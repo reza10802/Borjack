@@ -1,4 +1,5 @@
-import { categories } from "@/lib/data/categories";
+import { categories } from "../lib/data/categories";
+
 export default function CategorySection() {
     return (
         <section className="mb-10">
@@ -10,13 +11,12 @@ export default function CategorySection() {
                 {categories.map((category) => (
                     <div
                         key={category.id}
-                        className="flex flex-col items-center rounded-xl bg-white p-4 shadow-sm hover:shadow-md transition"
+                        className="flex flex-col items-center rounded-xl bg-white p-4 shadow-sm hover:shadow-md transition cursor-pointer"
                     >
                         <span className="mb-2 text-3xl">
                             {category.icon}
                         </span>
-
-                        <span className="text-sm">
+                        <span className="text-sm text-gray-700">
                             {category.title}
                         </span>
                     </div>
