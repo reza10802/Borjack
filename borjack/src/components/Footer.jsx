@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export default function Footer() {
   return (
     <footer className="mt-16 border-t border-gray-200 bg-white">
@@ -15,20 +17,20 @@ export default function Footer() {
           <div>
             <h3 className="mb-4 text-sm font-bold">دسترسی سریع</h3>
             <ul className="space-y-2 text-sm text-gray-600">
-              <li className="hover:text-black cursor-pointer transition">خانه</li>
-              <li className="hover:text-black cursor-pointer transition">محصولات</li>
-              <li className="hover:text-black cursor-pointer transition">سبد خرید</li>
-              <li className="hover:text-black cursor-pointer transition">پروفایل</li>
+              <li><Link href="/" className="hover:text-black transition">خانه</Link></li>
+              <li><Link href="/search" className="hover:text-black transition">محصولات</Link></li>
+              <li><Link href="/cart" className="hover:text-black transition">سبد خرید</Link></li>
+              <li><Link href="/profile" className="hover:text-black transition">پروفایل</Link></li>
             </ul>
           </div>
 
           <div>
             <h3 className="mb-4 text-sm font-bold">دسته‌بندی‌ها</h3>
             <ul className="space-y-2 text-sm text-gray-600">
-              <li className="hover:text-black cursor-pointer transition">موبایل</li>
-              <li className="hover:text-black cursor-pointer transition">لپ‌تاپ</li>
-              <li className="hover:text-black cursor-pointer transition">پوشاک</li>
-              <li className="hover:text-black cursor-pointer transition">لوازم جانبی</li>
+              <li><Link href="/search?category=موبایل" className="hover:text-black transition">موبایل</Link></li>
+              <li><Link href="/search?category=لپ‌تاپ" className="hover:text-black transition">لپ‌تاپ</Link></li>
+              <li><Link href="/search?category=پوشاک" className="hover:text-black transition">پوشاک</Link></li>
+              <li><Link href="/search?category=لوازم جانبی" className="hover:text-black transition">لوازم جانبی</Link></li>
             </ul>
           </div>
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth } from "../../context/AuthContext";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -11,21 +11,21 @@ export default function LoginPage() {
     const [identifier, setIdentifier] = useState("");
     const [password, setPassword] = useState("");
     const [error, setError] = useState("");
+    const [loading, setLoading] = useState(false);
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
         setError("");
+        setLoading(true);
 
-        const users = JSON.parse(localStorage.getItem("users") || "[]");
-        const found = users.find(u => u.identifier === identifier && u.password === password);
-
-        if (!found) {
-            setError("اطلاعات وارد شده اشتباه است");
-            return;
+        try {
+            await login(identifier, password);
+            router.push("/");
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
         }
-
-        login({ name: found.name, identifier: found.identifier });
-        router.push("/");
     };
 
     return (
@@ -33,9 +33,7 @@ export default function LoginPage() {
             <div className="bg-white p-8 rounded-2xl border border-gray-200 shadow-sm w-full max-w-sm">
 
                 <div className="flex justify-center mb-6">
-                    <a href="/"> 
-                        <img src="/images/photo_2026-06-20_01-20-44.jpg" className="w-12 h-12 rounded-xl object-cover" alt="لوگو" />
-                    </a>
+                    <img src="/images/photo_2026-06-20_01-20-44.jpg" className="w-12 h-12 rounded-xl object-cover" alt="لوگو" />
                 </div>
 
                 <h1 className="text-xl font-bold text-center mb-6">ورود</h1>
@@ -47,7 +45,6 @@ export default function LoginPage() {
                         value={identifier}
                         onChange={e => setIdentifier(e.target.value)}
                         className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500"
-                        autoComplete="off"
                     />
                     <input
                         type="password"
@@ -57,8 +54,9 @@ export default function LoginPage() {
                         className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500"
                     />
                     {error && <p className="text-red-500 text-sm text-center">{error}</p>}
-                    <button type="submit" className="w-full bg-black text-white rounded-lg py-2.5 text-sm font-medium hover:bg-gray-800 transition">
-                        ورود
+                    <button type="submit" disabled={loading}
+                        className="w-full bg-black text-white rounded-lg py-2.5 text-sm font-medium hover:bg-gray-800 transition disabled:opacity-50">
+                        {loading ? "در حال ورود..." : "ورود"}
                     </button>
                 </form>
 

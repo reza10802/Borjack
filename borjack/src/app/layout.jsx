@@ -1,5 +1,5 @@
 import "./globals.css";
-import { AuthProvider } from "@/context/AuthContext";
+import { AuthProvider } from "../context/AuthContext";
 
 export const metadata = {
   title: "فروشگاه آنلاین",
@@ -11,9 +11,7 @@ export default function RootLayout({ children }) {
     <html dir="rtl" lang="fa">
       <body className="min-h-screen flex flex-col">
         <AuthProvider>
-          <main className="flex-1">
-            {children}
-          </main>
+          {children}
         </AuthProvider>
       </body>
     </html>

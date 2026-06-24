@@ -6,24 +6,54 @@ const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
     const [user, setUser] = useState(null);
+    const [loading, setLoading] = useState(true);
 
+    // چک کردن وضعیت لاگین از cookie
     useEffect(() => {
-        const stored = localStorage.getItem("user");
-        if (stored) setUser(JSON.parse(stored));
+        fetch("/api/auth/me")
+            .then(res => res.ok ? res.json() : null)
+            .then(data => setUser(data))
+            .catch(() => setUser(null))
+            .finally(() => setLoading(false));
     }, []);
 
-    const login = (userData) => {
-        setUser(userData);
-        localStorage.setItem("user", JSON.stringify(userData));
+    const login = async (identifier, password) => {
+        const res = await fetch("/api/auth/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ identifier, password }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data.error || "خطا در ورود");
+
+        setUser(data);
+        return data;
     };
 
-    const logout = () => {
+    const register = async (name, identifier, password) => {
+        const res = await fetch("/api/auth/register", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name, identifier, password }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data.error || "خطا در ثبت‌نام");
+
+        // بعد از ثبت‌نام خودکار لاگین
+        return login(identifier, password);
+    };
+
+    const logout = async () => {
+        await fetch("/api/auth/logout", { method: "POST" });
         setUser(null);
-        localStorage.removeItem("user");
     };
 
     return (
-        <AuthContext.Provider value={{ user, login, logout }}>
+        <AuthContext.Provider value={{ user, loading, login, register, logout }}>
             {children}
         </AuthContext.Provider>
     );
