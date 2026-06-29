@@ -1,14 +1,15 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
+    const router = useRouter();
 
-    // چک کردن وضعیت لاگین از cookie
     useEffect(() => {
         fetch("/api/auth/me")
             .then(res => res.ok ? res.json() : null)
@@ -23,11 +24,8 @@ export function AuthProvider({ children }) {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ identifier, password }),
         });
-
         const data = await res.json();
-
         if (!res.ok) throw new Error(data.error || "خطا در ورود");
-
         setUser(data);
         return data;
     };
@@ -38,18 +36,16 @@ export function AuthProvider({ children }) {
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ name, identifier, password }),
         });
-
         const data = await res.json();
-
         if (!res.ok) throw new Error(data.error || "خطا در ثبت‌نام");
-
-        // بعد از ثبت‌نام خودکار لاگین
         return login(identifier, password);
     };
 
+    // ۳. بعد از خروج به login هدایت میشه
     const logout = async () => {
         await fetch("/api/auth/logout", { method: "POST" });
         setUser(null);
+        router.push("/login");
     };
 
     return (

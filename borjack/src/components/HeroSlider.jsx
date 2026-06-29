@@ -148,7 +148,7 @@ export default function HeroSlider() {
         ref={prevRef}
         className="absolute right-4 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-white/10 text-white"
       >
-        ›
+        ‹
       </button>
 
       {/* Next */}

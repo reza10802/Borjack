@@ -1,23 +1,11 @@
 import { NextResponse } from "next/server";
-import { prisma } from "../../../lib/db";
-import jwt from "jsonwebtoken";
+import { prisma } from "@/lib/db";
+import { getCurrentUser, logAction } from "@/lib/auth";
 
-const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key-change-in-production";
-
-function getUserFromRequest(req) {
-    const token = req.cookies.get("token")?.value;
-    if (!token) return null;
-    try {
-        return jwt.verify(token, JWT_SECRET);
-    } catch {
-        return null;
-    }
-}
-
-// GET /api/orders — گرفتن سفارشات کاربر
+// GET /api/orders — گرفتن سفارشات کاربر فعلی
 export async function GET(req) {
     try {
-        const user = getUserFromRequest(req);
+        const user = await getCurrentUser(req);
         if (!user) return NextResponse.json({ error: "لاگین نشدی" }, { status: 401 });
 
         const orders = await prisma.order.findMany({
@@ -41,13 +29,12 @@ export async function GET(req) {
     }
 }
 
-// POST /api/orders — ثبت سفارش جدید
+// POST /api/orders — ثبت سفارش جدید از روی سبد خرید
 export async function POST(req) {
     try {
-        const user = getUserFromRequest(req);
+        const user = await getCurrentUser(req);
         if (!user) return NextResponse.json({ error: "لاگین نشدی" }, { status: 401 });
 
-        // گرفتن سبد خرید
         const cartItems = await prisma.cartItem.findMany({
             where: { userId: user.id },
             include: { product: true }
@@ -59,12 +46,11 @@ export async function POST(req) {
 
         const total = cartItems.reduce((sum, item) => sum + item.product.price * item.quantity, 0);
 
-        // ساخت سفارش
+        // status عمداً ست نشده — مقدار پیش‌فرض enum (PENDING) از schema گرفته می‌شه
         const order = await prisma.order.create({
             data: {
                 userId: user.id,
                 total,
-                status: "در انتظار پرداخت",
                 items: {
                     create: cartItems.map(item => ({
                         productId: item.productId,
@@ -82,8 +68,16 @@ export async function POST(req) {
             }
         });
 
-        // پاک کردن سبد خرید
         await prisma.cartItem.deleteMany({ where: { userId: user.id } });
+
+        await logAction(req, {
+            userId: user.id,
+            action: "CREATE_ORDER",
+            entityType: "Order",
+            entityId: order.id,
+            description: `سفارش #${order.id} توسط مشتری ثبت شد`,
+            newValue: { total, itemCount: cartItems.length },
+        });
 
         return NextResponse.json(order, { status: 201 });
     } catch (error) {

@@ -7,15 +7,59 @@ datasource db {
   provider = "postgresql"
 }
 
+enum Role {
+  CUSTOMER
+  ADMIN
+  MANAGER
+}
+
+enum OrderStatus {
+  PENDING
+  PROCESSING
+  READY_TO_SHIP
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum LogAction {
+  CREATE_PRODUCT
+  UPDATE_PRODUCT
+  DELETE_PRODUCT
+  UPDATE_STOCK
+  CREATE_ORDER
+  UPDATE_ORDER_STATUS
+  CREATE_USER
+  UPDATE_USER
+  DELETE_USER
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
 model User {
   id         String   @id @default(cuid())
   name       String
   identifier String   @unique
   password   String
+  role       Role     @default(CUSTOMER)
   createdAt  DateTime @default(now())
 
-  orders    Order[]
-  cart      CartItem[]
+  orders        Order[]
+  cart          CartItem[]
+  auditLogs     AuditLog[]
+  reviews       Review[]
+  sentTasks     Task[]  @relation("TaskFrom")
+  receivedTasks Task[]  @relation("TaskTo")
+}
+
+model Category {
+  id        Int      @id @default(autoincrement())
+  title     String   @unique
+  createdAt DateTime @default(now())
 }
 
 model Product {
@@ -57,11 +101,14 @@ model ProductSpec {
 model Review {
   id        Int      @id @default(autoincrement())
   user      String
+  userId    String?
   rating    Int
   comment   String
   date      String
+  approved  Boolean  @default(false)
   product   Product  @relation(fields: [productId], references: [id])
   productId Int
+  author    User?    @relation(fields: [userId], references: [id])
   createdAt DateTime @default(now())
 }
 
@@ -78,12 +125,11 @@ model CartItem {
 
 model Order {
   id        Int         @id @default(autoincrement())
-  status    String      @default("در انتظار پرداخت")
+  status    OrderStatus @default(PENDING)
   total     Int
   createdAt DateTime    @default(now())
   user      User        @relation(fields: [userId], references: [id])
   userId    String
-
   items     OrderItem[]
 }
 
@@ -95,4 +141,32 @@ model OrderItem {
   orderId   Int
   product   Product @relation(fields: [productId], references: [id])
   productId Int
+}
+
+model AuditLog {
+  id          String    @id @default(cuid())
+  action      LogAction
+  entityType  String
+  entityId    String
+  description String?
+  oldValue    Json?
+  newValue    Json?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime  @default(now())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id])
+}
+
+model Task {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  priority    Priority @default(MEDIUM)
+  done        Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  fromId      String
+  from        User     @relation("TaskFrom", fields: [fromId], references: [id])
+  toId        String
+  to          User     @relation("TaskTo", fields: [toId], references: [id])
 }

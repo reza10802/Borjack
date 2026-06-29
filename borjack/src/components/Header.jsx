@@ -30,6 +30,11 @@ export default function Header() {
                 <div className="flex items-center gap-2 shrink-0">
                     {user ? (
                         <>
+                            {(user.role === "ADMIN" || user.role === "MANAGER") && (
+                                <Link href="/admin" className="hidden sm:inline-flex px-4 py-1.5 text-sm rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-50 transition">
+                                    پنل ادمین
+                                </Link>
+                            )}
                             <CartIcon />
                             <Link href="/profile" className="hidden sm:inline-flex px-4 py-1.5 text-sm rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-50 transition">
                                 {user.name || "پروفایل"}
@@ -95,6 +100,11 @@ export default function Header() {
                     <div className="flex gap-2 mt-4">
                         {user ? (
                             <>
+                                {(user.role === "ADMIN" || user.role === "MANAGER") && (
+                                    <Link href="/admin" className="flex-1 text-center py-2 text-sm border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition">
+                                        پنل ادمین
+                                    </Link>
+                                )}
                                 <Link href="/cart" className="flex-1 text-center py-2 text-sm border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition">
                                     سبد خرید
                                 </Link>

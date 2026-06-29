@@ -2,14 +2,9 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
-import { categories as categoryList } from "../../../lib/categories";
 import ProductCard from "../../../components/ProductCard";
 import BackButton from "../../../components/BackButton";
 
-const MIN_PRICE = 0;
-const MAX_PRICE = 150000000;
-
-const categories = ["همه", ...categoryList.map(c => c.title)];
 const sortOptions = [
     { value: "default", label: "پیش‌فرض" },
     { value: "price-asc", label: "ارزان‌ترین" },
@@ -26,16 +21,11 @@ const priceOptions = [
     { value: "50000000-150000000", label: "بالای ۵۰ میلیون" },
 ];
 
-const CustomSelect = ({ value, onChange, options, placeholder }) => (
+const CustomSelect = ({ value, onChange, options }) => (
     <div className="relative">
-        <select
-            value={value}
-            onChange={e => onChange(e.target.value)}
-            className="appearance-none w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 focus:outline-none focus:border-gray-400 transition cursor-pointer pr-4 pl-8"
-        >
-            {options.map(o => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
+        <select value={value} onChange={e => onChange(e.target.value)}
+            className="appearance-none w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-700 focus:outline-none focus:border-gray-400 transition cursor-pointer pr-4 pl-8">
+            {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
         <svg className="absolute left-2.5 top-3 w-4 h-4 text-gray-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -52,18 +42,24 @@ export default function SearchPage() {
     const [onlyDiscount, setOnlyDiscount] = useState(false);
     const [onlyInStock, setOnlyInStock] = useState(false);
     const [showFilters, setShowFilters] = useState(false);
-
     const [products, setProducts] = useState([]);
+    const [categories, setCategories] = useState([]);
     const [loading, setLoading] = useState(true);
 
     const fromCategory = searchParams.get("category");
+
+    // خواندن دسته‌بندی‌ها از API
+    useEffect(() => {
+        fetch("/api/categories")
+            .then(r => r.ok ? r.json() : { categories: [] })
+            .then(d => setCategories(["همه", ...(d.categories || []).map(c => c.name)]));
+    }, []);
 
     useEffect(() => {
         setQuery(searchParams.get("q") || "");
         setSelectedCategory(searchParams.get("category") || "همه");
     }, [searchParams]);
 
-    // ساخت query string برای API بر اساس فیلترهای فعلی
     const apiQuery = useMemo(() => {
         const params = new URLSearchParams();
         if (query.trim()) params.set("search", query.trim());
@@ -82,8 +78,6 @@ export default function SearchPage() {
     useEffect(() => {
         let active = true;
         setLoading(true);
-
-        // یه کمی debounce برای جستجوی تایپی، فیلترها فوری اعمال می‌شن
         const delay = query ? 350 : 0;
         const timer = setTimeout(() => {
             fetch(`/api/products${apiQuery ? `?${apiQuery}` : ""}`)
@@ -92,7 +86,6 @@ export default function SearchPage() {
                 .catch(() => { if (active) setProducts([]); })
                 .finally(() => { if (active) setLoading(false); });
         }, delay);
-
         return () => { active = false; clearTimeout(timer); };
     }, [apiQuery]);
 
@@ -106,8 +99,6 @@ export default function SearchPage() {
 
     const FilterPanel = () => (
         <div className="flex flex-col gap-5">
-
-            {/* دسته‌بندی */}
             <div>
                 <label className="text-xs font-bold text-gray-500 mb-2 block">دسته‌بندی</label>
                 <CustomSelect
@@ -116,18 +107,10 @@ export default function SearchPage() {
                     options={categories.map(c => ({ value: c, label: c }))}
                 />
             </div>
-
-            {/* محدوده قیمت */}
             <div>
                 <label className="text-xs font-bold text-gray-500 mb-2 block">محدوده قیمت</label>
-                <CustomSelect
-                    value={priceFilter}
-                    onChange={setPriceFilter}
-                    options={priceOptions}
-                />
+                <CustomSelect value={priceFilter} onChange={setPriceFilter} options={priceOptions} />
             </div>
-
-            {/* فیلترها */}
             <div className="flex flex-col gap-2.5">
                 <label className="flex items-center gap-2.5 cursor-pointer group">
                     <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition ${onlyDiscount ? "bg-black border-black" : "border-gray-300 group-hover:border-gray-400"}`}
@@ -148,8 +131,6 @@ export default function SearchPage() {
                     <span className="text-sm text-gray-600">فقط موجود</span>
                 </label>
             </div>
-
-            {/* ریست */}
             <button onClick={resetFilters}
                 className="w-full py-2 text-sm border border-gray-200 rounded-xl text-gray-500 hover:bg-gray-50 transition">
                 پاک کردن فیلترها
@@ -159,9 +140,7 @@ export default function SearchPage() {
 
     return (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8" dir="rtl">
-
             {fromCategory && <BackButton />}
-
             <div className="relative mb-6">
                 <input type="text" value={query} onChange={e => setQuery(e.target.value)}
                     placeholder="جستجو در محصولات..."
@@ -171,16 +150,12 @@ export default function SearchPage() {
                 </svg>
                 {query && <button onClick={() => setQuery("")} className="absolute top-4 left-4 text-gray-400 hover:text-gray-600 transition">✕</button>}
             </div>
-
             <div className="flex gap-6">
-
-                {/* فیلتر دسکتاپ */}
                 <aside className="hidden lg:block w-56 shrink-0">
                     <div className="bg-white rounded-2xl border border-gray-100 p-5 sticky top-24">
                         <FilterPanel />
                     </div>
                 </aside>
-
                 <div className="flex-1">
                     <div className="flex items-center justify-between mb-4 gap-3">
                         <span className="text-sm text-gray-500">{loading ? "..." : `${products.length} محصول`}</span>
@@ -195,13 +170,11 @@ export default function SearchPage() {
                             <CustomSelect value={sort} onChange={setSort} options={sortOptions} />
                         </div>
                     </div>
-
                     {showFilters && (
                         <div className="lg:hidden bg-white border border-gray-100 rounded-2xl p-5 mb-4">
                             <FilterPanel />
                         </div>
                     )}
-
                     {loading ? (
                         <div className="text-center py-20 text-gray-400 text-sm">در حال بارگذاری...</div>
                     ) : products.length === 0 ? (

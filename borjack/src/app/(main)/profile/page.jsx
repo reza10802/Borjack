@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "../../../context/AuthContext";
 import { useRouter, useSearchParams } from "next/navigation";
 import BackButton from "../../../components/BackButton";
+import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from "../../../lib/orderStatus";
 
 export default function ProfilePage() {
     const { user, loading } = useAuth();
@@ -35,13 +36,6 @@ export default function ProfilePage() {
     };
 
     if (loading || !user) return null;
-
-    const statusColor = {
-        "تحویل داده شده": "bg-green-100 text-green-700",
-        "در حال ارسال": "bg-blue-100 text-blue-700",
-        "لغو شده": "bg-red-100 text-red-700",
-        "در انتظار پرداخت": "bg-yellow-100 text-yellow-700",
-    };
 
     const tabs = [
         { id: "info", label: "اطلاعات حساب" },
@@ -124,8 +118,8 @@ export default function ProfilePage() {
                                     <div className="flex items-center justify-between mb-4">
                                         <div className="flex items-center gap-3">
                                             <span className="text-sm font-bold text-gray-800">سفارش #{order.id}</span>
-                                            <span className={`text-xs px-2 py-1 rounded-lg ${statusColor[order.status] || "bg-gray-100 text-gray-600"}`}>
-                                                {order.status}
+                                            <span className={`text-xs px-2 py-1 rounded-lg ${ORDER_STATUS_COLORS[order.status] || "bg-gray-100 text-gray-600"}`}>
+                                                {ORDER_STATUS_LABELS[order.status] || order.status}
                                             </span>
                                         </div>
                                         <span className="text-xs text-gray-400">

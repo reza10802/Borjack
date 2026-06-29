@@ -3,8 +3,7 @@ import { prisma } from "../../../../lib/db";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
-const JWT_SECRET =
-  process.env.JWT_SECRET || "your-secret-key-change-in-production";
+const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key-change-in-production";
 
 export async function POST(req) {
   try {
@@ -13,15 +12,16 @@ export async function POST(req) {
     if (!identifier || !password) {
       return NextResponse.json(
         { error: "همه فیلدها الزامی هستند" },
-        { status: 400 },
+        { status: 400 }
       );
     }
 
     const user = await prisma.user.findUnique({ where: { identifier } });
+    console.log("USER FROM DB:", user);
     if (!user) {
       return NextResponse.json(
         { error: "این حساب وجود ندارد" },
-        { status: 404 },
+        { status: 404 }
       );
     }
 
@@ -29,20 +29,23 @@ export async function POST(req) {
     if (!isValid) {
       return NextResponse.json(
         { error: "رمز عبور اشتباه است" },
-        { status: 401 },
+        { status: 401 }
       );
     }
 
+    // role هم توی توکن ذخیره میشه
     const token = jwt.sign(
-      { id: user.id, name: user.name, identifier: user.identifier },
+      { id: user.id, name: user.name, identifier: user.identifier, role: user.role },
       JWT_SECRET,
-      { expiresIn: "7d" },
+      { expiresIn: "7d" }
     );
 
+    // role هم به client برگردونده میشه
     const response = NextResponse.json({
       id: user.id,
       name: user.name,
       identifier: user.identifier,
+      role: user.role,
     });
 
     response.cookies.set("token", token, {
