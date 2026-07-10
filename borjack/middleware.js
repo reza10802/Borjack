@@ -1,62 +1,74 @@
+// src/middleware.js
 import { NextResponse } from "next/server";
-import { jwtVerify } from "jose";
+import jwt from "jsonwebtoken";
 
-const SECRET = new TextEncoder().encode(process.env.JWT_SECRET);
+const JWT_SECRET = process.env.JWT_SECRET;
 
-// مسیرهایی که فقط ADMIN یا MANAGER می‌توانند ببینند
-const ADMIN_ROUTES = ["/admin"];
+const ADMIN_ONLY_PAGES = [
+  "/admin/users",
+  "/admin/staff",
+  "/admin/logs",
+  "/admin/categories",
+];
 
-// مسیرهایی که فقط MANAGER می‌تواند ببیند
-const MANAGER_ROUTES = ["/manager"];
+const MANAGER_ALLOWED_PAGES = [
+  "/admin",
+  "/admin/orders",
+  "/admin/products",
+  "/admin/reviews",
+];
 
-// مسیرهایی که باید لاگین باشند (CUSTOMER+)
-const AUTH_ROUTES = ["/cart", "/profile", "/checkout"];
+function getRoleFromToken(req) {
+  try {
+    const token =
+      req.cookies.get("token")?.value ||
+      req.cookies.get("accessToken")?.value ||
+      req.cookies.get("auth-token")?.value;
 
-export async function middleware(request) {
-  const { pathname } = request.nextUrl;
-  const token = request.cookies.get("token")?.value;
+    if (!token) return null;
 
-  // تابع کمکی برای redirect به صفحه login
-  const redirectToLogin = () => {
-    const loginUrl = new URL("/login", request.url);
-    loginUrl.searchParams.set("redirect", pathname);
+    const decoded = jwt.verify(token, JWT_SECRET);
+    return decoded?.role || null;
+  } catch {
+    return null;
+  }
+}
+
+export function middleware(req) {
+  const { pathname } = req.nextUrl;
+
+  if (!pathname.startsWith("/admin")) {
+    return NextResponse.next();
+  }
+
+  const role = getRoleFromToken(req);
+
+  // لاگین نیست
+  if (!role) {
+    const loginUrl = new URL("/login", req.url);
     return NextResponse.redirect(loginUrl);
-  };
+  }
 
-  // تابع کمکی برای صفحه 403
-  const redirectToForbidden = () => {
-    return NextResponse.redirect(new URL("/403", request.url));
-  };
+  // فقط ADMIN و MANAGER حق ورود به admin دارند
+  if (!["ADMIN", "MANAGER"].includes(role)) {
+    return NextResponse.redirect(new URL("/403", req.url));
+  }
 
-  // بررسی مسیرهای MANAGER
-  if (MANAGER_ROUTES.some((r) => pathname.startsWith(r))) {
-    if (!token) return redirectToLogin();
-    try {
-      const { payload } = await jwtVerify(token, SECRET);
-      if (payload.role !== "MANAGER") return redirectToForbidden();
-    } catch {
-      return redirectToLogin();
+  // صفحات فقط مخصوص ADMIN
+  if (ADMIN_ONLY_PAGES.some((page) => pathname === page || pathname.startsWith(page + "/"))) {
+    if (role !== "ADMIN") {
+      return NextResponse.redirect(new URL("/403", req.url));
     }
   }
 
-  // بررسی مسیرهای ADMIN (MANAGER هم مجاز است)
-  else if (ADMIN_ROUTES.some((r) => pathname.startsWith(r))) {
-    if (!token) return redirectToLogin();
-    try {
-      const { payload } = await jwtVerify(token, SECRET);
-      if (!["ADMIN", "MANAGER"].includes(payload.role)) return redirectToForbidden();
-    } catch {
-      return redirectToLogin();
-    }
-  }
+  // اگر MANAGER خواست به صفحه‌ای خارج از محدوده خودش برود
+  if (role === "MANAGER") {
+    const allowed = MANAGER_ALLOWED_PAGES.some(
+      (page) => pathname === page || pathname.startsWith(page + "/")
+    );
 
-  // بررسی مسیرهای نیازمند لاگین
-  else if (AUTH_ROUTES.some((r) => pathname.startsWith(r))) {
-    if (!token) return redirectToLogin();
-    try {
-      await jwtVerify(token, SECRET);
-    } catch {
-      return redirectToLogin();
+    if (!allowed) {
+      return NextResponse.redirect(new URL("/403", req.url));
     }
   }
 
@@ -64,11 +76,5 @@ export async function middleware(request) {
 }
 
 export const config = {
-  matcher: [
-    "/admin/:path*",
-    "/manager/:path*",
-    "/cart/:path*",
-    "/profile/:path*",
-    "/checkout/:path*",
-  ],
+  matcher: ["/admin/:path*"],
 };

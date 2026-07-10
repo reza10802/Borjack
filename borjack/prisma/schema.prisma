@@ -22,6 +22,30 @@ enum OrderStatus {
   CANCELLED
 }
 
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+}
+
+model Transaction {
+  id          String   @id @default(cuid())
+
+  orderId     String   @unique
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  authority   String   @unique
+  refId       String?
+
+  amount      Int
+
+  status      String   @default("PENDING")
+  gateway     String   @default("ZARINPAL")
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
 enum LogAction {
   CREATE_PRODUCT
   UPDATE_PRODUCT
@@ -32,6 +56,8 @@ enum LogAction {
   CREATE_USER
   UPDATE_USER
   DELETE_USER
+  SEND_OTP
+  VERIFY_OTP
 }
 
 enum Priority {
@@ -41,19 +67,72 @@ enum Priority {
 }
 
 model User {
-  id         String   @id @default(cuid())
-  name       String
-  identifier String   @unique
-  password   String
-  role       Role     @default(CUSTOMER)
+  id              String    @id @default(cuid())
+  name            String
+  phone           String    @unique
+  email           String?
+  password        String
+  role            Role      @default(CUSTOMER)
+  isPhoneVerified Boolean   @default(false)
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  wishlist        WishlistItem[]
+  orders          Order[]
+  cart            CartItem[]
+  auditLogs       AuditLog[]
+  reviews         Review[]
+  sentTasks       Task[]    @relation("TaskFrom")
+  receivedTasks   Task[]    @relation("TaskTo")
+  addresses       Address[]
+}
+
+model Address {
+  id            String   @id @default(cuid())
+  userId        String
+
+  receiverName  String
+  receiverPhone String
+
+  provinceId    Int
+  provinceName  String
+
+  cityId        Int
+  cityName      String
+
+  address       String
+  postalCode    String
+
+  isDefault     Boolean  @default(false)
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model OtpCode {
+  id         Int      @id @default(autoincrement())
+  phone      String
+  code       String
+  expiresAt  DateTime
+  used       Boolean  @default(false)
   createdAt  DateTime @default(now())
 
-  orders        Order[]
-  cart          CartItem[]
-  auditLogs     AuditLog[]
-  reviews       Review[]
-  sentTasks     Task[]  @relation("TaskFrom")
-  receivedTasks Task[]  @relation("TaskTo")
+  @@index([phone])
+}
+
+model WishlistItem {
+  id        Int      @id @default(autoincrement())
+  userId    String
+  productId Int
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
 }
 
 model Category {
@@ -76,26 +155,29 @@ model Product {
   reviewCount   Int      @default(0)
   createdAt     DateTime @default(now())
 
-  images     ProductImage[]
-  specs      ProductSpec[]
-  reviews    Review[]
-  cartItems  CartItem[]
-  orderItems OrderItem[]
+  wishlistItems WishlistItem[]
+  images        ProductImage[]
+  specs         ProductSpec[]
+  reviews       Review[]
+  cartItems     CartItem[]
+  orderItems    OrderItem[]
 }
 
 model ProductImage {
-  id        Int     @id @default(autoincrement())
+  id        Int      @id @default(autoincrement())
   url       String
-  product   Product @relation(fields: [productId], references: [id])
   productId Int
+
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
 }
 
 model ProductSpec {
-  id        Int     @id @default(autoincrement())
+  id        Int      @id @default(autoincrement())
   key       String
   value     String
-  product   Product @relation(fields: [productId], references: [id])
   productId Int
+
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
 }
 
 model Review {
@@ -106,41 +188,72 @@ model Review {
   comment   String
   date      String
   approved  Boolean  @default(false)
-  product   Product  @relation(fields: [productId], references: [id])
   productId Int
-  author    User?    @relation(fields: [userId], references: [id])
   createdAt DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  author  User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
 }
 
 model CartItem {
-  id        Int     @id @default(autoincrement())
-  quantity  Int     @default(1)
-  user      User    @relation(fields: [userId], references: [id])
+  id        Int      @id @default(autoincrement())
+  quantity  Int      @default(1)
   userId    String
-  product   Product @relation(fields: [productId], references: [id])
   productId Int
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@unique([userId, productId])
 }
 
 model Order {
-  id        Int         @id @default(autoincrement())
-  status    OrderStatus @default(PENDING)
-  total     Int
-  createdAt DateTime    @default(now())
-  user      User        @relation(fields: [userId], references: [id])
-  userId    String
-  items     OrderItem[]
+  id              Int      @id @default(autoincrement())
+
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+
+  total           Int
+
+  status          String   @default("PENDING")
+
+  paymentStatus   String   @default("UNPAID")
+
+  authority       String?  @unique
+
+  refId           String?
+
+  paidAt          DateTime?
+
+  receiverName    String
+
+  receiverPhone   String
+
+  provinceId      Int
+  provinceName    String
+
+  cityId          Int
+  cityName        String
+
+  address         String
+
+  postalCode      String
+
+  items           OrderItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model OrderItem {
-  id        Int     @id @default(autoincrement())
+  id        Int      @id @default(autoincrement())
+  orderId   Int
+  productId Int
   quantity  Int
   price     Int
-  order     Order   @relation(fields: [orderId], references: [id])
-  orderId   Int
-  product   Product @relation(fields: [productId], references: [id])
-  productId Int
+
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id])
 }
 
 model AuditLog {
@@ -155,7 +268,8 @@ model AuditLog {
   userAgent   String?
   createdAt   DateTime  @default(now())
   userId      String
-  user        User      @relation(fields: [userId], references: [id])
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Task {
@@ -165,8 +279,10 @@ model Task {
   priority    Priority @default(MEDIUM)
   done        Boolean  @default(false)
   createdAt   DateTime @default(now())
-  fromId      String
-  from        User     @relation("TaskFrom", fields: [fromId], references: [id])
-  toId        String
-  to          User     @relation("TaskTo", fields: [toId], references: [id])
+
+  fromId String
+  toId   String
+
+  from User @relation("TaskFrom", fields: [fromId], references: [id], onDelete: Cascade)
+  to   User @relation("TaskTo", fields: [toId], references: [id], onDelete: Cascade)
 }

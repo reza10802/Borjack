@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { prisma } from "../../../../lib/db";
-import { requireAdminOrManager } from "../../../../lib/auth";
+import { prisma } from "@/lib/db";
+import { requireManagerOrAdmin } from "@/lib/auth";
  
 export async function GET() {
-  const { session, error } = await requireAdminOrManager();
+  const { session, error } = await requireManagerOrAdmin();
   if (error) return error;
  
   const today = new Date();

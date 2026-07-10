@@ -11,12 +11,27 @@ export default function SpecialOffers() {
     const [swiperInstance, setSwiperInstance] = useState(null);
     const [products, setProducts] = useState([]);
 
-    useEffect(() => {
-        fetch("/api/products?discount=true")
-            .then(res => res.json())
-            .then(data => setProducts(data))
-            .catch(console.error);
-    }, []);
+useEffect(() => {
+  fetch("/api/products?discount=true")
+    .then((res) => res.json())
+    .then((data) => {
+      console.log("special offers api:", data);
+
+      if (Array.isArray(data)) {
+        setProducts(data);
+      } else if (Array.isArray(data.products)) {
+        setProducts(data.products);
+      } else if (Array.isArray(data.data)) {
+        setProducts(data.data);
+      } else {
+        setProducts([]);
+      }
+    })
+    .catch((err) => {
+      console.error(err);
+      setProducts([]);
+    });
+}, []);
 
     return (
         <section className="mb-10 rounded-2xl bg-black p-6 text-white relative">

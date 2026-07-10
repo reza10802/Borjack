@@ -1,88 +1,91 @@
 import { NextResponse } from "next/server";
-import { prisma } from "../../../../lib/db";
-import { requireAdmin } from "../../../../lib/auth";
-import { createAuditLog } from "../../../../lib/auditLog";
- 
-export async function GET() {
-  const { session, error } = await requireAdmin();
-  if (error) return error;
- 
-  const products = await prisma.product.findMany({
-    orderBy: { createdAt: "desc" },
-  });
- 
-  return NextResponse.json({ products });
+import { prisma } from "@/lib/db";
+import { requireManagerOrAdmin, logAction } from "@/lib/auth";
+
+// GET /api/admin/products — لیست محصولات
+export async function GET(req) {
+  const check = await requireManagerOrAdmin(req);
+  if (check.error) return check.error;
+
+  try {
+    const products = await prisma.product.findMany({
+      orderBy: { createdAt: "desc" },
+      include: {
+        images: true,
+        specs: true,
+      },
+    });
+
+    return NextResponse.json({ products });
+  } catch (error) {
+    console.error(error);
+    return NextResponse.json(
+      { error: "خطا در دریافت محصولات" },
+      { status: 500 }
+    );
+  }
 }
- 
+
+// POST /api/admin/products — ساخت محصول جدید
 export async function POST(req) {
-  const { session, error } = await requireAdmin();
-  if (error) return error;
- 
-  const body = await req.json();
-  const { title, price, originalPrice, discount, category, image, description, inStock } = body;
- 
-  const product = await prisma.product.create({
-    data: { title, price, originalPrice, discount, category, image, description, inStock },
-  });
- 
-  await createAuditLog({
-    userId: session.id,
-    action: "CREATE_PRODUCT",
-    entityType: "Product",
-    entityId: product.id,
-    description: `ایجاد کالا "${title}"`,
-    newValue: product,
-  });
- 
-  return NextResponse.json({ product }, { status: 201 });
-}
- 
-export async function PATCH(req) {
-  const { session, error } = await requireAdmin();
-  if (error) return error;
- 
-  const body = await req.json();
-  const { id, ...data } = body;
- 
-  const before = await prisma.product.findUnique({ where: { id } });
- 
-  const product = await prisma.product.update({
-    where: { id },
-    data,
-  });
- 
-  await createAuditLog({
-    userId: session.id,
-    action: "UPDATE_PRODUCT",
-    entityType: "Product",
-    entityId: id,
-    description: `ویرایش کالا "${product.title}"`,
-    oldValue: before,
-    newValue: product,
-  });
- 
-  return NextResponse.json({ product });
-}
- 
-export async function DELETE(req) {
-  const { session, error } = await requireAdmin();
-  if (error) return error;
- 
-  const { searchParams } = new URL(req.url);
-  const id = Number(searchParams.get("id"));
- 
-  const before = await prisma.product.findUnique({ where: { id } });
- 
-  await prisma.product.delete({ where: { id } });
- 
-  await createAuditLog({
-    userId: session.id,
-    action: "DELETE_PRODUCT",
-    entityType: "Product",
-    entityId: id,
-    description: `حذف کالا "${before?.title}"`,
-    oldValue: before,
-  });
- 
-  return NextResponse.json({ success: true });
+  const check = await requireManagerOrAdmin(req);
+  if (check.error) return check.error;
+
+  try {
+    const body = await req.json();
+    const {
+      title,
+      price,
+      originalPrice,
+      discount,
+      category,
+      image,
+      description,
+      inStock,
+    } = body;
+
+    if (!title || price == null || !category || !image || !description) {
+      return NextResponse.json(
+        { error: "همه فیلدهای ضروری را پر کنید" },
+        { status: 400 }
+      );
+    }
+
+    const product = await prisma.product.create({
+      data: {
+        title: String(title).trim(),
+        price: Number(price),
+        originalPrice:
+          originalPrice != null && originalPrice !== ""
+            ? Number(originalPrice)
+            : Number(price),
+        discount: discount != null ? Number(discount) : 0,
+        category: String(category).trim(),
+        image: String(image).trim(),
+        description: String(description).trim(),
+        inStock: typeof inStock === "boolean" ? inStock : true,
+      },
+      include: {
+        images: true,
+        specs: true,
+      },
+    });
+
+    await logAction(req, {
+      userId: check.user.id,
+      action: "CREATE_PRODUCT",
+      entityType: "Product",
+      entityId: String(product.id),
+      description: `محصول «${product.title}» ایجاد شد`,
+      newValue: product,
+    });
+
+    return NextResponse.json({ product }, { status: 201 });
+  } catch (error) {
+    console.error(error);
+    return NextResponse.json(
+      { error: "خطا در ساخت محصول" },
+      { status: 500 }
+    );
+  }
 }

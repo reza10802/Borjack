@@ -1,28 +1,16 @@
-import { NextRequest, NextResponse } from "next/server";
-import jwt from "jsonwebtoken";
+import { NextResponse } from "next/server";
+import { getSessionUser } from "@/lib/auth";
 
-const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key-change-in-production";
-
-export async function GET(req) {
-    
+export async function GET() {
   try {
-    const token = req.cookies.get("token")?.value;
+    const user = await getSessionUser();
 
-    if (!token) {
+    if (!user) {
       return NextResponse.json({ error: "لاگین نشدی" }, { status: 401 });
     }
 
-    const decoded = jwt.verify(token, JWT_SECRET);
-
-    // role هم برگردونده میشه تا AuthContext و Header بتونن نقش رو بدونن
-    return NextResponse.json({
-      id: decoded.id,
-      name: decoded.name,
-      identifier: decoded.identifier,
-      role: decoded.role,
-    });
-
-  } catch (error) {
+    return NextResponse.json(user);
+  } catch {
     return NextResponse.json({ error: "توکن نامعتبر" }, { status: 401 });
   }
 }

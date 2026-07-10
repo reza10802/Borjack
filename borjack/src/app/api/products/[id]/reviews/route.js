@@ -1,11 +1,11 @@
 // src/app/api/products/[id]/reviews/route.js
 import { NextResponse } from "next/server";
-import { prisma } from "../../../../../lib/db";
-import { getSession } from "../../../../../lib/auth";
+import { prisma } from "@/lib/db";
+import { getSession, getSessionUser } from "@/lib/auth";
 
 // POST — ثبت نظر جدید
 export async function POST(req, { params }) {
-    const session = await getSession();
+    const session = await getSessionUser();
     if (!session) return NextResponse.json({ error: "لاگین نشدی" }, { status: 401 });
 
     const { id } = await params;

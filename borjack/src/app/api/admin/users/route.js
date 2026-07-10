@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
-import { prisma } from "../../../../lib/db";
-import { requireAdmin } from "../../../../lib/auth";
-import { createAuditLog } from "../../../../lib/auditLog";
+import { prisma } from "@/lib/db";
+import { requireAdmin, logAction } from "@/lib/auth";
 
 export async function GET() {
-  const { session, error } = await requireAdmin();
-  if (error) return error;
+  const auth = await requireAdmin();
+  if (auth.error) return auth.error;
 
   const users = await prisma.user.findMany({
     select: {
@@ -22,63 +21,51 @@ export async function GET() {
   return NextResponse.json({ users });
 }
 
-export async function PATCH(req) {
-  const { session, error } = await requireAdmin();
-  if (error) return error;
-
-  const { userId, role } = await req.json();
-
-  if (userId === session.id) {
-    return NextResponse.json({ error: "نمی‌توانید نقش خود را تغییر دهید" }, { status: 400 });
-  }
-
-  const validRoles = ["CUSTOMER", "ADMIN", "MANAGER"];
-  if (!validRoles.includes(role)) {
-    return NextResponse.json({ error: "نقش نامعتبر" }, { status: 400 });
-  }
-
-  const before = await prisma.user.findUnique({ where: { id: userId } });
-  const user = await prisma.user.update({
-    where: { id: userId },
-    data: { role },
-    select: { id: true, name: true, role: true },
-  });
-
-  await createAuditLog({
-    userId: session.id,
-    action: "UPDATE_USER",
-    entityType: "User",
-    entityId: userId,
-    description: `تغییر نقش "${before?.name}" از ${before?.role} به ${role}`,
-    oldValue: { role: before?.role },
-    newValue: { role },
-  });
-
-  return NextResponse.json({ user });
-}
-
 export async function DELETE(req) {
-  const { session, error } = await requireAdmin();
-  if (error) return error;
+  const auth = await requireAdmin();
+  if (auth.error) return auth.error;
 
-  const { searchParams } = new URL(req.url);
-  const userId = searchParams.get("userId");
+  try {
+    const { searchParams } = new URL(req.url);
+    const userId = searchParams.get("userId");
 
-  if (userId === session.id) {
-    return NextResponse.json({ error: "نمی‌توانید حساب خود را حذف کنید" }, { status: 400 });
+    if (!userId) {
+      return NextResponse.json({ error: "userId الزامی است" }, { status: 400 });
+    }
+
+    if (userId === auth.user.id) {
+      return NextResponse.json(
+        { error: "نمی‌توانید حساب خودتان را حذف کنید" },
+        { status: 400 }
+      );
+    }
+
+    const before = await prisma.user.findUnique({ where: { id: userId } });
+    if (!before) {
+      return NextResponse.json({ error: "کاربر پیدا نشد" }, { status: 404 });
+    }
+
+    if (before.role === "ADMIN") {
+      return NextResponse.json(
+        { error: "حذف ادمین از پنل مجاز نیست" },
+        { status: 403 }
+      );
+    }
+
+    await prisma.user.delete({ where: { id: userId } });
+
+    await logAction({
+      userId: auth.user.id,
+      action: "DELETE_USER",
+      entityType: "User",
+      entityId: userId,
+      description: `حذف کاربر "${before.name}"`,
+      oldValue: before,
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error(error);
+    return NextResponse.json({ error: "خطا در حذف کاربر" }, { status: 500 });
   }
-
-  const before = await prisma.user.findUnique({ where: { id: userId } });
-  await prisma.user.delete({ where: { id: userId } });
-
-  await createAuditLog({
-    userId: session.id,
-    action: "DELETE_USER",
-    entityType: "User",
-    entityId: userId,
-    description: `حذف کاربر "${before?.name}"`,
-    oldValue: before,
-  });
-
-  return NextResponse.json({ success: true });
 }

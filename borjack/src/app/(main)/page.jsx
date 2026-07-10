@@ -1,7 +1,7 @@
-import HeroSlider from "../../components/HeroSlider";
-import CategorySection from "../../components/CategorySection";
-import SpecialOffers from "../../components/SpecialOffers";
-import ProductGrid from "../../components/ProductGrid";
+import HeroSlider from "@/components/HeroSlider";
+import CategorySection from "@/components/CategorySection";
+import SpecialOffers from "@/components/SpecialOffers";
+import ProductGrid from "@/components/ProductGrid";
 
 export default function Home() {
   return (

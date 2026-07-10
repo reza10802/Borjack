@@ -1,38 +1,54 @@
 import { NextResponse } from "next/server";
-import { prisma } from "../../../../lib/db";
+import { prisma } from "@/lib/db";
 import bcrypt from "bcryptjs";
+import { registerSchema } from "@/lib/validations/auth";
 
 export async function POST(req) {
-    try {
-        const { name, identifier, password } = await req.json();
+  try {
+    const body = await req.json();
 
-        if (!name || !identifier || !password) {
-            return NextResponse.json({ error: "همه فیلدها الزامی هستند" }, { status: 400 });
-        }
+    const parsed = registerSchema.safeParse(body);
 
-        if (password.length < 6) {
-            return NextResponse.json({ error: "رمز عبور باید حداقل ۶ کاراکتر باشد" }, { status: 400 });
-        }
-
-        const existing = await prisma.user.findUnique({ where: { identifier } });
-        if (existing) {
-            return NextResponse.json({ error: "این حساب قبلاً ثبت شده" }, { status: 409 });
-        }
-
-        const hashedPassword = await bcrypt.hash(password, 10);
-
-        const user = await prisma.user.create({
-            data: { name, identifier, password: hashedPassword },
-        });
-
-        return NextResponse.json({
-            id: user.id,
-            name: user.name,
-            identifier: user.identifier,
-        }, { status: 201 });
-
-    } catch (error) {
-        console.error(error);
-        return NextResponse.json({ error: "خطا در ثبت‌نام" }, { status: 500 });
+    if (!parsed.success) {
+      const firstError =
+        parsed.error.issues[0]?.message || "اطلاعات نامعتبر است";
+      return NextResponse.json({ error: firstError }, { status: 400 });
     }
+
+    const { name, phone, password } = parsed.data;
+
+    const existing = await prisma.user.findUnique({
+      where: { phone },
+    });
+
+    if (existing) {
+      return NextResponse.json(
+        { error: "این شماره قبلاً ثبت شده است" },
+        { status: 409 }
+      );
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const user = await prisma.user.create({
+      data: {
+        name,
+        phone,
+        password: hashedPassword,
+        role: "CUSTOMER",
+      },
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        role: true,
+        isPhoneVerified: true,
+      },
+    });
+
+    return NextResponse.json(user, { status: 201 });
+  } catch (error) {
+    console.error("REGISTER ERROR:", error);
+    return NextResponse.json({ error: "خطا در ثبت‌نام" }, { status: 500 });
+  }
 }

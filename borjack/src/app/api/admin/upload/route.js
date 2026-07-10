@@ -3,14 +3,14 @@ import sharp from "sharp";
 import { mkdir } from "fs/promises";
 import path from "path";
 import crypto from "crypto";
-import { requireAdminOrManager } from "@/lib/auth";
+import { requireManagerOrAdmin } from "@/lib/auth";
 
 const MAX_SIZE = 8 * 1024 * 1024; // 8 مگابایت
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif", "image/avif"];
 
 // POST /api/admin/upload — آپلود عکس محصول، تبدیل به webp، ذخیره با ساختار تاریخی
 export async function POST(req) {
-    const check = await requireAdminOrManager();
+    const check = await requireManagerOrAdmin();
     if (check.error) return check.error;
 
     try {

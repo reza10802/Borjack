@@ -1,45 +1,43 @@
 import { NextResponse } from "next/server";
-import { prisma } from "../../../../lib/db";
-import { requireAdminOrManager } from "../../../../lib/auth";
-import { createAuditLog } from "../../../../lib/auditLog";
+import { prisma } from "@/lib/db";
+import { requireManagerOrAdmin } from "@/lib/auth";
 
-export async function GET() {
-  const { session, error } = await requireAdminOrManager();
-  if (error) return error;
+// GET /api/admin/orders — لیست سفارش‌ها
+export async function GET(req) {
+  const check = await requireManagerOrAdmin(req);
+  if (check.error) return check.error;
 
-  const orders = await prisma.order.findMany({
-    include: {
-      user: { select: { id: true, name: true, identifier: true } },
-      items: { include: { product: { select: { title: true } } } },
-    },
-    orderBy: { createdAt: "desc" },
-  });
+  try {
+    const orders = await prisma.order.findMany({
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            identifier: true,
+          },
+        },
+        items: {
+          include: {
+            product: {
+              select: {
+                id: true,
+                title: true,
+                image: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
 
-  return NextResponse.json({ orders });
-}
-
-export async function PATCH(req) {
-  const { session, error } = await requireAdminOrManager();
-  if (error) return error;
-
-  const { orderId, status } = await req.json();
-
-  const before = await prisma.order.findUnique({ where: { id: orderId } });
-
-  const order = await prisma.order.update({
-    where: { id: orderId },
-    data: { status },
-  });
-
-  await createAuditLog({
-    userId: session.id,
-    action: "UPDATE_ORDER_STATUS",
-    entityType: "Order",
-    entityId: orderId,
-    description: `تغییر وضعیت سفارش #${orderId} از ${before?.status} به ${status}`,
-    oldValue: { status: before?.status },
-    newValue: { status },
-  });
-
-  return NextResponse.json({ order });
+    return NextResponse.json({ orders });
+  } catch (error) {
+    console.error(error);
+    return NextResponse.json(
+      { error: "خطا در دریافت سفارشات" },
+      { status: 500 }
+    );
+  }
 }
