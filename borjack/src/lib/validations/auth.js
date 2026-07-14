@@ -131,3 +131,21 @@ export const checkoutSchema = z.object({
   saveAddress: z.boolean().optional(),
   addressId: z.number().optional().nullable(),
 });
+
+export const profileSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(2, "نام باید حداقل ۲ کاراکتر باشد")
+    .max(100, "نام خیلی طولانی است"),
+
+  email: z
+    .string()
+    .trim()
+    .optional()
+    .or(z.literal(""))
+    .refine(
+      (value) => !value || emailRegex.test(value),
+      "ایمیل معتبر نیست"
+    ),
+});

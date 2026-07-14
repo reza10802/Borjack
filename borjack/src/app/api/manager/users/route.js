@@ -3,13 +3,13 @@
 
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { requireManager } from "@/lib/auth";
+import { requireManagerOrAdmin } from "@/lib/auth";
 import { createAuditLog } from "@/lib/auditLog";
 
 // GET — لیست همه کاربران
-export async function GET(request) {
-  const { session, error } = await requireManager();
-  if (error) return error;
+export async function GET(req) {
+  const check = await requireManagerOrAdmin(req);
+  if (check.error) return check.error;
 
   const users = await db.user.findMany({
     select: {
@@ -28,8 +28,10 @@ export async function GET(request) {
 
 // PATCH — تغییر نقش کاربر
 export async function PATCH(request) {
-  const { session, error } = await requireManager();
-  if (error) return error;
+  const check = await requireManagerOrAdmin(request);
+  if (check.error) return check.error;
+
+  const session = check.user;
 
   const body = await request.json();
   const { userId, role } = body;
@@ -41,7 +43,10 @@ export async function PATCH(request) {
 
   // نمی‌توان نقش خود را تغییر داد
   if (userId === session.id) {
-    return NextResponse.json({ error: "Cannot change your own role" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Cannot change your own role" },
+      { status: 400 },
+    );
   }
 
   const before = await db.user.findUnique({
@@ -74,8 +79,10 @@ export async function PATCH(request) {
 
 // DELETE — حذف کاربر
 export async function DELETE(request) {
-  const { session, error } = await requireManager();
-  if (error) return error;
+  const check = await requireManagerOrAdmin(request);
+  if (check.error) return check.error;
+
+  const session = check.user;
 
   const { searchParams } = new URL(request.url);
   const userId = searchParams.get("userId");
