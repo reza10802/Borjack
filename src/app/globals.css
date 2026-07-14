@@ -1,0 +1,30 @@
+@import "tailwindcss";
+
+@font-face {
+  font-family: "Vazir";
+  src: url("/fonts/Vazir-Light.woff2") format("woff2");
+  font-weight: 300;
+  font-style: normal;
+}
+@font-face {
+  font-family: "Vazir";
+  src: url("/fonts/Vazir-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+}
+@font-face {
+  font-family: "Vazir";
+  src: url("/fonts/Vazir-Bold.woff2") format("woff2");
+  font-weight: 800;
+  font-style: normal;
+}
+
+
+@theme {
+  --font-sans: "Vazir", sans-serif;
+}
+
+body {
+  direction: rtl;
+  background-color: #f5f5f5;
+}
