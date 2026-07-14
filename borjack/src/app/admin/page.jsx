@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
+import Select from "react-select";
 
 const priorityConfig = {
     HIGH: { label: "بالا", color: "bg-red-100 text-red-700" },
@@ -260,34 +261,53 @@ export default function AdminDashboard() {
                         />
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <select
-                                value={newTask.priority}
-                                onChange={(e) =>
-                                    setNewTask((t) => ({ ...t, priority: e.target.value }))
+                            <Select
+                                options={[
+                                    { value: "HIGH", label: "اولویت بالا" },
+                                    { value: "MEDIUM", label: "اولویت متوسط" },
+                                    { value: "LOW", label: "اولویت کم" },
+                                ]}
+                                value={{
+                                    value: newTask.priority,
+                                    label:
+                                        newTask.priority === "HIGH"
+                                            ? "اولویت بالا"
+                                            : newTask.priority === "MEDIUM"
+                                                ? "اولویت متوسط"
+                                                : "اولویت کم",
+                                }}
+                                onChange={(option) =>
+                                    setNewTask((t) => ({
+                                        ...t,
+                                        priority: option.value,
+                                    }))
                                 }
-                                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none bg-white"
-                            >
-                                <option value="HIGH">اولویت بالا</option>
-                                <option value="MEDIUM">اولویت متوسط</option>
-                                <option value="LOW">اولویت کم</option>
-                            </select>
+                            />
 
-                            <select
-                                value={newTask.toId}
-                                onChange={(e) =>
-                                    setNewTask((t) => ({ ...t, toId: e.target.value }))
-                                }
-                                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none bg-white"
-                            >
-                                <option value="">انتخاب گیرنده</option>
-                                {users
+                            <Select
+                                options={users
                                     .filter((u) => u.id !== user?.id)
-                                    .map((u) => (
-                                        <option key={u.id} value={u.id}>
-                                            {u.name} ({u.role})
-                                        </option>
-                                    ))}
-                            </select>
+                                    .map((u) => ({
+                                        value: u.id,
+                                        label: `${u.name} (${u.role})`,
+                                    }))}
+                                value={
+                                    users
+                                        .filter((u) => u.id !== user?.id)
+                                        .map((u) => ({
+                                            value: u.id,
+                                            label: `${u.name} (${u.role})`,
+                                        }))
+                                        .find((u) => u.value === newTask.toId) || null
+                                }
+                                onChange={(option) =>
+                                    setNewTask((t) => ({
+                                        ...t,
+                                        toId: option?.value || "",
+                                    }))
+                                }
+                                placeholder="انتخاب گیرنده"
+                            />
                         </div>
 
                         <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
@@ -318,8 +338,8 @@ export default function AdminDashboard() {
                             key={f.id}
                             onClick={() => setFilter(f.id)}
                             className={`px-4 py-2 rounded-lg text-sm transition ${filter === f.id
-                                    ? "bg-black text-white"
-                                    : "border border-gray-200 text-gray-600 hover:bg-gray-50"
+                                ? "bg-black text-white"
+                                : "border border-gray-200 text-gray-600 hover:bg-gray-50"
                                 }`}
                         >
                             {f.label}
@@ -347,16 +367,16 @@ export default function AdminDashboard() {
                             <div
                                 key={task.id}
                                 className={`rounded-xl border p-4 transition ${task.done
-                                        ? "bg-gray-50 border-gray-100 opacity-70"
-                                        : "bg-white border-gray-200"
+                                    ? "bg-gray-50 border-gray-100 opacity-70"
+                                    : "bg-white border-gray-200"
                                     }`}
                             >
                                 <div className="flex items-start gap-3">
                                     <button
                                         onClick={() => toggleDone(task)}
                                         className={`w-5 h-5 rounded-full border-2 shrink-0 mt-1 flex items-center justify-center transition ${task.done
-                                                ? "bg-black border-black"
-                                                : "border-gray-300 hover:border-black"
+                                            ? "bg-black border-black"
+                                            : "border-gray-300 hover:border-black"
                                             }`}
                                     >
                                         {task.done && (
@@ -380,8 +400,8 @@ export default function AdminDashboard() {
                                         <div className="flex flex-wrap items-center gap-2 mb-1">
                                             <span
                                                 className={`text-sm font-medium break-words ${task.done
-                                                        ? "line-through text-gray-400"
-                                                        : "text-gray-800"
+                                                    ? "line-through text-gray-400"
+                                                    : "text-gray-800"
                                                     }`}
                                             >
                                                 {task.title}

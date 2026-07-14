@@ -3,9 +3,9 @@ import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
 
 // گرفتن آیتم‌های سبد خرید
-export async function GET(req) {
+export async function GET() {
   try {
-    const user = await getSessionUser(req);
+    const user = await getSessionUser();
 
     if (!user) {
       return NextResponse.json({ error: "لاگین نشدی" }, { status: 401 });
@@ -28,7 +28,7 @@ export async function GET(req) {
     console.error("CART GET ERROR:", error);
     return NextResponse.json(
       { error: "خطا در دریافت سبد خرید" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -36,7 +36,7 @@ export async function GET(req) {
 // افزودن به سبد خرید
 export async function POST(req) {
   try {
-    const user = await getSessionUser(req);
+    const user = await getSessionUser();
 
     if (!user) {
       return NextResponse.json({ error: "لاگین نشدی" }, { status: 401 });
@@ -49,7 +49,7 @@ export async function POST(req) {
     if (!productId || Number.isNaN(productId)) {
       return NextResponse.json(
         { error: "شناسه محصول نامعتبر است" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -105,7 +105,7 @@ export async function POST(req) {
     console.error("CART POST ERROR:", error);
     return NextResponse.json(
       { error: "خطا در افزودن به سبد خرید" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -113,7 +113,7 @@ export async function POST(req) {
 // حذف کل یک آیتم از سبد با productId
 export async function DELETE(req) {
   try {
-    const user = await getSessionUser(req);
+    const user = await getSessionUser();
 
     if (!user) {
       return NextResponse.json({ error: "لاگین نشدی" }, { status: 401 });
@@ -125,7 +125,7 @@ export async function DELETE(req) {
     if (!productId || Number.isNaN(productId)) {
       return NextResponse.json(
         { error: "شناسه محصول نامعتبر است" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -143,7 +143,7 @@ export async function DELETE(req) {
     console.error("CART DELETE ERROR:", error);
     return NextResponse.json(
       { error: "خطا در حذف از سبد خرید" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

@@ -31,7 +31,17 @@ export async function POST(req) {
     if (!user) {
       return NextResponse.json(
         { error: "این حساب وجود ندارد" },
-        { status: 404 }
+        { status: 404 },
+      );
+    }
+    if (!user.isActive) {
+      return NextResponse.json(
+        {
+          error: "حساب کاربری شما توسط مدیریت غیرفعال شده است.",
+        },
+        {
+          status: 403,
+        },
       );
     }
 
@@ -40,7 +50,7 @@ export async function POST(req) {
     if (!isValid) {
       return NextResponse.json(
         { error: "رمز عبور اشتباه است" },
-        { status: 401 }
+        { status: 401 },
       );
     }
 
@@ -50,7 +60,7 @@ export async function POST(req) {
         role: user.role,
       },
       JWT_SECRET,
-      { expiresIn: "7d" }
+      { expiresIn: "7d" },
     );
 
     const response = NextResponse.json({

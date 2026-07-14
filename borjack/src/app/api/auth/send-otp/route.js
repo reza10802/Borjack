@@ -16,6 +16,22 @@ export async function POST(req) {
 
     const { phone } = parsed.data;
 
+    const user = await prisma.user.findUnique({
+      where: {
+        phone,
+      },
+    });
+
+    if (user && !user.isActive) {
+      return NextResponse.json(
+        {
+          error: "حساب کاربری شما مسدود شده است.",
+        },
+        {
+          status: 403,
+        },
+      );
+    }
     // کد تستی
     const code = Math.floor(100000 + Math.random() * 900000).toString();
 
@@ -53,7 +69,7 @@ export async function POST(req) {
     console.error("SEND OTP ERROR:", error);
     return NextResponse.json(
       { error: "خطا در ارسال کد تایید" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

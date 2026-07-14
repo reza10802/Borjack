@@ -14,6 +14,16 @@ export default function ProfilePage() {
     const highlightedOrderId = searchParams.get("order");
 
     const [orders, setOrders] = useState([]);
+    const [orderTab, setOrderTab] = useState("paid");
+
+    const paidOrders = orders.filter(
+        (o) => o.paymentStatus === "PAID"
+    );
+
+    const pendingOrders = orders.filter(
+        (o) => o.paymentStatus === "PENDING"
+    );
+
     const [wishlist, setWishlist] = useState([]);
 
     const [ordersLoading, setOrdersLoading] = useState(true);
@@ -44,8 +54,6 @@ export default function ProfilePage() {
 
         setAccountForm({
             name: user.name || "",
-            address: user.address || "",
-            postalCode: user.postalCode || "",
         });
 
         fetchOrders();
@@ -78,20 +86,7 @@ export default function ProfilePage() {
 
             const data = await res.json();
 
-            const filteredOrders = (data || []).filter((order) => {
-                const hasSuccessfulPayment =
-                    order.paymentStatus === "PAID" ||
-                    order.paymentStatus === "SUCCESS" ||
-                    !!order.paymentRefId;
-
-                const isPendingBoth =
-                    order.paymentStatus === "PENDING" &&
-                    order.status === "PENDING";
-
-                return hasSuccessfulPayment || !isPendingBoth;
-            });
-
-            setOrders(filteredOrders);
+            setOrders(data || []);
         } catch (error) {
             console.error(error);
             setOrders([]);
@@ -204,6 +199,26 @@ export default function ProfilePage() {
         { id: "account", label: "اطلاعات حساب" },
     ];
 
+
+    const cancelOrder = async (id) => {
+        if (!confirm("این سفارش حذف شود؟"))
+            return;
+
+        try {
+            const res = await fetch(`/api/order/${id}`, {
+                method: "DELETE",
+            });
+
+            if (!res.ok) return;
+
+            setOrders((prev) =>
+                prev.filter((o) => o.id !== id)
+            );
+        } catch (err) {
+            console.error(err);
+        }
+    };
+
     return (
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-10" dir="rtl">
             <BackButton />
@@ -232,11 +247,10 @@ export default function ProfilePage() {
                     <button
                         key={tab.id}
                         onClick={() => setActiveTab(tab.id)}
-                        className={`px-4 sm:px-5 py-2 rounded-xl text-sm font-medium transition ${
-                            activeTab === tab.id
-                                ? "bg-black text-white"
-                                : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"
-                        }`}
+                        className={`px-4 sm:px-5 py-2 rounded-xl text-sm font-medium transition ${activeTab === tab.id
+                            ? "bg-black text-white"
+                            : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"
+                            }`}
                     >
                         {tab.label}
                     </button>
@@ -265,8 +279,6 @@ export default function ProfilePage() {
                                     setIsEditing(false);
                                     setAccountForm({
                                         name: user.name || "",
-                                        address: user.address || "",
-                                        postalCode: user.postalCode || "",
                                     });
                                     setAccountMessage("");
                                 }}
@@ -307,62 +319,12 @@ export default function ProfilePage() {
                             </div>
                         </div>
 
-                        <div className="flex flex-col gap-1">
-                            <label className="text-xs text-gray-400">آدرس</label>
-
-                            {isEditing ? (
-                                <textarea
-                                    rows={4}
-                                    value={accountForm.address}
-                                    onChange={(e) =>
-                                        setAccountForm((prev) => ({
-                                            ...prev,
-                                            address: e.target.value,
-                                        }))
-                                    }
-                                    className="border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-800 focus:outline-none focus:border-black resize-none"
-                                    placeholder="آدرس کامل خود را وارد کنید"
-                                />
-                            ) : (
-                                <div className="border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-800 bg-gray-50 min-h-[96px] leading-7">
-                                    {user.address || "ثبت نشده"}
-                                </div>
-                            )}
-                        </div>
-
-                        <div className="flex flex-col gap-1">
-                            <label className="text-xs text-gray-400">کد پستی</label>
-
-                            {isEditing ? (
-                                <input
-                                    type="text"
-                                    inputMode="numeric"
-                                    maxLength={10}
-                                    value={accountForm.postalCode}
-                                    onChange={(e) => {
-                                        const onlyDigits = e.target.value.replace(/\D/g, "");
-                                        setAccountForm((prev) => ({
-                                            ...prev,
-                                            postalCode: onlyDigits,
-                                        }));
-                                    }}
-                                    className="border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-800 focus:outline-none focus:border-black"
-                                    placeholder="مثلاً 1234567890"
-                                />
-                            ) : (
-                                <div className="border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-800 bg-gray-50">
-                                    {user.postalCode || "ثبت نشده"}
-                                </div>
-                            )}
-                        </div>
-
                         {accountMessage && (
                             <p
-                                className={`text-sm ${
-                                    accountMessage.includes("موفق")
-                                        ? "text-green-600"
-                                        : "text-red-500"
-                                }`}
+                                className={`text-sm ${accountMessage.includes("موفق")
+                                    ? "text-green-600"
+                                    : "text-red-500"
+                                    }`}
                             >
                                 {accountMessage}
                             </p>
@@ -395,92 +357,149 @@ export default function ProfilePage() {
                             هنوز سفارش نهایی‌شده‌ای ثبت نکردی
                         </div>
                     ) : (
-                        orders.map((order) => {
-                            const isHighlighted =
-                                highlightedOrderId && String(order.id) === highlightedOrderId;
+                        <>
+                            <div className="flex gap-2 mb-5">
+                                <button
+                                    onClick={() => setOrderTab("paid")}
+                                    className={`px-4 py-2 rounded-xl text-sm transition ${orderTab === "paid"
+                                        ? "bg-black text-white"
+                                        : "border border-gray-200 text-gray-600"
+                                        }`}
+                                >
+                                    پرداخت شده
+                                </button>
 
-                            return (
-                                <div
-                                    key={order.id}
-                                    className={`bg-white rounded-2xl border p-4 sm:p-5 ${
-                                        isHighlighted
+                                <button
+                                    onClick={() => setOrderTab("pending")}
+                                    className={`px-4 py-2 rounded-xl text-sm transition ${orderTab === "pending"
+                                        ? "bg-black text-white"
+                                        : "border border-gray-200 text-gray-600"
+                                        }`}
+                                >
+                                    در انتظار پرداخت
+                                </button>
+                            </div>
+                            {(orderTab === "paid" ? paidOrders : pendingOrders).map((order) => {
+                                const isHighlighted = highlightedOrderId && String(order.id) === highlightedOrderId;
+
+                                return (
+                                    <div
+                                        key={order.id}
+                                        className={`bg-white rounded-2xl border p-4 sm:p-5 ${isHighlighted
                                             ? "border-black ring-1 ring-black"
                                             : "border-gray-100"
-                                    }`}
-                                >
-                                    {isHighlighted && (
-                                        <p className="text-xs text-green-600 font-medium mb-3">
-                                            ✓ سفارش با موفقیت ثبت شد
-                                        </p>
-                                    )}
+                                            }`}
+                                    >
+                                        {isHighlighted && (
+                                            <p className="text-xs text-green-600 font-medium mb-3">
+                                                ✓ سفارش با موفقیت ثبت شد
+                                            </p>
+                                        )}
 
-                                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-                                        <div className="flex items-center gap-3 flex-wrap">
-                                            <span className="text-sm font-bold text-gray-800">
-                                                سفارش #{order.id}
-                                            </span>
-
-                                            <span
-                                                className={`text-xs px-2 py-1 rounded-lg ${
-                                                    ORDER_STATUS_COLORS[order.status] ||
-                                                    "bg-gray-100 text-gray-600"
-                                                }`}
-                                            >
-                                                {ORDER_STATUS_LABELS[order.status] || order.status}
-                                            </span>
-
-                                            {order.paymentRefId && (
-                                                <span className="text-xs px-2 py-1 rounded-lg bg-green-50 text-green-700">
-                                                    کد رهگیری: {order.paymentRefId}
+                                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                                            <div className="flex items-center gap-3 flex-wrap">
+                                                <span className="text-sm font-bold text-gray-800">
+                                                    سفارش #{order.id}
                                                 </span>
-                                            )}
+
+                                                {order.paymentStatus === "PENDING" ? (
+                                                    <span className="text-xs px-2 py-1 rounded-lg bg-yellow-100 text-yellow-700">
+                                                        در انتظار پرداخت
+                                                    </span>
+                                                ) : (
+                                                    order.paymentStatus === "PENDING" ? (
+                                                        <span className="text-xs px-2 py-1 rounded-lg bg-yellow-100 text-yellow-700">
+                                                            در انتظار پرداخت
+                                                        </span>
+                                                    ) : (
+                                                        <span
+                                                            className={`text-xs px-2 py-1 rounded-lg ${ORDER_STATUS_COLORS[order.status] ||
+                                                                "bg-gray-100 text-gray-600"
+                                                                }`}
+                                                        >
+                                                            {ORDER_STATUS_LABELS[order.status] || order.status}
+                                                        </span>
+                                                    )
+                                                )}
+
+                                                {order.paymentRefId && (
+                                                    <span className="text-xs px-2 py-1 rounded-lg bg-green-50 text-green-700">
+                                                        کد رهگیری: {order.paymentRefId}
+                                                    </span>
+                                                )}
+                                            </div>
+
+                                            <span className="text-xs text-gray-400">
+                                                {new Date(order.createdAt).toLocaleDateString("fa-IR")}
+                                            </span>
                                         </div>
 
-                                        <span className="text-xs text-gray-400">
-                                            {new Date(order.createdAt).toLocaleDateString("fa-IR")}
-                                        </span>
-                                    </div>
+                                        <div className="flex flex-col gap-3">
+                                            {order.items.map((item) => (
+                                                <div key={item.id} className="flex items-center gap-3">
+                                                    <div className="w-12 h-12 rounded-xl bg-gray-100 overflow-hidden shrink-0">
+                                                        <img
+                                                            src={
+                                                                item.product.images?.[0]?.url ||
+                                                                item.product.image
+                                                            }
+                                                            alt={item.product.title}
+                                                            className="w-full h-full object-cover"
+                                                            onError={(e) => (e.target.style.display = "none")}
+                                                        />
+                                                    </div>
 
-                                    <div className="flex flex-col gap-3">
-                                        {order.items.map((item) => (
-                                            <div key={item.id} className="flex items-center gap-3">
-                                                <div className="w-12 h-12 rounded-xl bg-gray-100 overflow-hidden shrink-0">
-                                                    <img
-                                                        src={
-                                                            item.product.images?.[0]?.url ||
-                                                            item.product.image
-                                                        }
-                                                        alt={item.product.title}
-                                                        className="w-full h-full object-cover"
-                                                        onError={(e) => (e.target.style.display = "none")}
-                                                    />
-                                                </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-sm text-gray-800 line-clamp-1">
+                                                            {item.product.title}
+                                                        </p>
+                                                        <p className="text-xs text-gray-400">
+                                                            تعداد: {item.quantity}
+                                                        </p>
+                                                    </div>
 
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="text-sm text-gray-800 line-clamp-1">
-                                                        {item.product.title}
+                                                    <p className="text-sm font-medium whitespace-nowrap">
+                                                        {(item.price * item.quantity).toLocaleString()} تومان
                                                     </p>
-                                                    <p className="text-xs text-gray-400">
-                                                        تعداد: {item.quantity}
-                                                    </p>
                                                 </div>
-
-                                                <p className="text-sm font-medium whitespace-nowrap">
-                                                    {(item.price * item.quantity).toLocaleString()} تومان
+                                            ))}
+                                        </div>
+                                        {order.paymentStatus === "PENDING" && (
+                                            <div className="mt-4 border-t border-gray-100 pt-4">
+                                                <p className="text-sm text-yellow-700 mb-3">
+                                                    این سفارش هنوز پرداخت نشده است.
                                                 </p>
-                                            </div>
-                                        ))}
-                                    </div>
 
-                                    <div className="border-t border-gray-100 mt-4 pt-4 flex justify-between items-center">
-                                        <span className="text-sm text-gray-500">جمع کل</span>
-                                        <span className="text-sm font-bold">
-                                            {order.total.toLocaleString()} تومان
-                                        </span>
+                                                <button
+                                                    onClick={() => {
+                                                        window.location.href =
+                                                            `https://sandbox.zarinpal.com/pg/StartPay/${order.authority}`;
+                                                    }}
+                                                    className="mt-3 bg-black text-white px-4 py-2 rounded-xl hover:bg-gray-800 transition"
+                                                >
+                                                    ادامه پرداخت
+                                                </button>
+                                                <button
+                                                    onClick={() => cancelOrder(order.id)}
+                                                    className="mt-3 mr-2 border border-red-500 text-red-500 px-4 py-2 rounded-xl hover:bg-red-50 transition"
+                                                >
+                                                    لغو سفارش
+                                                </button>
+                                            </div>
+                                        )}
+
+
+
+                                        <div className="border-t border-gray-100 mt-4 pt-4 flex justify-between items-center">
+                                            <span className="text-sm text-gray-500">جمع کل</span>
+                                            <span className="text-sm font-bold">
+                                                {order.total.toLocaleString("fa-IR")} تومان
+                                            </span>
+                                        </div>
                                     </div>
-                                </div>
-                            );
-                        })
+                                );
+                            })}
+                        </>
                     )}
                 </div>
             )}

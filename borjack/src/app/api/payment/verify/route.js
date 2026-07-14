@@ -15,8 +15,11 @@ export async function GET(req) {
       return NextResponse.redirect(`${siteUrl}/?payment=failed`);
     }
 
+    // پیدا کردن سفارش
     const order = await prisma.order.findFirst({
-      where: { paymentAuthority: authority },
+      where: {
+        authority,
+      },
     });
 
     if (!order) {
@@ -25,28 +28,26 @@ export async function GET(req) {
 
     // کاربر پرداخت را لغو کرده
     if (status !== "OK") {
-      await prisma.order.update({
-        where: { id: order.id },
-        data: {
-          paymentStatus: "FAILED",
+      await prisma.transaction.deleteMany({
+        where: {
+          orderId: order.id,
+        },
+      });
+
+      await prisma.order.delete({
+        where: {
+          id: order.id,
         },
       });
 
       return NextResponse.redirect(`${siteUrl}/?payment=canceled`);
     }
 
-    const merchant_id = process.env.ZARINPAL_MERCHANT_ID;
-
-    // مبلغ باید دقیقاً همان مبلغی باشد که در request فرستاده شد
-    const amount = order.total;
-
     const payload = {
-      merchant_id,
-      amount,
+      merchant_id: process.env.ZARINPAL_MERCHANT_ID,
       authority,
+      amount: order.total,
     };
-
-    console.log("Zarinpal verify payload:", payload);
 
     const response = await fetch(ZARINPAL_VERIFY_URL, {
       method: "POST",
@@ -57,41 +58,62 @@ export async function GET(req) {
     });
 
     const data = await response.json();
-    console.log("Zarinpal verify response:", data);
 
     const result = data?.data;
 
-    // 100 = موفق
-    // 101 = قبلاً تایید شده
     if (result?.code === 100 || result?.code === 101) {
+      // آپدیت سفارش
       await prisma.order.update({
-        where: { id: order.id },
+        where: {
+          id: order.id,
+        },
         data: {
           paymentStatus: "PAID",
+          status: "PROCESSING",
           paidAt: new Date(),
-          paymentRefId: result.ref_id ? String(result.ref_id) : null,
+          refId: String(result.ref_id),
         },
       });
 
-      // بعد از پرداخت موفق → صفحه فروشگاه
-      return NextResponse.redirect(
-        `${siteUrl}/?payment=success&orderId=${order.id}`
-      );
+      // آپدیت تراکنش
+      await prisma.transaction.update({
+        where: {
+          orderId: order.id,
+        },
+        data: {
+          status: "SUCCESS",
+          refId: String(result.ref_id),
+        },
+      });
+
+      // پاک کردن سبد خرید
+      await prisma.cartItem.deleteMany({
+        where: {
+          userId: order.userId,
+        },
+      });
+
+      return NextResponse.redirect(`${siteUrl}/profile?payment=success`);
     }
 
-    await prisma.order.update({
-      where: { id: order.id },
-      data: {
-        paymentStatus: "FAILED",
+    await prisma.transaction.deleteMany({
+      where: {
+        orderId: order.id,
       },
     });
 
-    return NextResponse.redirect(`${siteUrl}/?payment=failed&orderId=${order.id}`);
+    await prisma.order.delete({
+      where: {
+        id: order.id,
+      },
+    });
+
+    return NextResponse.redirect(`${siteUrl}/?payment=failed`);
   } catch (error) {
-    console.error("Zarinpal verify error:", error);
+    console.error("VERIFY ERROR:", error);
 
     return NextResponse.redirect(
-      `${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/?payment=failed`
+      `${process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"}/?payment=failed`,
     );
   }
 }

@@ -39,7 +39,7 @@ export async function GET(req) {
     console.error("GET /api/admin/tasks error:", error);
     return NextResponse.json(
       { error: "خطا در دریافت تسک‌ها" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -57,12 +57,17 @@ export async function POST(req) {
     if (!title || !toId) {
       return NextResponse.json(
         { error: "عنوان و گیرنده الزامی است" },
-        { status: 400 }
+        { status: 400 },
       );
     }
-
+    console.log({
+      title,
+      description,
+      priority,
+      toId,
+    });
     const to = await prisma.user.findUnique({
-      where: { id: Number(toId) },
+      where: { id: toId },
       select: { id: true, name: true, role: true },
     });
 
@@ -76,7 +81,7 @@ export async function POST(req) {
         description: description || null,
         priority: priority || "MEDIUM",
         fromId: user.id,
-        toId: Number(toId),
+        toId: toId,
       },
       include: {
         from: { select: { id: true, name: true, role: true } },
@@ -87,9 +92,6 @@ export async function POST(req) {
     return NextResponse.json({ task }, { status: 201 });
   } catch (error) {
     console.error("POST /api/admin/tasks error:", error);
-    return NextResponse.json(
-      { error: "خطا در ساخت تسک" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "خطا در ساخت تسک" }, { status: 500 });
   }
 }

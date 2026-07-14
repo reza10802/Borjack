@@ -5,7 +5,7 @@ import { profileSchema } from "@/lib/validations/auth";
 
 export async function PATCH(req) {
   try {
-    const user = await getSessionUser(req);
+    const user = await getSessionUser();
 
     if (!user) {
       return NextResponse.json({ error: "لاگین نیستی" }, { status: 401 });

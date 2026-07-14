@@ -10,8 +10,9 @@ export async function GET() {
     select: {
       id: true,
       name: true,
-      identifier: true,
+      phone: true,
       role: true,
+      isActive: true,
       createdAt: true,
       _count: { select: { orders: true } },
     },

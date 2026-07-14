@@ -26,12 +26,13 @@ enum PaymentStatus {
   PENDING
   PAID
   FAILED
+  EXPIRED
 }
 
 model Transaction {
   id          String   @id @default(cuid())
 
-  orderId     String   @unique
+  orderId     Int   @unique
   order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   authority   String   @unique
@@ -39,7 +40,7 @@ model Transaction {
 
   amount      Int
 
-  status      String   @default("PENDING")
+  status      OrderStatus   @default(PENDING)
   gateway     String   @default("ZARINPAL")
 
   createdAt   DateTime @default(now())
@@ -58,6 +59,15 @@ enum LogAction {
   DELETE_USER
   SEND_OTP
   VERIFY_OTP
+  BLOCK_USER
+  UNBLOCK_USER
+
+  LOGIN
+  LOGOUT
+
+  CREATE_TASK
+  UPDATE_TASK
+  DELETE_TASK
 }
 
 enum Priority {
@@ -74,6 +84,7 @@ model User {
   password        String
   role            Role      @default(CUSTOMER)
   isPhoneVerified Boolean   @default(false)
+  isActive        Boolean   @default(true)
 
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
@@ -215,11 +226,13 @@ model Order {
 
   total           Int
 
-  status          String   @default("PENDING")
+  status          OrderStatus @default(PENDING)
 
-  paymentStatus   String   @default("UNPAID")
+  paymentStatus   PaymentStatus @default(PENDING)
 
   authority       String?  @unique
+
+  paymentExpiresAt DateTime?
 
   refId           String?
 
@@ -240,6 +253,8 @@ model Order {
   postalCode      String
 
   items           OrderItem[]
+
+  transaction     Transaction?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

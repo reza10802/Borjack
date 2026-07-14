@@ -20,8 +20,8 @@ export default function AdminUsersPage() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(null);
-  const [deleting, setDeleting] = useState(null);
   const [error, setError] = useState("");
+  const [toggling, setToggling] = useState(null);
 
   const load = async () => {
     setError("");
@@ -77,28 +77,35 @@ export default function AdminUsersPage() {
     }
   };
 
-  const deleteUser = async (userId) => {
-    if (!confirm("آیا مطمئن هستی؟ این عمل غیرقابل بازگشت است.")) return;
-
-    setDeleting(userId);
+  const toggleUserStatus = async (userId, isActive) => {
+    setToggling(userId);
     setError("");
 
     try {
-      const res = await fetch(`/api/admin/users?userId=${userId}`, {
-        method: "DELETE",
+      const res = await fetch(`/api/admin/users/${userId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          isActive,
+        }),
       });
+
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.error || "خطا در حذف کاربر");
+        setError(data.error || "خطا در تغییر وضعیت");
         return;
       }
 
-      setUsers((prev) => prev.filter((u) => u.id !== userId));
+      setUsers((prev) =>
+        prev.map((u) => (u.id === userId ? data.user : u))
+      );
     } catch {
       setError("خطا در ارتباط با سرور");
     } finally {
-      setDeleting(null);
+      setToggling(null);
     }
   };
 
@@ -125,6 +132,7 @@ export default function AdminUsersPage() {
                 <th className="px-4 py-3 font-medium">شناسه</th>
                 <th className="px-4 py-3 font-medium">سفارشات</th>
                 <th className="px-4 py-3 font-medium">نقش</th>
+                <th className="px-4 py-3 font-medium">وضعیت</th>
                 <th className="px-4 py-3 font-medium">عملیات</th>
               </tr>
             </thead>
@@ -137,7 +145,7 @@ export default function AdminUsersPage() {
                 return (
                   <tr key={u.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 font-medium text-gray-800">{u.name}</td>
-                    <td className="px-4 py-3 text-gray-500 text-xs">{u.identifier}</td>
+                    <td className="px-4 py-3 text-gray-500 text-xs">{u.phone}</td>
                     <td className="px-4 py-3 text-gray-600">{u._count?.orders ?? 0}</td>
                     <td className="px-4 py-3">
                       <span
@@ -145,6 +153,13 @@ export default function AdminUsersPage() {
                       >
                         {ROLE_LABELS[u.role]}
                       </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      {u.isActive ? (
+                        <span className="text-green-600">فعال</span>
+                      ) : (
+                        <span className="text-red-600">مسدود</span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       {isSelf ? (
@@ -157,18 +172,25 @@ export default function AdminUsersPage() {
                             value={u.role}
                             onChange={(e) => changeRole(u.id, e.target.value)}
                             disabled={updating === u.id}
-                            className="text-xs border border-gray-200 rounded-lg px-2 py-1 focus:outline-none disabled:opacity-50"
+                            className="text-xs border border-gray-200 rounded-lg px-2 py-1"
                           >
                             <option value="CUSTOMER">مشتری</option>
                             <option value="MANAGER">منیجر</option>
                           </select>
-
                           <button
-                            onClick={() => deleteUser(u.id)}
-                            disabled={deleting === u.id}
-                            className="text-red-500 hover:text-red-700 text-xs transition disabled:opacity-50"
+                            onClick={() => toggleUserStatus(u.id, !u.isActive)}
+                            disabled={toggling === u.id}
+                            className={`px-3 py-1 rounded-lg text-xs transition ${u.isActive
+                              ? "bg-red-100 text-red-700 hover:bg-red-200"
+                              : "bg-green-100 text-green-700 hover:bg-green-200"
+                              }`}
+                              
                           >
-                            {deleting === u.id ? "..." : "حذف"}
+                            {toggling === u.id
+                              ? "..."
+                              : u.isActive
+                                ? "مسدود کردن"
+                                : "فعال کردن"}
                           </button>
                         </div>
                       )}

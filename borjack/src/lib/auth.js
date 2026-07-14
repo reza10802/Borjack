@@ -36,7 +36,6 @@ export async function getSessionUser() {
     if (!token) return null;
 
     const decoded = jwt.verify(token, JWT_SECRET);
-
     if (!decoded?.id) return null;
 
     const user = await prisma.user.findUnique({
@@ -47,12 +46,39 @@ export async function getSessionUser() {
         phone: true,
         email: true,
         role: true,
+        isActive: true,
         isPhoneVerified: true,
+
+        addresses: {
+          where: {
+            isDefault: true,
+          },
+          take: 1,
+        },
       },
     });
 
-    return user || null;
-  } catch {
+    if (!user) return null;
+    if (!user.isActive) return null;
+
+    const defaultAddress = user.addresses[0] || null;
+    return {
+      id: user.id,
+      name: user.name,
+      phone: user.phone,
+      email: user.email,
+      role: user.role,
+      isPhoneVerified: user.isPhoneVerified,
+
+      address: defaultAddress?.address ?? null,
+      postalCode: defaultAddress?.postalCode ?? null,
+      provinceName: defaultAddress?.provinceName ?? null,
+      cityName: defaultAddress?.cityName ?? null,
+      receiverName: defaultAddress?.receiverName ?? null,
+      receiverPhone: defaultAddress?.receiverPhone ?? null,
+    };
+  } catch (err) {
+    console.error("AUTH ERROR:", err);
     return null;
   }
 }
@@ -64,7 +90,7 @@ export async function requireAuth() {
     return {
       error: NextResponse.json(
         { error: "ابتدا وارد حساب شوید" },
-        { status: 401 }
+        { status: 401 },
       ),
     };
   }
@@ -80,7 +106,7 @@ export async function requireVerifiedUser() {
     return {
       error: NextResponse.json(
         { error: "شماره موبایل هنوز تایید نشده است" },
-        { status: 403 }
+        { status: 403 },
       ),
     };
   }
