@@ -18,7 +18,11 @@ export async function GET(req) {
 
     const where = {};
 
-    if (category) where.category = category;
+    if (category) {
+      where.category = {
+        title: category,
+      };
+    }
     if (search) where.title = { contains: search };
     if (onlyDiscount) where.discount = { gt: 0 };
     if (onlyInStock) where.inStock = true;
@@ -63,7 +67,7 @@ export async function GET(req) {
     console.error(error);
     return NextResponse.json(
       { error: "خطا در دریافت محصولات" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

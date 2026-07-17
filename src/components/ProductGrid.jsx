@@ -1,21 +1,23 @@
 import Link from "next/link";
 import ProductCard from "./ProductCard";
+import { prisma } from "@/lib/db";
 
 async function getProducts() {
-  const baseUrl =
-    process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+  const products = await prisma.product.findMany({
+    orderBy: {
+      createdAt: "desc",
+    },
+    include: {
+      images: true,
+      specs: true,
+    },
+  });
 
-  try {
-    const res = await fetch(`${baseUrl}/api/products`, {
-      cache: "no-store",
-    });
-
-    if (!res.ok) return [];
-    return res.json();
-  } catch (error) {
-    console.error("Failed to fetch products:", error);
-    return [];
-  }
+  return products.map((product) => ({
+    ...product,
+    image: product.images?.[0]?.url || product.image,
+    isWishlisted: false,
+  }));
 }
 
 export default async function ProductGrid() {

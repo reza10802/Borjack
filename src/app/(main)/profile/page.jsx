@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter, useSearchParams } from "next/navigation";
 import BackButton from "@/components/BackButton";
 import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from "@/lib/orderStatus";
 
-export default function ProfilePage() {
+function ProfileContent() {
     const { user, loading, setUser } = useAuth();
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -578,5 +578,13 @@ export default function ProfilePage() {
                 </div>
             )}
         </div>
+    );
+}
+
+export default function ProfilePage() {
+    return (
+        <Suspense fallback={null}>
+            <ProfileContent />
+        </Suspense>
     );
 }

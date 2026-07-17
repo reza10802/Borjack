@@ -7,7 +7,7 @@ const ADMIN_ALLOWED_FIELDS = [
   "price",
   "originalPrice",
   "discount",
-  "category",
+  "categoryId",
   "image",
   "description",
   "inStock",
@@ -38,23 +38,73 @@ export async function PATCH(req, { params }) {
     }
 
     const allowedFields =
-      auth.user.role === "ADMIN" ? ADMIN_ALLOWED_FIELDS : MANAGER_ALLOWED_FIELDS;
+      auth.user.role === "ADMIN"
+        ? ADMIN_ALLOWED_FIELDS
+        : MANAGER_ALLOWED_FIELDS;
 
     const data = {};
+
     for (const field of allowedFields) {
-      if (body[field] !== undefined) data[field] = body[field];
+      // فقط فیلدهایی که واقعاً ارسال شدن
+      if (body[field] === undefined) continue;
+
+      if (field === "categoryId") {
+        data.category = {
+          connect: {
+            id: Number(body.categoryId),
+          },
+        };
+      } else if (
+        field === "price" ||
+        field === "originalPrice" ||
+        field === "discount"
+      ) {
+        data[field] = Number(body[field]);
+      } else {
+        data[field] = body[field];
+      }
     }
 
     if (Object.keys(data).length === 0) {
       return NextResponse.json(
         { error: "فیلد مجاز برای ویرایش ارسال نشده" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
-    const product = await prisma.product.update({
+    await prisma.product.update({
       where: { id: productId },
       data,
+    });
+
+    // بروزرسانی گالری تصاویر
+    if (Array.isArray(body.gallery)) {
+      await prisma.productImage.deleteMany({
+        where: {
+          productId,
+        },
+      });
+
+      if (body.gallery.length > 0) {
+        await prisma.productImage.createMany({
+          data: body.gallery.filter(Boolean).map((url) => ({
+            productId,
+            url,
+          })),
+        });
+      }
+    }
+
+    // محصول نهایی را همراه روابط برگردان
+    const product = await prisma.product.findUnique({
+      where: {
+        id: productId,
+      },
+      include: {
+        category: true,
+        images: true,
+        specs: true,
+      },
     });
 
     const isStockOnly = Object.keys(data).length === 1 && "inStock" in data;
@@ -66,7 +116,10 @@ export async function PATCH(req, { params }) {
       entityId: productId,
       description: `ویرایش محصول "${before.title}"`,
       oldValue: before,
-      newValue: data,
+      newValue: {
+        ...data,
+        gallery: body.gallery,
+      },
     });
 
     return NextResponse.json({ product });
@@ -102,7 +155,7 @@ export async function DELETE(req, { params }) {
           error:
             "این محصول در سفارشات قبلی استفاده شده و قابل حذف نیست. به‌جای حذف، موجودی آن را ناموجود کن.",
         },
-        { status: 409 }
+        { status: 409 },
       );
     }
 

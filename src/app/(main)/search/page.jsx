@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect,Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import ProductCard from "../../../components/ProductCard";
-import BackButton from "../../../components/BackButton";
+import ProductCard from "@/components/ProductCard";
+import BackButton from "@/components/BackButton";
 
 const sortOptions = [
     { value: "default", label: "پیش‌فرض" },
@@ -33,7 +33,7 @@ const CustomSelect = ({ value, onChange, options }) => (
     </div>
 );
 
-export default function SearchPage() {
+function SearchContent() {
     const searchParams = useSearchParams();
     const [query, setQuery] = useState(searchParams.get("q") || "");
     const [selectedCategory, setSelectedCategory] = useState(searchParams.get("category") || "همه");
@@ -194,4 +194,12 @@ export default function SearchPage() {
             </div>
         </div>
     );
+}
+
+export default function SearchPage() {
+  return (
+    <Suspense fallback={null}>
+      <SearchContent />
+    </Suspense>
+  );
 }

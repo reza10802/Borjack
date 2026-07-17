@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
+import Modal from "@/components/ui/Modal";
+import Select from "react-select";
+import { selectStyles } from "@/components/ui/selectStyles";
 
 const ROLE_LABELS = {
   CUSTOMER: "مشتری",
@@ -22,6 +25,20 @@ export default function AdminUsersPage() {
   const [updating, setUpdating] = useState(null);
   const [error, setError] = useState("");
   const [toggling, setToggling] = useState(null);
+  const [search, setSearch] = useState("");
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [showModal, setShowModal] = useState(false);
+
+  const filteredUsers = users.filter((u) => {
+    const q = search.trim().toLowerCase();
+
+    if (!q) return true;
+
+    return (
+      u.name?.toLowerCase().includes(q) ||
+      u.phone?.includes(q)
+    );
+  });
 
   const load = async () => {
     setError("");
@@ -119,10 +136,20 @@ export default function AdminUsersPage() {
         </div>
       )}
 
+      <div className="mb-5">
+        <input
+          type="text"
+          placeholder="جستجوی نام یا شماره موبایل..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-full rounded-xl border border-gray-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-black/20"
+        />
+      </div>
+
       <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
         {loading ? (
           <div className="p-8 text-center text-gray-400">در حال بارگذاری...</div>
-        ) : users.length === 0 ? (
+        ) : filteredUsers.length === 0 ? (
           <div className="p-8 text-center text-gray-400">کاربری یافت نشد</div>
         ) : (
           <table className="w-full text-sm">
@@ -138,7 +165,7 @@ export default function AdminUsersPage() {
             </thead>
 
             <tbody className="divide-y divide-gray-100">
-              {users.map((u) => {
+              {filteredUsers.map((u) => {
                 const isSelf = u.id === me?.id;
                 const isAdmin = u.role === "ADMIN";
 
@@ -168,15 +195,34 @@ export default function AdminUsersPage() {
                         <span className="text-xs text-gray-400">ادمین اصلی</span>
                       ) : (
                         <div className="flex items-center gap-2">
-                          <select
-                            value={u.role}
-                            onChange={(e) => changeRole(u.id, e.target.value)}
-                            disabled={updating === u.id}
-                            className="text-xs border border-gray-200 rounded-lg px-2 py-1"
+                          <button
+                            onClick={() => {
+                              setSelectedUser(u);
+                              setShowModal(true);
+                            }}
+                            className="px-3 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 text-xs"
                           >
-                            <option value="CUSTOMER">مشتری</option>
-                            <option value="MANAGER">منیجر</option>
-                          </select>
+                            جزئیات
+                          </button>
+                          <Select
+                            styles={selectStyles}
+                            menuPortalTarget={document.body}
+                            isDisabled={updating === u.id}
+                            options={[
+                              { value: "CUSTOMER", label: "کاربر عادی" },
+                              { value: "MANAGER", label: "منیجر" },
+                            ]}
+                            value={{
+                              value: u.role,
+                              label:
+                                u.role === "CUSTOMER"
+                                  ? "کاربر عادی"
+                                  : "منیجر",
+                            }}
+                            onChange={(option) =>
+                              changeRole(u.id, option.value)
+                            }
+                          />
                           <button
                             onClick={() => toggleUserStatus(u.id, !u.isActive)}
                             disabled={toggling === u.id}
@@ -184,7 +230,7 @@ export default function AdminUsersPage() {
                               ? "bg-red-100 text-red-700 hover:bg-red-200"
                               : "bg-green-100 text-green-700 hover:bg-green-200"
                               }`}
-                              
+
                           >
                             {toggling === u.id
                               ? "..."
@@ -202,6 +248,47 @@ export default function AdminUsersPage() {
           </table>
         )}
       </div>
+      <Modal
+        open={showModal}
+        onClose={() => setShowModal(false)}
+        title="اطلاعات کاربر"
+      >
+        {selectedUser && (
+          <div className="space-y-3 text-sm">
+
+            <div>
+              <span className="font-bold">نام:</span>{" "}
+              {selectedUser.name}
+            </div>
+
+            <div>
+              <span className="font-bold">شماره:</span>{" "}
+              {selectedUser.phone}
+            </div>
+
+            <div>
+              <span className="font-bold">نقش:</span>{" "}
+              {ROLE_LABELS[selectedUser.role]}
+            </div>
+
+            <div>
+              <span className="font-bold">وضعیت:</span>{" "}
+              {selectedUser.isActive ? "فعال" : "مسدود"}
+            </div>
+
+            <div>
+              <span className="font-bold">تعداد سفارش:</span>{" "}
+              {selectedUser._count.orders}
+            </div>
+
+            <div>
+              <span className="font-bold">تاریخ عضویت:</span>{" "}
+              {new Date(selectedUser.createdAt).toLocaleDateString("fa-IR")}
+            </div>
+
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

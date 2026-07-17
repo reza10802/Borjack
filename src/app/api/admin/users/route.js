@@ -2,11 +2,23 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAdmin, logAction } from "@/lib/auth";
 
-export async function GET() {
+export async function GET(req) {
   const auth = await requireAdmin();
   if (auth.error) return auth.error;
 
+  const { searchParams } = new URL(req.url);
+  const role = searchParams.get("role");
+
+  let where = {};
+
+  if (role === "staff") {
+    where.role = {
+      in: ["ADMIN", "MANAGER"],
+    };
+  }
+
   const users = await prisma.user.findMany({
+    where,
     select: {
       id: true,
       name: true,
@@ -14,9 +26,15 @@ export async function GET() {
       role: true,
       isActive: true,
       createdAt: true,
-      _count: { select: { orders: true } },
+      _count: {
+        select: {
+          orders: true,
+        },
+      },
     },
-    orderBy: { createdAt: "desc" },
+    orderBy: {
+      createdAt: "desc",
+    },
   });
 
   return NextResponse.json({ users });
@@ -37,7 +55,7 @@ export async function DELETE(req) {
     if (userId === auth.user.id) {
       return NextResponse.json(
         { error: "نمی‌توانید حساب خودتان را حذف کنید" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -49,7 +67,7 @@ export async function DELETE(req) {
     if (before.role === "ADMIN") {
       return NextResponse.json(
         { error: "حذف ادمین از پنل مجاز نیست" },
-        { status: 403 }
+        { status: 403 },
       );
     }
 

@@ -2,16 +2,42 @@
 
 import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
+import Select from "react-select";
+import {
+  XMarkIcon,
+  PhotoIcon,
+  ArrowPathIcon,
+  PencilSquareIcon
+} from "@heroicons/react/24/outline";
 
 const emptyForm = {
   title: "",
-  price: "",
   originalPrice: "",
-  discount: "0",
-  category: "",
+  price: "",
+  categoryId: "",
   image: "",
+  gallery: [],
   description: "",
   inStock: true,
+};
+
+const selectStyles = {
+  control: (base) => ({
+    ...base,
+    minHeight: 44,
+    borderRadius: 12,
+    borderColor: "#e5e7eb",
+    boxShadow: "none",
+    "&:hover": {
+      borderColor: "#9ca3af",
+    },
+  }),
+  menu: (base) => ({
+    ...base,
+    borderRadius: 12,
+    overflow: "hidden",
+    zIndex: 50,
+  }),
 };
 
 export default function AdminProductsPage() {
@@ -26,7 +52,8 @@ export default function AdminProductsPage() {
   const [form, setForm] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
-  const [uploading, setUploading] = useState(false);
+  const [galleryUploading, setGalleryUploading] = useState(false);
+  const [editingProduct, setEditingProduct] = useState(null);
 
   useEffect(() => {
     fetchProducts();
@@ -38,16 +65,21 @@ export default function AdminProductsPage() {
 
   const fetchCategories = async () => {
     try {
-      const res = await fetch("/api/categories");
+      const res = await fetch("/api/admin/categories");
       if (res.ok) {
         const data = await res.json();
         const cats = data.categories || [];
         setCategories(cats);
         if (cats.length > 0) {
-          setForm((f) => ({ ...f, category: f.category || cats[0].name }));
+          setForm((f) => ({
+            ...f,
+            categoryId: f.categoryId ?? cats[0]?.id ?? null,
+          }));
         }
       }
-    } catch {}
+    } catch (err) {
+      console.error(err)
+    }
   };
 
   const fetchProducts = async () => {
@@ -113,59 +145,58 @@ export default function AdminProductsPage() {
       alert("خطا در ارتباط با سرور");
     }
   };
+  const originalPrice =
+    form.originalPrice === ""
+      ? Number(form.price)
+      : Number(form.originalPrice);
 
-  const handleImageUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setFormError("");
-    setUploading(true);
-
-    try {
-      const body = new FormData();
-      body.append("image", file);
-
-      const res = await fetch("/api/admin/upload", { method: "POST", body });
-      const data = await res.json();
-
-      if (!res.ok) {
-        setFormError(data.error || "خطا در آپلود تصویر");
-        return;
-      }
-
-      setForm((f) => ({ ...f, image: data.url }));
-    } catch {
-      setFormError("خطا در ارتباط با سرور هنگام آپلود");
-    } finally {
-      setUploading(false);
-    }
-  };
+  const price = Number(form.price);
 
   const handleSubmit = async (e) => {
+
     e.preventDefault();
     if (!isAdmin) return;
 
     setFormError("");
+    const method = editingProduct ? "PATCH" : "POST";
 
-    if (!form.title || !form.price || !form.category || !form.image || !form.description) {
+    const url = editingProduct
+      ? `/api/admin/products/${editingProduct.id}`
+      : "/api/admin/products";
+
+    if (
+      form.title.trim() === "" ||
+      form.description.trim() === "" ||
+      form.categoryId == null ||
+      form.gallery.length === 0 ||
+      Number(form.price) <= 0
+    ) {
       setFormError("همه فیلدهای ضروری را پر کن");
       return;
     }
 
+    if (Number(form.price) > originalPrice) {
+      setFormError("قیمت فروش نمی‌تواند بیشتر از قیمت اصلی باشد");
+      return;
+    }
     setSubmitting(true);
 
     try {
-      const res = await fetch("/api/admin/products", {
-        method: "POST",
+      const res = await fetch(url, {
+        method: method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...form,
-          price: Number(form.price),
-          originalPrice: Number(form.originalPrice) || Number(form.price),
-          discount: Number(form.discount) || 0,
+          title: form.title,
+          price: price,
+          originalPrice,
+          discount,
+          categoryId: Number(form.categoryId),
+          image: form.image,
+          gallery: form.gallery,
+          description: form.description,
+          inStock: form.inStock,
         }),
       });
-
       const data = await res.json();
 
       if (!res.ok) {
@@ -173,15 +204,101 @@ export default function AdminProductsPage() {
         return;
       }
 
-      setProducts((prev) => [data.product, ...prev]);
-      setForm({ ...emptyForm, category: categories[0]?.name || "" });
+      if (editingProduct) {
+        setProducts(prev =>
+          prev.map(p =>
+            p.id === data.product.id ? data.product : p
+          )
+        );
+      } else {
+        setProducts(prev => [data.product, ...prev]);
+      }
+
+      setEditingProduct(null);
+
+      setForm({
+        ...emptyForm,
+        categoryId: categories[0]?.id ?? null,
+      });
       setShowForm(false);
     } catch {
       setFormError("خطا در ارتباط با سرور");
     } finally {
       setSubmitting(false);
+      setEditingProduct(null);
     }
   };
+
+  const categoryOptions = categories.map((c) => ({
+    value: c.id,
+    label: c.title,
+  }));
+
+  const cancelEdit = () => {
+    setEditingProduct(null);
+    setForm({
+      ...emptyForm,
+      categoryId: categories[0]?.id ?? null,
+    });
+
+    setShowForm(false);
+  };
+
+  const handleGalleryUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    console.log(file)
+    setGalleryUploading(true);
+    setFormError("");
+
+    try {
+      const body = new FormData();
+      body.append("image", file);
+
+      const res = await fetch("/api/admin/upload", {
+        method: "POST",
+        body,
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setFormError(data.error);
+        return;
+      }
+
+      setForm((prev) => {
+        // اولین عکس = عکس اصلی
+        if (!prev.image) {
+          return {
+            ...prev,
+            image: data.url,
+            gallery: [data.url],
+          };
+        }
+
+        return {
+          ...prev,
+          gallery: [...prev.gallery, data.url],
+        };
+      });
+    } finally {
+      setGalleryUploading(false);
+    }
+  };
+
+  const discount =
+    originalPrice > 0
+      ? Math.min(
+        100,
+        Math.max(
+          0,
+          Math.round(
+            ((originalPrice - price) / originalPrice) * 100
+          )
+        )
+      )
+      : 0;
 
   return (
     <div className="flex flex-col gap-6">
@@ -190,7 +307,20 @@ export default function AdminProductsPage() {
 
         {isAdmin && (
           <button
-            onClick={() => setShowForm((s) => !s)}
+            onClick={() => {
+              if (showForm) {
+                cancelEdit();
+              } else {
+                setEditingProduct(null);
+
+                setForm({
+                  ...emptyForm,
+                  categoryId: categories[0]?.id ?? null,
+                });
+
+                setShowForm(true);
+              }
+            }}
             className="px-4 py-2 text-sm bg-black text-white rounded-xl hover:bg-gray-800 transition"
           >
             {showForm ? "بستن فرم" : "+ محصول جدید"}
@@ -203,6 +333,9 @@ export default function AdminProductsPage() {
           onSubmit={handleSubmit}
           className="bg-white rounded-2xl border border-gray-100 p-5 flex flex-col gap-4"
         >
+          <h3 className="text-lg font-bold">
+            {editingProduct ? "ویرایش محصول" : "ثبت محصول جدید"}
+          </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <input
               placeholder="عنوان محصول"
@@ -211,33 +344,29 @@ export default function AdminProductsPage() {
               className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-gray-400"
             />
 
-            <select
-              value={form.category}
-              onChange={(e) => setForm({ ...form, category: e.target.value })}
-              className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-gray-400"
-            >
-              {categories.length === 0 ? (
-                <option value="">ابتدا دسته‌بندی اضافه کن</option>
-              ) : (
-                categories.map((c) => (
-                  <option key={c.id} value={c.name}>
-                    {c.name}
-                  </option>
-                ))
-              )}
-            </select>
-
-            <input
-              type="number"
-              placeholder="قیمت (تومان)"
-              value={form.price}
-              onChange={(e) => setForm({ ...form, price: e.target.value })}
-              className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-gray-400"
+            <Select
+              styles={selectStyles}
+              options={categoryOptions}
+              value={
+                categoryOptions.find(
+                  (item) => item.value === form.categoryId
+                ) || null
+              }
+              onChange={(selected) =>
+                setForm({
+                  ...form,
+                  categoryId: selected?.value ?? null,
+                })
+              }
+              placeholder="انتخاب دسته‌بندی"
+              isSearchable
+              className="text-sm"
+              classNamePrefix="react-select"
             />
 
             <input
               type="number"
-              placeholder="قیمت قبل از تخفیف (اختیاری)"
+              placeholder="قیمت اصلی"
               value={form.originalPrice}
               onChange={(e) => setForm({ ...form, originalPrice: e.target.value })}
               className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-gray-400"
@@ -245,39 +374,106 @@ export default function AdminProductsPage() {
 
             <input
               type="number"
-              placeholder="درصد تخفیف"
-              value={form.discount}
-              onChange={(e) => setForm({ ...form, discount: e.target.value })}
+              placeholder="قیمت فروش"
+              value={form.price}
+              onChange={(e) => setForm({ ...form, price: e.target.value })}
               className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-gray-400"
             />
 
-            <div className="flex items-center gap-3 sm:col-span-2">
-              <div className="w-16 h-16 rounded-xl bg-gray-100 overflow-hidden shrink-0 flex items-center justify-center text-gray-300 text-xs">
-                {form.image ? (
-                  <img src={form.image} alt="پیش‌نمایش" className="w-full h-full object-cover" />
-                ) : (
-                  "بدون عکس"
+            <div className="sm:col-span-2 bg-gray-50 rounded-xl p-3 flex justify-between items-center">
+              <span className="text-sm text-gray-500">
+                درصد تخفیف
+              </span>
+
+              <span className="font-bold text-green-600">
+                {discount}%
+              </span>
+            </div>
+
+            <div className="sm:col-span-2">
+              {/* گالری */}
+              <p className="text-sm font-medium mb-3">
+                تصاویر محصول
+              </p>
+              <div className="flex flex-wrap gap-4">
+
+
+
+                {form.gallery.length === 0 && (
+                  <div className="w-32 h-32 rounded-xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center text-gray-400">
+                    <PhotoIcon className="w-10 h-10" />
+                    <span className="text-xs mt-2">
+                      بدون تصویر
+                    </span>
+                  </div>
                 )}
+
+                {form.gallery.map((img, index) => (
+                  <div
+                    key={index}
+                    className="relative w-32 h-32 rounded-xl overflow-hidden border border-gray-200"
+                  >
+                    <img
+                      src={img}
+                      alt={`gallery-${index}`}
+                      className="w-full h-full object-cover cursor-pointer"
+                      onClick={() =>
+                        setForm((prev) => ({
+                          ...prev,
+                          image: img,
+                          gallery: [
+                            img,
+                            ...prev.gallery.filter((g) => g !== img),
+                          ],
+                        }))
+                      }
+                    />
+                    {index === 0 && (
+                      <span className="absolute top-2 left-2 bg-black text-white text-[10px] font-medium px-2 py-1 rounded-md shadow">
+                        اصلی
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setForm((prev) => {
+                          const gallery = prev.gallery.filter((_, i) => i !== index);
+
+                          return {
+                            ...prev,
+                            gallery,
+                            image: gallery[0] || "", // اگر عکس اصلی حذف شد، عکس بعدی اصلی می‌شود
+                          };
+                        })
+                      }
+                      className="absolute top-2 right-2 w-6 h-6 rounded-full bg-red-600 text-white flex items-center justify-center shadow hover:bg-red-700"
+                    >
+                      <XMarkIcon className="w-4 h-4" />
+                    </button>
+
+                  </div>
+                ))}
+
+                {/* دکمه افزودن */}
+                <label className="w-32 h-32 border-2 border-dashed border-gray-300 rounded-xl flex items-center justify-center cursor-pointer hover:border-black hover:bg-gray-50 transition">
+
+                  <input
+                    type="file"
+                    hidden
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={handleGalleryUpload}
+                  />
+
+                  {galleryUploading ? (
+                    <ArrowPathIcon className="w-8 h-8 animate-spin" />
+                  ) : (
+                    <PhotoIcon className="w-10 h-10 text-gray-400" />
+                  )}
+
+                </label>
+
               </div>
 
-              <label className="flex-1 cursor-pointer">
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageUpload}
-                  disabled={uploading}
-                  className="hidden"
-                />
-                <span
-                  className={`inline-flex items-center justify-center w-full sm:w-auto px-4 py-2.5 rounded-xl text-sm border transition ${
-                    uploading
-                      ? "border-gray-200 text-gray-400"
-                      : "border-gray-300 text-gray-700 hover:bg-gray-50"
-                  }`}
-                >
-                  {uploading ? "در حال آپلود..." : form.image ? "تغییر عکس" : "انتخاب عکس"}
-                </span>
-              </label>
             </div>
           </div>
 
@@ -303,10 +499,14 @@ export default function AdminProductsPage() {
 
           <button
             type="submit"
-            disabled={submitting || uploading}
+            disabled={
+              submitting ||
+              galleryUploading ||
+              categories.length === 0
+            }
             className="self-start px-5 py-2.5 bg-black text-white rounded-xl text-sm font-medium hover:bg-gray-800 transition disabled:opacity-50"
           >
-            {submitting ? "در حال ثبت..." : "ثبت محصول"}
+            {editingProduct ? "ویرایش محصول" : "ثبت محصول"}
           </button>
         </form>
       )}
@@ -338,19 +538,40 @@ export default function AdminProductsPage() {
               <div className="flex-1">
                 <p className="text-sm font-medium text-gray-800 line-clamp-1">{product.title}</p>
                 <p className="text-xs text-gray-400">
-                  {product.category} • {product.price?.toLocaleString()} تومان
+                  {product.category?.title} • {product.price?.toLocaleString()} تومان
                 </p>
               </div>
 
               <button
                 onClick={() => toggleStock(product)}
-                className={`text-xs px-3 py-1.5 rounded-lg font-medium transition ${
-                  product.inStock
-                    ? "bg-green-100 text-green-700 hover:bg-green-200"
-                    : "bg-gray-100 text-gray-500 hover:bg-gray-200"
-                }`}
+                className={`text-xs px-3 py-1.5 rounded-lg font-medium transition ${product.inStock
+                  ? "bg-green-100 text-green-700 hover:bg-green-200"
+                  : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                  }`}
               >
                 {product.inStock ? "موجود" : "ناموجود"}
+              </button>
+
+              <button
+                onClick={() => {
+                  setEditingProduct(product);
+
+                  setForm({
+                    title: product.title,
+                    price: String(product.price),
+                    originalPrice: String(product.originalPrice),
+                    categoryId: product.categoryId,
+                    image: product.image,
+                    gallery: product.images.map((i) => i.url),
+                    description: product.description,
+                    inStock: product.inStock,
+                  });
+
+                  setShowForm(true);
+                }}
+                className="text-blue-500 hover:text-blue-700"
+              >
+                <PencilSquareIcon className="w-5 h-5" />
               </button>
 
               {isAdmin && (
@@ -358,7 +579,7 @@ export default function AdminProductsPage() {
                   onClick={() => deleteProduct(product.id)}
                   className="text-gray-300 hover:text-red-500 transition text-lg leading-none px-1"
                 >
-                  ✕
+                  <XMarkIcon className="w-5 h-5" />
                 </button>
               )}
             </div>
