@@ -12,16 +12,22 @@ export default function OrdersTable({
   setNextStatus
 }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
+    <div className="card overflow-hidden">
       <table className="w-full text-sm">
-        <thead className="bg-gray-50 text-gray-500 text-right">
+        <thead
+          className="text-right"
+          style={{
+            background: "var(--color-surface-2)",
+            color: "var(--color-text-muted)",
+          }}
+        >
           <tr>
-            <th className="px-4 py-3 font-medium">شماره</th>
-            <th className="px-4 py-3 font-medium">مشتری</th>
-            <th className="px-4 py-3 font-medium">مبلغ</th>
-            <th className="px-4 py-3 font-medium">وضعیت</th>
-            <th className="px-4 py-3 font-medium">تاریخ</th>
-            <th className="px-4 py-3 font-medium">جزئیات</th>
+            <th className="px-5 py-4 font-medium whitespace-nowrap">شماره</th>
+            <th className="px-5 py-4 font-medium whitespace-nowrap">مشتری</th>
+            <th className="px-5 py-4 font-medium whitespace-nowrap">مبلغ</th>
+            <th className="px-5 py-4 font-medium whitespace-nowrap">وضعیت</th>
+            <th className="px-5 py-4 font-medium whitespace-nowrap">تاریخ</th>
+            <th className="px-5 py-4 font-medium whitespace-nowrap">جزئیات</th>
           </tr>
         </thead>
 
@@ -30,13 +36,21 @@ export default function OrdersTable({
         ) : orders.length === 0 ? (
           <tbody>
             <tr>
-              <td colSpan={6} className="py-10 text-center text-gray-400">
+              <td
+                colSpan={6}
+                className="py-12 text-center muted"
+              >
                 سفارشی ثبت نشده
               </td>
             </tr>
           </tbody>
         ) : (
-          <tbody className="divide-y divide-gray-100">
+          <tbody
+            className="divide-y"
+            style={{
+              borderColor: "var(--color-border)",
+            }}
+          >
             {orders.map((order) => (
               <OrderRow
                 key={order.id}
@@ -44,7 +58,7 @@ export default function OrdersTable({
                 expanded={expanded}
                 setExpanded={setExpanded}
                 updating={updating}
-                
+
                 setConfirmOpen={setConfirmOpen}
                 setSelectedOrder={setSelectedOrder}
                 setNextStatus={setNextStatus}

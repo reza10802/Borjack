@@ -6,6 +6,7 @@ import { Navigation, Autoplay } from "swiper/modules";
 
 import "swiper/css";
 import "swiper/css/navigation";
+import { ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/solid";
 
 const slides = [
   {
@@ -13,8 +14,7 @@ const slides = [
     title: "تجربه‌ای متفاوت از خرید آنلاین",
     desc: "هزاران محصول با بهترین قیمت و ارسال سریع در سراسر کشور",
     cta: "همین حالا خرید کن",
-    emoji: "🛍️",
-    bg: "linear-gradient(135deg, #1a0533 0%, #3b1a6b 50%, #6b2fa0 100%)",
+    bg: "linear-gradient(135deg,#1E2640 0%,#2B365A 50%,#384876 100%)",
     badgeStyle: {
       background: "rgba(180,120,255,0.25)",
       color: "#d4a8ff",
@@ -28,8 +28,7 @@ const slides = [
     title: "تا ۵۰٪ تخفیف روی محصولات برگزیده",
     desc: "فرصت را از دست نده — پیشنهاد تابستانه تا پایان ماه معتبر است",
     cta: "مشاهده تخفیف‌ها",
-    emoji: "⚡",
-    bg: "linear-gradient(135deg, #012233 0%, #034a6e 50%, #0a7bb5 100%)",
+    bg: "linear-gradient(135deg,#25304E 0%,#36466E 50%,#465B90 100%)",
     badgeStyle: {
       background: "rgba(80,180,255,0.2)",
       color: "#7acfff",
@@ -43,8 +42,7 @@ const slides = [
     title: "جدیدترین گجت‌های تکنولوژی",
     desc: "آخرین محصولات دیجیتال با گارانتی اصالت و ضمانت بازگشت وجه",
     cta: "کشف محصولات",
-    emoji: "💻",
-    bg: "linear-gradient(135deg, #1f0a00 0%, #5c1f00 50%, #a03200 100%)",
+    bg: "linear-gradient(135deg,#1E2640 0%,#35436B 50%,#4B5C8F 100%)",
     badgeStyle: {
       background: "rgba(255,120,50,0.2)",
       color: "#ffaa77",
@@ -58,8 +56,7 @@ const slides = [
     title: "باشگاه مشتریان طلایی",
     desc: "عضو شو و از تخفیف‌های انحصاری، ارسال رایگان و پشتیبانی ۲۴ ساعته بهره‌مند شو",
     cta: "عضویت رایگان",
-    emoji: "🏆",
-    bg: "linear-gradient(135deg, #001a0d 0%, #004d29 50%, #007a3d 100%)",
+    bg: "linear-gradient(135deg,#22314C 0%,#314769 50%,#435E89 100%)",
     badgeStyle: {
       background: "rgba(60,220,120,0.2)",
       color: "#7fffa0",
@@ -75,7 +72,7 @@ export default function HeroSlider() {
   const nextRef = useRef(null);
   const swiperRef = useRef(null);
 
-  const [progress, setProgress] = useState(0);
+  const [activeSlide, setActiveSlide] = useState(0);
 
   useEffect(() => {
     if (
@@ -92,46 +89,50 @@ export default function HeroSlider() {
   }, []);
 
   return (
-    <section className="relative my-8 h-[340px] rounded-2xl overflow-hidden">
-
+    <section
+      className="relative my-8 h-[320px] sm:h-[420px] lg:h-[520px] lg:my-10 overflow-hidden rounded-3xl border border-zinc-200/50 dark:border-zinc-700/50 bg-white dark:bg-[#1E2640] shadow-xl shadow-black/5 dark:shadow-black/30"
+    >
       <Swiper
         modules={[Navigation, Autoplay]}
-        autoplay={{ delay: 4000, disableOnInteraction: false }}
+        autoplay={{
+          delay: 4000,
+          disableOnInteraction: false,
+          pauseOnMouseEnter: true,
+        }}
         onSwiper={(swiper) => {
           swiperRef.current = swiper;
         }}
-        onAutoplayTimeLeft={(swiper, time, prog) => {
-          setProgress(1 - prog);
+        onSlideChange={(swiper) => {
+          setActiveSlide(swiper.realIndex);
         }}
         className="h-full"
       >
         {slides.map((slide, i) => (
           <SwiperSlide key={i} className="h-full">
             <div
-              className="relative h-full"
+              className="relative h-full overflow-hidden"
               style={{ background: slide.bg }}
             >
-
-              <div className="relative z-10 h-full flex items-center px-14">
-                <div>
+              <div className="absolute inset-0 bg-black/20" />
+              <div className="relative z-10 flex h-full items-center px-6 py-8 sm:px-10 lg:px-20">
+                <div className="max-w-2xl">
                   <span
-                    className="inline-block text-xs px-3 py-1 rounded-full mb-4"
                     style={slide.badgeStyle}
+                    className=" inline-flex items-center rounded-full px-4 py-1 text-xs font-semibold backdrop-blur-md shadow-lg "
                   >
                     {slide.badge}
                   </span>
 
-                  <h2 className="text-white text-3xl font-bold mb-3">
+                  <h2 className="mt-4 text-xl sm:text-4xl lg:text-5xl font-black leading-snug text-white">
                     {slide.title}
                   </h2>
 
-                  <p className="text-white/70 mb-6">
+                  <p className="mt-4 mb-6 max-w-xl text-sm sm:text-base lg:text-lg leading-6 sm:leading-7 text-white/85">
                     {slide.desc}
                   </p>
 
                   <button
-                    className="px-6 py-2 rounded-md text-white font-semibold"
-                    style={{ background: slide.ctaColor }}
+                    className="btn-primary w-fit px-5 py-2.5 sm:px-6 sm:py-3 hover:scale-105 transition-transform duration-300"
                   >
                     {slide.cta}
                   </button>
@@ -146,24 +147,26 @@ export default function HeroSlider() {
       {/* Prev */}
       <button
         ref={prevRef}
-        className="absolute right-4 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-white/10 text-white"
+        className=" hidden lg:flex items-center justify-center absolute right-5 top-1/2 z-20 -translate-y-1/2 w-12 h-12 rounded-full bg-white/15 backdrop-blur-xl border border-white/20 text-white hover:bg-[var(--color-primary)] hover:border-[var(--color-primary)] transition-all duration-300 "
       >
-        ‹
+        <ChevronRightIcon className="w-6 h-6" />
+
       </button>
 
       {/* Next */}
       <button
         ref={nextRef}
-        className="absolute left-4 top-1/2 -translate-y-1/2 z-20 w-10 h-10 rounded-full bg-white/10 text-white"
+        className=" hidden lg:flex items-center justify-center absolute left-5 top-1/2 z-20 -translate-y-1/2 w-12 h-12 rounded-full bg-white/15 backdrop-blur-xl border border-white/20 text-white hover:bg-[var(--color-primary)] hover:border-[var(--color-primary)] transition-all duration-300 "
       >
-        ›
+        <ChevronLeftIcon className="w-6 h-6" />
+
       </button>
 
-      {/* progress */}
-      <div className="absolute bottom-0 left-0 h-[3px] w-full bg-white/10">
+      {/* Progress */}
+      <div className="absolute bottom-0 left-0 z-30 w-full h-1 bg-white/10 overflow-hidden">
         <div
-          className="h-full bg-white transition-all"
-          style={{ width: `${progress * 100}%` }}
+          key={activeSlide}
+          className="hero-progress h-full bg-gradient-to-r from-orange-500 to-orange-300"
         />
       </div>
 

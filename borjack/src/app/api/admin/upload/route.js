@@ -1,9 +1,28 @@
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
-import sharp from "sharp";
 import { mkdir } from "fs/promises";
 import path from "path";
 import crypto from "crypto";
 import { requireManagerOrAdmin } from "@/lib/auth";
+
+let sharp;
+
+async function optimizeImage(buffer, outputPath) {
+  if (!sharp) {
+    ({ default: sharp } = await import("sharp"));
+  }
+
+  return sharp(buffer)
+    .resize({
+      width: 1600,
+      withoutEnlargement: true,
+    })
+    .webp({
+      quality: 82,
+    })
+    .toFile(outputPath);
+}
 
 const MAX_SIZE = 8 * 1024 * 1024; // 8 مگابایت
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif", "image/avif"];
@@ -42,10 +61,7 @@ export async function POST(req) {
         const filename = `${Date.now()}-${crypto.randomBytes(4).toString("hex")}.webp`;
         const absolutePath = path.join(absoluteDir, filename);
 
-        await sharp(buffer)
-            .resize({ width: 1600, withoutEnlargement: true })
-            .webp({ quality: 82 })
-            .toFile(absolutePath);
+        await optimizeImage(buffer, absolutePath);
 
         const publicUrl = `/${relativeDir.split(path.sep).join("/")}/${filename}`;
 

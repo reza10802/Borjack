@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { sendOtpSchema } from "@/lib/validations/auth";
 
+const OTP_RESEND_COOLDOWN_MS = 60 * 1000;
+
 export async function POST(req) {
   try {
     const body = await req.json();
@@ -32,8 +34,24 @@ export async function POST(req) {
         },
       );
     }
-    // کد تستی
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // محدودیت ارسال: حداقل ۶۰ ثانیه بین دو درخواست برای همان شماره
+    const lastOtp = await prisma.otpCode.findFirst({
+      where: { phone },
+      orderBy: { createdAt: "desc" },
+    });
+
+    if (
+      lastOtp &&
+      Date.now() - lastOtp.createdAt.getTime() < OTP_RESEND_COOLDOWN_MS
+    ) {
+      return NextResponse.json(
+        { error: "لطفاً کمی صبر کنید و دوباره تلاش کنید" },
+        { status: 429 },
+      );
+    }
+
+    const code = "123456";
 
     // منقضی شدن 2 دقیقه‌ای
     const expiresAt = new Date(Date.now() + 2 * 60 * 1000);
@@ -57,13 +75,17 @@ export async function POST(req) {
       },
     });
 
-    // TODO: اینجا بعداً سرویس پیامک واقعی را صدا بزن
-    // await smsProvider.send(phone, `کد تایید شما: ${code}`);
-
-    return NextResponse.json({
-      message: "کد تایید ارسال شد",
-      // فقط برای محیط تست:
+    const message = [
+      "کد تایید فروشگاه:",
       code,
+      "",
+      "اعتبار: ۲ دقیقه",
+    ].join("\n");
+
+    console.log(`[OTP TEST] کد OTP برای ${phone}: ${code}`);
+    return NextResponse.json({
+      success: true,
+      message: "کد تایید ارسال شد",
     });
   } catch (error) {
     console.error("SEND OTP ERROR:", error);

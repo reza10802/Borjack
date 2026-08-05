@@ -18,12 +18,23 @@ function OrderRow({
 }) {
     return (
         <>
-            <tr className="hover:bg-gray-50">
-                <td className="px-4 py-3 text-gray-500">
+            <tr
+                className="transition-colors"
+                style={{
+                    color: "var(--color-text)",
+                }}
+                onMouseEnter={(e) => {
+                    e.currentTarget.style.background = "var(--color-surface-2)";
+                }}
+                onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "transparent";
+                }}
+            >
+                <td className="px-5 py-4 muted">
                     #{order.id}
                 </td>
 
-                <td className="px-4 py-3 font-medium text-gray-800">
+                <td className="px-5 py-4 font-medium text-[var(--color-text)]">
                     {order.user?.name || "—"}
                 </td>
 
@@ -31,9 +42,9 @@ function OrderRow({
                     {Number(order.total || 0).toLocaleString("fa-IR")} تومان
                 </td>
 
-                <td className="px-4 py-3">
+                <td className="px-5 py-4">
                     {order.paymentStatus === "PENDING" ? (
-                        <span className="text-xs px-2 py-1 rounded-lg bg-yellow-100 text-yellow-700">
+                        <span className="px-3 py-1 rounded-xl text-xs font-medium bg-yellow-100 text-yellow-700">
                             در انتظار پرداخت
                         </span>
                     ) : (
@@ -45,8 +56,7 @@ function OrderRow({
                                 setConfirmOpen(true);
                             }}
                             disabled={updating === order.id}
-                            className={`text-xs px-2 py-1 rounded-lg border-0 font-medium cursor-pointer ${ORDER_STATUS_COLORS[order.status] ?? "bg-gray-100 text-gray-600"
-                                }`}
+                            className={`rounded-xl px-3 py-2 text-xs font-medium border border-[var(--color-border)] cursor-pointer transition ${ORDER_STATUS_COLORS[order.status] ?? "bg-gray-100 text-gray-600"}`}
                         >
                             {ORDER_STATUSES.map((status) => (
                                 <option key={status} value={status}>
@@ -57,7 +67,7 @@ function OrderRow({
                     )}
                 </td>
 
-                <td className="px-4 py-3 text-gray-500">
+                <td className="px-5 py-4 muted">
                     {new Date(order.createdAt).toLocaleDateString("fa-IR")}
                 </td>
 
@@ -68,7 +78,7 @@ function OrderRow({
                                 expanded === order.id ? null : order.id
                             )
                         }
-                        className="text-blue-600 hover:text-blue-800 text-xs transition"
+                        className="btn-outline text-xs px-3 py-2"
                     >
                         {expanded === order.id ? "بستن" : "مشاهده"}
                     </button>
@@ -77,8 +87,15 @@ function OrderRow({
 
             {expanded === order.id && (
                 <tr>
-                    <td colSpan={6} className="px-4 pb-3">
-                        <div className="bg-gray-50 rounded-lg p-3 text-xs text-gray-600 space-y-1">
+                    <td colSpan={6} className="px-5 pb-5">
+                        <div
+                            className="rounded-2xl p-4 text-sm space-y-2 border"
+                            style={{
+                                background: "var(--color-surface-2)",
+                                borderColor: "var(--color-border)",
+                                color: "var(--color-text)",
+                            }}
+                        >
                             {order.items?.length ? (
                                 order.items.map((item) => (
                                     <div
@@ -100,7 +117,7 @@ function OrderRow({
                                     </div>
                                 ))
                             ) : (
-                                <div className="text-gray-400">
+                                <div className="muted">
                                     آیتمی برای این سفارش ثبت نشده
                                 </div>
                             )}

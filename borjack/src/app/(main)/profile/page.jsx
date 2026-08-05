@@ -1,14 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter, useSearchParams } from "next/navigation";
 import BackButton from "@/components/BackButton";
 import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from "@/lib/orderStatus";
+import { toPersianPrice } from "@/lib/utils";
 
-export default function ProfilePage() {
-    const { user, loading, setUser } = useAuth();
+function ProfileContent() {
+    const { user, loading, logout } = useAuth();
     const router = useRouter();
     const searchParams = useSearchParams();
     const highlightedOrderId = searchParams.get("order");
@@ -185,7 +186,7 @@ export default function ProfilePage() {
 
     if (loading) {
         return (
-            <div className="max-w-5xl mx-auto px-4 sm:px-6 py-10 text-center text-gray-400">
+            <div className="max-w-5xl mx-auto px-4 sm:px-6 py-10 text-center text-zinc-500 dark:text-zinc-400">
                 در حال بارگذاری...
             </div>
         );
@@ -224,20 +225,36 @@ export default function ProfilePage() {
             <BackButton />
 
             {/* هدر پروفایل */}
-            <div className="bg-white rounded-2xl border border-gray-100 p-4 sm:p-6 mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div className="flex items-center gap-4 min-w-0">
-                    <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-black flex items-center justify-center text-white text-xl sm:text-2xl font-bold shrink-0">
-                        {user.name?.[0] || "U"}
+            <div className="card mb-8 p-6">
+                <div className="flex items-center justify-between">
+
+                    {/* اطلاعات کاربر */}
+                    <div className="flex items-center gap-4">
+
+                        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--color-primary)] text-2xl font-black text-white shadow-lg">
+                            {user.name?.[0]}
+                        </div>
+
+                        <div>
+                            <h1 className="text-xl font-black text-[var(--color-primary)] dark:text-white">
+                                {user.name}
+                            </h1>
+
+                            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                                {user.phone}
+                            </p>
+                        </div>
+
                     </div>
 
-                    <div className="min-w-0">
-                        <h1 className="text-lg sm:text-xl font-bold text-gray-900 truncate">
-                            {user.name}
-                        </h1>
-                        <p className="text-sm text-gray-500 break-all">
-                            {user.phone || "شماره ثبت نشده"}
-                        </p>
-                    </div>
+                    {/* دکمه خروج */}
+                    <button
+                        onClick={logout}
+                        className="rounded-xl border border-red-500 px-5 py-2.5 text-sm font-bold text-red-500 transition hover:bg-red-500 hover:text-white"
+                    >
+                        خروج
+                    </button>
+
                 </div>
             </div>
 
@@ -248,8 +265,8 @@ export default function ProfilePage() {
                         key={tab.id}
                         onClick={() => setActiveTab(tab.id)}
                         className={`px-4 sm:px-5 py-2 rounded-xl text-sm font-medium transition ${activeTab === tab.id
-                            ? "bg-black text-white"
-                            : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"
+                            ? "bg-[var(--color-primary)] text-white shadow-lg"
+                            : "bg-[var(--background-card)] border border-zinc-200 dark:border-zinc-700 hover:border-[var(--color-primary)]"
                             }`}
                     >
                         {tab.label}
@@ -259,9 +276,9 @@ export default function ProfilePage() {
 
             {/* اطلاعات حساب */}
             {activeTab === "account" && (
-                <div className="bg-white rounded-2xl border border-gray-100 p-5 sm:p-6">
+                <div className="card p-5 sm:p-6">
                     <div className="flex items-center justify-between mb-6">
-                        <h2 className="text-lg font-bold">اطلاعات حساب کاربری</h2>
+                        <h2 className="text-lg font-black text-[var(--color-primary)] dark:text-white">اطلاعات حساب کاربری</h2>
 
                         {!isEditing ? (
                             <button
@@ -269,7 +286,7 @@ export default function ProfilePage() {
                                     setIsEditing(true);
                                     setAccountMessage("");
                                 }}
-                                className="px-4 py-2 text-sm rounded-xl border border-gray-200 hover:bg-gray-50 transition"
+                                className="btn-outline px-4 py-2 text-sm rounded-xl border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:bg-zinc-800 transition"
                             >
                                 ویرایش
                             </button>
@@ -282,7 +299,7 @@ export default function ProfilePage() {
                                     });
                                     setAccountMessage("");
                                 }}
-                                className="px-4 py-2 text-sm rounded-xl border border-gray-200 hover:bg-gray-50 transition"
+                                className="btn-outline px-4 py-2 rounded-xl text-sm border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:bg-zinc-800 transition"
                             >
                                 انصراف
                             </button>
@@ -291,7 +308,7 @@ export default function ProfilePage() {
 
                     <div className="flex flex-col gap-4">
                         <div className="flex flex-col gap-1">
-                            <label className="text-xs text-gray-400">نام و نام خانوادگی</label>
+                            <label className="text-xs text-zinc-500 dark:text-zinc-400">نام و نام خانوادگی</label>
 
                             {isEditing ? (
                                 <input
@@ -303,18 +320,17 @@ export default function ProfilePage() {
                                             name: e.target.value,
                                         }))
                                     }
-                                    className="border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-800 focus:outline-none focus:border-black"
-                                />
+                                    className="rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-4 py-3 text-sm text-zinc-800 dark:text-zinc-100" />
                             ) : (
-                                <div className="border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-800 bg-gray-50">
+                                <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-4 py-3 text-sm text-zinc-800 dark:text-zinc-100">
                                     {user.name}
                                 </div>
                             )}
                         </div>
 
                         <div className="flex flex-col gap-1">
-                            <label className="text-xs text-gray-400">شماره تلفن</label>
-                            <div className="border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-800 bg-gray-50">
+                            <label className="text-xs text-zinc-500 dark:text-zinc-400">شماره تلفن</label>
+                            <div className="rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-4 py-3 text-sm text-zinc-800 dark:text-zinc-100 focus:outline-none focus:border-[var(--color-primary)]">
                                 {user.phone || "ثبت نشده"}
                             </div>
                         </div>
@@ -322,8 +338,8 @@ export default function ProfilePage() {
                         {accountMessage && (
                             <p
                                 className={`text-sm ${accountMessage.includes("موفق")
-                                    ? "text-green-600"
-                                    : "text-red-500"
+                                    ? "text-green-600 dark:text-green-400"
+                                    : "text-red-500 dark:text-red-400"
                                     }`}
                             >
                                 {accountMessage}
@@ -335,7 +351,7 @@ export default function ProfilePage() {
                                 <button
                                     onClick={handleSaveAccount}
                                     disabled={savingAccount}
-                                    className="px-5 py-3 bg-black text-white rounded-xl text-sm font-medium hover:bg-gray-800 transition disabled:opacity-50"
+                                    className="btn-primary px-5 py-3 rounded-xl disabled:opacity-50"
                                 >
                                     {savingAccount ? "در حال ذخیره..." : "ذخیره تغییرات"}
                                 </button>
@@ -349,21 +365,21 @@ export default function ProfilePage() {
             {activeTab === "orders" && (
                 <div className="flex flex-col gap-4">
                     {ordersLoading ? (
-                        <div className="bg-white rounded-2xl border border-gray-100 p-10 text-center text-gray-400 text-sm">
+                        <div className="card border-gray-100 p-10 text-center text-zinc-500 dark:text-zinc-400 text-sm">
                             در حال بارگذاری سفارشات...
                         </div>
                     ) : orders.length === 0 ? (
-                        <div className="bg-white rounded-2xl border border-gray-100 p-10 text-center text-gray-400 text-sm">
+                        <div className="card border-gray-100 p-10 text-center text-zinc-500 dark:text-zinc-400 text-sm">
                             هنوز سفارش نهایی‌شده‌ای ثبت نکردی
                         </div>
                     ) : (
                         <>
-                            <div className="flex gap-2 mb-5">
+                            <div className="flex flex-wrap gap-2 mb-6">
                                 <button
                                     onClick={() => setOrderTab("paid")}
-                                    className={`px-4 py-2 rounded-xl text-sm transition ${orderTab === "paid"
-                                        ? "bg-black text-white"
-                                        : "border border-gray-200 text-gray-600"
+                                    className={`px-4 sm:px-5 py-2 rounded-xl text-sm font-medium transition ${orderTab === "paid"
+                                        ? "bg-[var(--color-primary)] text-white shadow-lg"
+                                        : "bg-[var(--background-card)] border border-zinc-200 dark:border-zinc-700 hover:border-[var(--color-primary)]"
                                         }`}
                                 >
                                     پرداخت شده
@@ -371,9 +387,9 @@ export default function ProfilePage() {
 
                                 <button
                                     onClick={() => setOrderTab("pending")}
-                                    className={`px-4 py-2 rounded-xl text-sm transition ${orderTab === "pending"
-                                        ? "bg-black text-white"
-                                        : "border border-gray-200 text-gray-600"
+                                    className={`px-4 sm:px-5 py-2 rounded-xl text-sm font-medium transition ${orderTab === "pending"
+                                        ? "bg-[var(--color-primary)] text-white shadow-lg"
+                                        : "bg-[var(--background-card)] border border-zinc-200 dark:border-zinc-700 hover:border-[var(--color-primary)]"
                                         }`}
                                 >
                                     در انتظار پرداخت
@@ -385,9 +401,9 @@ export default function ProfilePage() {
                                 return (
                                     <div
                                         key={order.id}
-                                        className={`bg-white rounded-2xl border p-4 sm:p-5 ${isHighlighted
-                                            ? "border-black ring-1 ring-black"
-                                            : "border-gray-100"
+                                        className={` card p-5 transition-all ${isHighlighted
+                                            ? "ring-2 ring-[var(--color-primary)] border-[var(--color-primary)]"
+                                            : ""
                                             }`}
                                     >
                                         {isHighlighted && (
@@ -396,40 +412,39 @@ export default function ProfilePage() {
                                             </p>
                                         )}
 
-                                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-                                            <div className="flex items-center gap-3 flex-wrap">
-                                                <span className="text-sm font-bold text-gray-800">
-                                                    سفارش #{order.id}
-                                                </span>
+                                        <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">                                            <div className="flex items-center gap-3 flex-wrap">
+                                            <span className="text-sm font-bold text-[var(--color-primary)] dark:text-white">
+                                                سفارش #{order.id}
+                                            </span>
 
-                                                {order.paymentStatus === "PENDING" ? (
+                                            {order.paymentStatus === "PENDING" ? (
+                                                <span className="text-xs px-2 py-1 rounded-lg bg-yellow-100 text-yellow-700">
+                                                    در انتظار پرداخت
+                                                </span>
+                                            ) : (
+                                                order.paymentStatus === "PENDING" ? (
                                                     <span className="text-xs px-2 py-1 rounded-lg bg-yellow-100 text-yellow-700">
                                                         در انتظار پرداخت
                                                     </span>
                                                 ) : (
-                                                    order.paymentStatus === "PENDING" ? (
-                                                        <span className="text-xs px-2 py-1 rounded-lg bg-yellow-100 text-yellow-700">
-                                                            در انتظار پرداخت
-                                                        </span>
-                                                    ) : (
-                                                        <span
-                                                            className={`text-xs px-2 py-1 rounded-lg ${ORDER_STATUS_COLORS[order.status] ||
-                                                                "bg-gray-100 text-gray-600"
-                                                                }`}
-                                                        >
-                                                            {ORDER_STATUS_LABELS[order.status] || order.status}
-                                                        </span>
-                                                    )
-                                                )}
-
-                                                {order.paymentRefId && (
-                                                    <span className="text-xs px-2 py-1 rounded-lg bg-green-50 text-green-700">
-                                                        کد رهگیری: {order.paymentRefId}
+                                                    <span
+                                                        className={`text-xs px-2 py-1 rounded-lg ${ORDER_STATUS_COLORS[order.status] ||
+                                                            "bg-gray-100 text-gray-600"
+                                                            }`}
+                                                    >
+                                                        {ORDER_STATUS_LABELS[order.status] || order.status}
                                                     </span>
-                                                )}
-                                            </div>
+                                                )
+                                            )}
 
-                                            <span className="text-xs text-gray-400">
+                                            {order.paymentRefId && (
+                                                <span className="text-xs px-2 py-1 rounded-lg bg-green-50 text-green-700">
+                                                    کد رهگیری: {order.paymentRefId}
+                                                </span>
+                                            )}
+                                        </div>
+
+                                            <span className="text-xs text-zinc-500 dark:text-zinc-400">
                                                 {new Date(order.createdAt).toLocaleDateString("fa-IR")}
                                             </span>
                                         </div>
@@ -437,29 +452,28 @@ export default function ProfilePage() {
                                         <div className="flex flex-col gap-3">
                                             {order.items.map((item) => (
                                                 <div key={item.id} className="flex items-center gap-3">
-                                                    <div className="w-12 h-12 rounded-xl bg-gray-100 overflow-hidden shrink-0">
-                                                        <img
-                                                            src={
-                                                                item.product.images?.[0]?.url ||
-                                                                item.product.image
-                                                            }
-                                                            alt={item.product.title}
-                                                            className="w-full h-full object-cover"
-                                                            onError={(e) => (e.target.style.display = "none")}
-                                                        />
+                                                    <div className="h-14 w-14 shrink-0 overflow-hidden rounded-2xl bg-zinc-100 dark:bg-zinc-800">                                                        <img
+                                                        src={
+                                                            item.product.images?.[0]?.url ||
+                                                            item.product.image
+                                                        }
+                                                        alt={item.product.title}
+                                                        className="w-full h-full object-cover"
+                                                        onError={(e) => (e.target.style.display = "none")}
+                                                    />
                                                     </div>
 
                                                     <div className="flex-1 min-w-0">
-                                                        <p className="text-sm text-gray-800 line-clamp-1">
+                                                        <p className="text-sm text-zinc-800 dark:text-zinc-100 line-clamp-1">
                                                             {item.product.title}
                                                         </p>
-                                                        <p className="text-xs text-gray-400">
-                                                            تعداد: {item.quantity}
+                                                        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                                                            تعداد: {toPersianPrice(item.quantity)}
                                                         </p>
                                                     </div>
 
                                                     <p className="text-sm font-medium whitespace-nowrap">
-                                                        {(item.price * item.quantity).toLocaleString()} تومان
+                                                        {toPersianPrice((item.price * item.quantity))} تومان
                                                     </p>
                                                 </div>
                                             ))}
@@ -490,9 +504,8 @@ export default function ProfilePage() {
 
 
 
-                                        <div className="border-t border-gray-100 mt-4 pt-4 flex justify-between items-center">
-                                            <span className="text-sm text-gray-500">جمع کل</span>
-                                            <span className="text-sm font-bold">
+                                        <div className="mt-6 flex items-center justify-between rounded-2xl bg-zinc-100 dark:bg-zinc-800/70 p-4">
+                                            <span className="text-xl font-black text-[var(--color-primary)] dark:text-[var(--color-accent)]">
                                                 {order.total.toLocaleString("fa-IR")} تومان
                                             </span>
                                         </div>
@@ -506,15 +519,15 @@ export default function ProfilePage() {
 
             {/* مورد علاقه‌ها */}
             {activeTab === "wishlist" && (
-                <div className="bg-white rounded-2xl border border-gray-100 p-5 sm:p-6">
-                    <h2 className="text-lg font-bold mb-5">مورد علاقه‌ها</h2>
+                <div className="card p-6">
+                    <h2 className="mb-6 text-lg font-black text-[var(--color-primary)] dark:text-white">مورد علاقه‌ها</h2>
 
                     {wishlistLoading ? (
-                        <div className="text-center py-10 text-gray-400 text-sm">
+                        <div className="py-12 text-center text-sm text-zinc-500 dark:text-zinc-400">
                             در حال بارگذاری...
                         </div>
                     ) : wishlist.length === 0 ? (
-                        <div className="text-center py-10 text-gray-400 text-sm">
+                        <div className="py-12 text-center text-sm text-zinc-500 dark:text-zinc-400">
                             هنوز محصولی به مورد علاقه‌ها اضافه نکردی
                         </div>
                     ) : (
@@ -526,11 +539,11 @@ export default function ProfilePage() {
                                 return (
                                     <div
                                         key={item.id}
-                                        className="border border-gray-100 rounded-2xl p-4 flex gap-3"
+                                        className="card flex gap-4 p-4 transition hover:-translate-y-0.5"
                                     >
                                         <Link
                                             href={`/products/${product.id}`}
-                                            className="w-20 h-20 rounded-xl bg-gray-100 overflow-hidden shrink-0"
+                                            className="h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-zinc-100 dark:bg-zinc-800"
                                         >
                                             <img
                                                 src={product.images?.[0]?.url || product.image}
@@ -544,28 +557,26 @@ export default function ProfilePage() {
                                             <div>
                                                 <Link
                                                     href={`/products/${product.id}`}
-                                                    className="text-sm font-medium text-gray-800 line-clamp-2 hover:text-black"
+                                                    className="text-sm font-bold text-zinc-900 dark:text-zinc-100 line-clamp-2 hover:text-[var(--color-accent)] transition-colors"
                                                 >
                                                     {product.title}
                                                 </Link>
 
-                                                <p className="text-sm font-bold text-gray-900 mt-2">
-                                                    {product.price.toLocaleString()} تومان
+                                                <p className="mt-2 text-base font-extrabold text-[var(--color-primary)] dark:text-[var(--color-accent)]">
+                                                    {toPersianPrice(product.price)} تومان
                                                 </p>
                                             </div>
 
                                             <div className="flex items-center justify-between mt-3">
                                                 <Link
                                                     href={`/products/${product.id}`}
-                                                    className="text-xs text-black font-medium hover:underline"
-                                                >
+                                                    className="text-xs font-semibold text-zinc-600 dark:text-zinc-300 hover:text-[var(--color-accent)] transition-colors"                                                >
                                                     مشاهده محصول
                                                 </Link>
 
                                                 <button
                                                     onClick={() => removeFromWishlist(product.id)}
-                                                    className="text-xs text-red-500 hover:text-red-600 transition"
-                                                >
+                                                    className="rounded-lg px-2 py-1 text-xs font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition"                                                >
                                                     حذف
                                                 </button>
                                             </div>
@@ -578,5 +589,13 @@ export default function ProfilePage() {
                 </div>
             )}
         </div>
+    );
+}
+
+export default function ProfilePage() {
+    return (
+        <Suspense fallback={null}>
+            <ProfileContent />
+        </Suspense>
     );
 }

@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
-const AuthContext = createContext(null);
+const AuthContext = createContext(undefined);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -11,11 +11,22 @@ export function AuthProvider({ children }) {
   const router = useRouter();
 
   useEffect(() => {
-    fetch("/api/auth/me", { cache: "no-store" })
+    const controller = new AbortController();
+
+    fetch("/api/auth/me", {
+      cache: "no-store",
+      signal: controller.signal,
+    })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => setUser(data))
-      .catch(() => setUser(null))
+      .catch((err) => {
+        if (err.name !== "AbortError") {
+          setUser(null);
+        }
+      })
       .finally(() => setLoading(false));
+
+    return () => controller.abort();
   }, []);
 
   const login = async (phone, password) => {
@@ -31,7 +42,7 @@ export function AuthProvider({ children }) {
       throw new Error(data.error || "خطا در ورود");
     }
 
-    setUser(data);
+    await refreshUser();
     return data;
   };
 
@@ -52,9 +63,14 @@ export function AuthProvider({ children }) {
   };
 
   const logout = async () => {
-    await fetch("/api/auth/logout", { method: "POST" });
-    setUser(null);
-    router.push("/login");
+    const res = await fetch("/api/auth/logout", {
+      method: "POST",
+    });
+
+    if (res.ok) {
+      setUser(null);
+      router.push("/login");
+    }
   };
 
   const refreshUser = async () => {
@@ -91,5 +107,11 @@ export function AuthProvider({ children }) {
 }
 
 export function useAuth() {
-  return useContext(AuthContext);
+  const context = useContext(AuthContext);
+
+  if (!context) {
+    throw new Error("useAuth must be used inside AuthProvider");
+  }
+
+  return context;
 }

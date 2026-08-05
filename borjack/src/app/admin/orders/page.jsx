@@ -42,10 +42,10 @@ export default function AdminOrdersPage() {
 
   return (
     <div>
-      <h1 className="text-xl font-bold text-gray-800 mb-6">سفارشات</h1>
+      <h1 className="section-title mb-6 text-[var(--color-primary)] dark:text-white">سفارشات</h1>
 
       {error && (
-        <div className="mb-4 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
+        <div className="card mb-4 border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
           {error}
         </div>
       )}
@@ -78,7 +78,7 @@ export default function AdminOrdersPage() {
       />
 
       {pagination && (
-        <div className="flex items-center justify-between mt-6">
+        <div className="card mt-6 flex items-center justify-between p-4">
 
           <button
             disabled={!pagination.hasPrev}
@@ -86,12 +86,12 @@ export default function AdminOrdersPage() {
               setExpanded(null);
               setPage(page - 1);
             }}
-            className="border rounded-lg px-4 py-2 disabled:opacity-50"
+            className="btn-outline disabled:opacity-50"
           >
             قبلی
           </button>
 
-          <span className="text-sm text-gray-600">
+          <span className="text-sm muted">
             صفحه {pagination.page} از {pagination.totalPages}
           </span>
 
@@ -101,7 +101,7 @@ export default function AdminOrdersPage() {
               setExpanded(null);
               setPage(page + 1);
             }}
-            className="border rounded-lg px-4 py-2 disabled:opacity-50"
+            className="btn-outline disabled:opacity-50"
           >
             بعدی
           </button>

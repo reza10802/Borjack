@@ -91,18 +91,23 @@ export default function AdminReviews() {
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">نظرات</h1>
-        <p className="text-sm text-gray-500 mt-0.5">{reviews.length} نظر</p>
+      <div className="mb-8 flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-[var(--color-text)]">
+            نظرات
+          </h1>
+          <p className="mt-1 text-sm text-[var(--color-text-muted)]">
+            {reviews.length} نظر
+          </p>
+        </div>
       </div>
-
       {error && (
-        <div className="mb-4 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
+        <div className="mb-5 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
           {error}
         </div>
       )}
 
-      <div className="flex gap-2 mb-4">
+      <div className="mb-6 flex flex-wrap gap-2">
         {[
           { key: "pending", label: "در انتظار تایید" },
           { key: "approved", label: "تایید شده" },
@@ -111,11 +116,11 @@ export default function AdminReviews() {
           <button
             key={t.key}
             onClick={() => setFilter(t.key)}
-            className={`px-4 py-1.5 text-sm rounded-xl transition ${
-              filter === t.key
-                ? "bg-black text-white"
-                : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"
-            }`}
+            className={`rounded-xl px-4 py-2 text-sm transition
+        ${filter === t.key
+                ? "bg-[var(--color-accent)] text-white"
+                : "border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] hover:border-[var(--color-accent)]"
+              }`}
           >
             {t.label}
           </button>
@@ -123,35 +128,43 @@ export default function AdminReviews() {
       </div>
 
       {loading ? (
-        <div className="space-y-2">
+        <div className="space-y-3">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-20 bg-white rounded-xl animate-pulse" />
+            <div
+              key={i}
+              className="h-28 animate-pulse rounded-2xl bg-[var(--color-surface-2)]"
+            />
           ))}
         </div>
       ) : reviews.length === 0 ? (
-        <p className="text-center text-gray-400 py-12 text-sm">نظری یافت نشد</p>
+        <p className="py-14 text-center text-sm text-[var(--color-text-muted)]">
+          نظری یافت نشد
+        </p>
       ) : (
         <div className="space-y-3">
           {reviews.map((r) => (
-            <div key={r.id} className="bg-white rounded-2xl border border-gray-100 p-4">
+            <div key={r.id} className="card rounded-2xl p-5">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="font-medium text-sm text-gray-900">{r.user}</span>
+                    <span className="text-sm font-semibold text-[var(--color-text)]">
+                      {r.user}
+                    </span>
                     <div className="flex text-sm">{STARS(r.rating)}</div>
                     <span
-                      className={`text-xs px-2 py-0.5 rounded-full ${
-                        r.approved
-                          ? "bg-green-50 text-green-700"
-                          : "bg-yellow-50 text-yellow-700"
-                      }`}
+                      className={`rounded-full px-3 py-1 text-xs font-medium ${r.approved
+                        ? "bg-green-500/10 text-green-500"
+                        : "bg-yellow-500/10 text-yellow-500"
+                        }`}
                     >
                       {r.approved ? "تایید شده" : "در انتظار"}
                     </span>
                   </div>
 
-                  <p className="text-sm text-gray-600 mb-1">{r.comment}</p>
-                  <p className="text-xs text-gray-400">
+                  <p className="mb-2 text-sm leading-7 text-[var(--color-text)]">
+                    {r.comment}
+                  </p>
+                  <p className="text-xs text-[var(--color-text-muted)]">
                     {r.product?.title} —{" "}
                     {new Date(r.createdAt).toLocaleDateString("fa-IR")}
                   </p>
@@ -162,7 +175,7 @@ export default function AdminReviews() {
                     <button
                       onClick={() => handleApprove(r.id, true)}
                       disabled={updating === r.id}
-                      className="text-xs px-3 py-1.5 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition disabled:opacity-50"
+                      className="rounded-xl bg-green-500/10 px-3 py-2 text-xs font-medium text-green-500 transition hover:bg-green-500/20 disabled:opacity-50"
                     >
                       تایید
                     </button>
@@ -170,7 +183,7 @@ export default function AdminReviews() {
                     <button
                       onClick={() => handleApprove(r.id, false)}
                       disabled={updating === r.id}
-                      className="text-xs px-3 py-1.5 bg-yellow-50 text-yellow-700 rounded-lg hover:bg-yellow-100 transition disabled:opacity-50"
+                      className="rounded-xl bg-yellow-500/10 px-3 py-2 text-xs font-medium text-yellow-600 transition hover:bg-yellow-500/20 disabled:opacity-50"
                     >
                       رد تایید
                     </button>
@@ -178,7 +191,7 @@ export default function AdminReviews() {
 
                   <button
                     onClick={() => handleDelete(r.id)}
-                    className="text-xs px-3 py-1.5 border border-red-100 text-red-500 rounded-lg hover:bg-red-50 transition"
+                    className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs font-medium text-red-500 transition hover:bg-red-500/20"
                   >
                     حذف
                   </button>

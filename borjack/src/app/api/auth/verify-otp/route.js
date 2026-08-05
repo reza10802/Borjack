@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { verifyOtpSchema } from "@/lib/validations/auth";
 import { getSessionUser } from "@/lib/auth";
+import jwt from "jsonwebtoken";
+const JWT_SECRET = process.env.JWT_SECRET;
 
 export async function POST(req) {
   try {
@@ -71,10 +73,30 @@ export async function POST(req) {
       },
     });
 
-    return NextResponse.json({
+    const newToken = jwt.sign(
+      {
+        id: authUser.id,
+        role: authUser.role,
+        isPhoneVerified: true,
+      },
+      JWT_SECRET,
+      { expiresIn: "7d" },
+    );
+
+    const response = NextResponse.json({
       success: true,
       message: "شماره موبایل با موفقیت تایید شد",
     });
+
+    response.cookies.set("token", newToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24 * 7,
+      path: "/",
+    });
+
+    return response;
   } catch (error) {
     console.error("VERIFY OTP ERROR:", error);
     return NextResponse.json(

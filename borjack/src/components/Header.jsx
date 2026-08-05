@@ -1,9 +1,12 @@
 "use client";
 import SearchBar from "./SearchBar";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "@/context/AuthContext";
 import CartIcon from "./CartIcon";
+import Image from "next/image";
+import ThemeToggle from "./ThemeToggle";
+import { usePathname } from "next/navigation";
 
 export default function Header() {
     const [menuOpen, setMenuOpen] = useState(false);
@@ -16,51 +19,70 @@ export default function Header() {
         { label: "پوشاک", href: "/search?category=پوشاک" },
     ];
 
-    return (
-        <header className="w-full bg-white border-b border-gray-100 sticky top-0 z-50" dir="rtl">
+    const pathname = usePathname();
 
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+    useEffect(() => {
+        setMenuOpen(false);
+    }, [pathname]);
+
+    return (
+        <header
+            className="sticky top-0 z-50 border-b border-zinc-200/50 dark:border-zinc-700/50 bg-white/90 dark:bg-[#1E2640]/95 backdrop-blur-xl shadow-sm"
+        >
+
+            <div className="container-page h-16 lg:h-20 flex items-center justify-between gap-6">
 
                 <Link href="/" className="flex items-center shrink-0">
-                    <img src="/images/photo_2026-06-20_01-20-44.jpg" alt="لوگوی سایت" className="w-12 h-12 rounded-xl object-cover" />
+                    <Image
+                        src="/images/logo.png"
+                        alt="لوگو"
+                        width={52}
+                        height={52}
+                        className="rounded-xl object-contain"
+                    />
                 </Link>
 
-                <SearchBar className="flex-1 max-w-md hidden sm:block" />
+                <SearchBar className="hidden md:block flex-1 max-w-2xl mx-8" />
+                <div className="flex items-center gap-3 shrink-0 h-12">
+                    <ThemeToggle />
+                    <CartIcon />
 
-                <div className="flex items-center gap-2 shrink-0">
                     {user ? (
                         <>
                             {(user.role === "ADMIN" || user.role === "MANAGER") && (
-                                <Link href="/admin" className="hidden sm:inline-flex px-4 py-1.5 text-sm rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-50 transition">
+                                <Link
+                                    href="/admin"
+                                    onClick={() => setMenuOpen(false)}
+                                    className=" hidden md:flex h-11 items-center justify-center rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-5 text-sm font-bold text-[var(--color-primary)] dark:text-[var(--color-accent)] transition-all duration-200 hover:border-[var(--color-accent)] hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:shadow-md"
+                                >
                                     پنل ادمین
                                 </Link>
                             )}
-                            <CartIcon />
-                            <Link href="/profile" className="hidden sm:inline-flex px-4 py-1.5 text-sm rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-50 transition">
+                            <Link href="/profile" className=" hidden md:flex h-11 items-center justify-center px-5 rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm font-bold text-zinc-700 dark:text-zinc-200 transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] hover:bg-zinc-50 dark:hover:bg-zinc-800 ">
                                 {user.name || "پروفایل"}
                             </Link>
-                            <button onClick={logout} className="hidden sm:inline-flex px-4 py-1.5 text-sm rounded-xl bg-black text-white hover:bg-gray-800 transition">
-                                خروج
-                            </button>
                         </>
                     ) : (
                         <>
-                            <Link href="/login" className="hidden sm:inline-flex px-4 py-1.5 text-sm rounded-xl border border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition">
+                            <Link href="/login" className="hidden md:flex h-11 items-center justify-center rounded-xl border border-transparent bg-[var(--color-primary)] px-5 text-sm font-medium text-white transition hover:bg-[var(--color-primary-hover)]">
                                 ورود
                             </Link>
-                            <Link href="/register" className="hidden sm:inline-flex px-4 py-1.5 text-sm rounded-xl bg-black text-white hover:bg-gray-800 transition">
+                            <Link href="/register" className="hidden md:flex h-11 items-center justify-center rounded-xl border border-[var(--color-accent)] px-5 text-sm font-medium text-[var(--color-accent)] transition hover:bg-[var(--color-accent)] hover:text-white">
                                 ثبت‌نام
                             </Link>
                         </>
                     )}
 
-                    <button onClick={() => setMenuOpen(!menuOpen)} className="md:hidden p-2 rounded-xl hover:bg-gray-100 transition" aria-label="منو">
+                    <button
+                        onClick={() => setMenuOpen(!menuOpen)}
+                        aria-label="منو"
+                        className=" md:hidden flex h-11 w-11 items-center justify-center rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 transition hover:border-[var(--color-accent)] hover:bg-zinc-50 dark:hover:bg-zinc-800">
                         {menuOpen ? (
-                            <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="h-5 w-5 text-zinc-700 dark:text-zinc-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                             </svg>
                         ) : (
-                            <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="h-5 w-5 text-zinc-700 dark:text-zinc-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
                             </svg>
                         )}
@@ -69,12 +91,12 @@ export default function Header() {
             </div>
 
             {/* منو دسکتاپ */}
-            <div className="hidden md:block border-t border-gray-100">
-                <div className="max-w-7xl mx-auto px-6">
-                    <nav className="flex gap-1">
+            <div className="hidden md:block border-t border-zinc-200/60 dark:border-zinc-800">
+                <div className="container-page">
+                    <nav className="flex items-center gap-2">
                         {navLinks.map((link) => (
                             <Link key={link.label} href={link.href}
-                                className="px-4 py-3 text-sm text-gray-600 hover:text-black hover:bg-gray-50 transition rounded-b-lg font-medium">
+                                className="relative px-5 py-4 text-sm font-medium text-zinc-600 transition hover:text-[var(--color-accent)] after:absolute after:bottom-0 after:left-1/2 after:h-0.5 after:w-0 after:-translate-x-1/2 after:bg-[var(--color-accent)] after:transition-all hover:after:w-3/4 dark:text-zinc-300">
                                 {link.label}
                             </Link>
                         ))}
@@ -84,14 +106,14 @@ export default function Header() {
 
             {/* منوی موبایل */}
             {menuOpen && (
-                <div className="md:hidden border-t border-gray-100 bg-white px-4 pb-4">
+                <div className="md:hidden border-t border-zinc-200 dark:border-zinc-700 bg-white dark:bg-[#1E2640] px-4 pb-4">
                     <div className="mt-3 mb-3">
                         <SearchBar />
                     </div>
                     <nav className="flex flex-col">
                         {navLinks.map((link) => (
                             <Link key={link.label} href={link.href}
-                                className="py-3 text-sm text-gray-700 border-b border-gray-100 last:border-0 hover:text-black transition"
+                                className="py-3 text-sm text-zinc-700 dark:text-zinc-300 border-b border-gray-100 last:border-0 hover:text-[var(--color-accent)] transition"
                                 onClick={() => setMenuOpen(false)}>
                                 {link.label}
                             </Link>
@@ -101,23 +123,27 @@ export default function Header() {
                         {user ? (
                             <>
                                 {(user.role === "ADMIN" || user.role === "MANAGER") && (
-                                    <Link href="/admin" className="flex-1 text-center py-2 text-sm border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition">
+                                    <Link onClick={() => setMenuOpen(false)} href="/admin" className="flex-1 h-11 flex items-center justify-center text-sm border border-transparent bg-zinc-100 dark:bg-zinc-800 rounded-xl text-zinc-700 dark:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition">
                                         پنل ادمین
                                     </Link>
                                 )}
-                                <Link href="/cart" className="flex-1 text-center py-2 text-sm border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition">
+                                <Link onClick={() => setMenuOpen(false)} href="/cart" className="flex-1 h-11 flex items-center justify-center text-sm border border-transparent bg-zinc-100 dark:bg-zinc-800 rounded-xl text-zinc-700 dark:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition">
                                     سبد خرید
                                 </Link>
-                                <button onClick={logout} className="flex-1 text-center py-2 text-sm bg-black text-white rounded-xl hover:bg-gray-800 transition">
-                                    خروج
-                                </button>
+                                <Link
+                                    href="/profile"
+                                    onClick={() => setMenuOpen(false)}
+                                    className="flex-1 h-11 flex items-center justify-center text-sm border border-transparent bg-zinc-100 dark:bg-zinc-800 rounded-xl text-zinc-700 dark:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition"
+                                >
+                                    پروفایل
+                                </Link>
                             </>
                         ) : (
                             <>
-                                <Link href="/login" className="flex-1 text-center py-2 text-sm border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition">
+                                <Link onClick={() => setMenuOpen(false)} href="/login" className="flex-1 h-11 flex items-center justify-center text-sm border border-[var(--color-accent)] rounded-xl text-[var(--color-accent)] hover:bg-zinc-100 dark:hover:bg-zinc-800 transition">
                                     ورود
                                 </Link>
-                                <Link href="/register" className="flex-1 text-center py-2 text-sm bg-black text-white rounded-xl hover:bg-gray-800 transition">
+                                <Link onClick={() => setMenuOpen(false)} href="/register" className="flex-1 h-11 flex items-center justify-center text-sm border border-transparent bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white rounded-xl transition">
                                     ثبت‌نام
                                 </Link>
                             </>

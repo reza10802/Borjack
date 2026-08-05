@@ -11,6 +11,12 @@ export async function GET(req) {
     const products = await prisma.product.findMany({
       orderBy: { createdAt: "desc" },
       include: {
+        category: {
+          select: {
+            id: true,
+            title: true,
+          },
+        },
         images: true,
         specs: true,
       },
@@ -21,7 +27,7 @@ export async function GET(req) {
     console.error(error);
     return NextResponse.json(
       { error: "خطا در دریافت محصولات" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
@@ -38,34 +44,51 @@ export async function POST(req) {
       price,
       originalPrice,
       discount,
-      category,
+      categoryId,
       image,
+      gallery = [],
       description,
-      inStock,
+      stock,
     } = body;
 
-    if (!title || price == null || !category || !image || !description) {
+    if (!title || price == null || !categoryId || !image || !description) {
       return NextResponse.json(
         { error: "همه فیلدهای ضروری را پر کنید" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     const product = await prisma.product.create({
       data: {
-        title: String(title).trim(),
+        title: title.trim(),
         price: Number(price),
         originalPrice:
           originalPrice != null && originalPrice !== ""
             ? Number(originalPrice)
             : Number(price),
-        discount: discount != null ? Number(discount) : 0,
-        category: String(category).trim(),
-        image: String(image).trim(),
-        description: String(description).trim(),
-        inStock: typeof inStock === "boolean" ? inStock : true,
+
+        discount: Number(discount) || 0,
+
+        category: {
+          connect: {
+            id: Number(categoryId),
+          },
+        },
+
+        image,
+
+        description: description.trim(),
+
+        stock: Number(stock ?? 0),
+
+        images: {
+          create: gallery.map((url) => ({
+            url,
+          })),
+        },
       },
       include: {
+        category: true,
         images: true,
         specs: true,
       },
@@ -83,9 +106,6 @@ export async function POST(req) {
     return NextResponse.json({ product }, { status: 201 });
   } catch (error) {
     console.error(error);
-    return NextResponse.json(
-      { error: "خطا در ساخت محصول" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "خطا در ساخت محصول" }, { status: 500 });
   }
 }

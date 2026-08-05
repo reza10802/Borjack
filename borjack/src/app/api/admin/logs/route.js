@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { prisma } from "../../../../lib/db";
-import { requireAdmin } from "../../../../lib/auth";
+import { prisma } from "@/lib/db";
+import { requireAdmin } from "@/lib/auth";
 
 // GET_logs → GET
 
 export async function GET(req) {
-  const { session, error } = await requireAdmin();
+  const { error } = await requireAdmin();
   if (error) return error;
  
   const { searchParams } = new URL(req.url);

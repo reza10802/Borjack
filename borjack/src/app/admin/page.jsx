@@ -190,8 +190,11 @@ export default function AdminDashboard() {
         : [];
 
     return (
-        <div dir="rtl" className="max-w-7xl mx-auto">
-            <h1 className="text-lg sm:text-xl font-bold text-gray-800 mb-4 sm:mb-6">
+        <div
+            dir="rtl"
+            className="max-w-7xl mx-auto min-h-full text-[var(--color-primary)] transition-colors"
+        >
+            <h1 className="text-lg sm:text-xl font-bold text-[var(--color-primary)] dark:text-white mb-4 sm:mb-6">
                 خوش آمدید، {user?.name} 👋
             </h1>
 
@@ -201,21 +204,20 @@ export default function AdminDashboard() {
                     ? [...Array(4)].map((_, i) => (
                         <div
                             key={i}
-                            className="bg-white rounded-xl p-4 animate-pulse h-24 border border-gray-100"
-                        />
+                            className="card animate-pulse h-24 bg-[var(--background-card)]" />
                     ))
                     : statCards.map((card) => (
                         <div
                             key={card.label}
-                            className="rounded-xl border border-gray-100 bg-white p-3 sm:p-4"
+                            className=" card hover:shadow-lg hover:-translate-y-1 transition-all "
                         >
                             <div className="flex flex-col items-center justify-between sm:flex-col sm:justify-center sm:items-center sm:text-center sm:gap-2">
                                 <div className="text-xl sm:text-2xl">{card.icon}</div>
 
-                                <div className="text-xl sm:text-2xl font-bold text-gray-800 leading-none">
+                                <div className="text-xl sm:text-2xl font-bold text-[var(--color-primary)] dark:text-white leading-none">
                                     {card.value}
                                 </div>
-                                <div className="text-xs sm:text-sm text-gray-500 mt-1">
+                                <div className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mt-1">
                                     {card.label}
                                 </div>
                             </div>
@@ -224,14 +226,14 @@ export default function AdminDashboard() {
             </div>
 
             {/* تسک‌ها */}
-            <div className="bg-white rounded-2xl border border-gray-100 p-4 sm:p-6">
+            <div className="card p-4 sm:p-6">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-5">
-                    <h2 className="text-base sm:text-lg font-bold text-gray-800">تسک‌ها</h2>
+                    <h2 className="text-base sm:text-lg font-bold text-[var(--color-primary)] dark:text-white">تسک‌ها</h2>
 
                     {user?.role === "ADMIN" && (
                         <button
                             onClick={() => setShowNewTask((s) => !s)}
-                            className="w-full sm:w-auto px-4 py-2 bg-black text-white text-sm rounded-xl hover:bg-gray-800 transition"
+                            className="w-full sm:w-auto px-4 py-2 btn-primary text-sm rounded-xl hover:bg-gray-800 transition"
                         >
                             + تسک جدید
                         </button>
@@ -239,7 +241,7 @@ export default function AdminDashboard() {
                 </div>
 
                 {user?.role === "ADMIN" && showNewTask && (
-                    <div className="bg-gray-50 rounded-xl p-4 mb-5 flex flex-col gap-3">
+                    <div className="card p-4 mb-5 flex flex-col gap-3 border border-[var(--color-border)]">
                         <input
                             type="text"
                             placeholder="عنوان تسک"
@@ -247,7 +249,7 @@ export default function AdminDashboard() {
                             onChange={(e) =>
                                 setNewTask((t) => ({ ...t, title: e.target.value }))
                             }
-                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-400"
+                            className=" w-full rounded-lg border border-[var(--color-border)] bg-[var(--background-card)] text-[var(--color-primary)] dark:text-white  focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent)] "
                         />
 
                         <textarea
@@ -257,7 +259,7 @@ export default function AdminDashboard() {
                                 setNewTask((t) => ({ ...t, description: e.target.value }))
                             }
                             rows={2}
-                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gray-400 resize-none"
+                            className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--background-card)] text-[var(--color-primary)] placeholder:text-zinc-500 focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent)] transition"
                         />
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -282,6 +284,42 @@ export default function AdminDashboard() {
                                         priority: option.value,
                                     }))
                                 }
+                                styles={{
+                                    control: (base) => ({
+                                        ...base,
+                                        backgroundColor: "var(--background-card)",
+                                        borderColor: "var(--color-border)",
+                                        color: "var(--color-primary)",
+                                        boxShadow: "none",
+                                    }),
+                                    menu: (base) => ({
+                                        ...base,
+                                        backgroundColor: "var(--background-card)",
+                                    }),
+                                    menuList: (base) => ({
+                                        ...base,
+                                        backgroundColor: "var(--background-card)",
+                                    }),
+                                    singleValue: (base) => ({
+                                        ...base,
+                                        color: "var(--color-primary)",
+                                    }),
+                                    input: (base) => ({
+                                        ...base,
+                                        color: "var(--color-primary)",
+                                    }),
+                                    placeholder: (base) => ({
+                                        ...base,
+                                        color: "#888",
+                                    }),
+                                    option: (base, state) => ({
+                                        ...base,
+                                        backgroundColor: state.isFocused
+                                            ? "var(--color-accent)"
+                                            : "var(--background-card)",
+                                        color: state.isFocused ? "#fff" : "var(--color-primary)",
+                                    }),
+                                }}
                             />
 
                             <Select
@@ -307,20 +345,42 @@ export default function AdminDashboard() {
                                     }))
                                 }
                                 placeholder="انتخاب گیرنده"
+                                styles={{
+                                    control: (base) => ({
+                                        ...base,
+                                        backgroundColor: "var(--background-card-rgb)",
+                                        borderColor: "var(--color-border)",
+                                        boxShadow: "none",
+                                    }),
+                                    menu: (base) => ({
+                                        ...base,
+                                        backgroundColor: "var(--background-card-rgb)",
+                                    }),
+                                    singleValue: (base) => ({
+                                        ...base,
+                                        color: "var(--color-primary)",
+                                    }),
+                                    option: (base, state) => ({
+                                        ...base,
+                                        backgroundColor: state.isFocused
+                                            ? "var(--color-accent)"
+                                            : "transparent",
+                                        color: state.isFocused ? "#fff" : "var(--color-primary)",
+                                    }),
+                                }}
                             />
                         </div>
 
                         <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
                             <button
                                 onClick={() => setShowNewTask(false)}
-                                className="w-full sm:w-auto px-4 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-100 transition"
-                            >
+                                className="px-4 py-2 text-sm rounded-lg border border-[var(--color-border)] bg-[var(--background-card)] text-[var(--color-primary)] dark:text-white hover:bg-[var(--background-app)] transition"                            >
                                 انصراف
                             </button>
                             <button
                                 onClick={createTask}
                                 disabled={submitting}
-                                className="w-full sm:w-auto px-4 py-2 text-sm bg-black text-white rounded-lg hover:bg-gray-800 transition disabled:opacity-50"
+                                className="w-full sm:w-auto px-4 py-2 text-sm btn-primary rounded-lg hover:bg-gray-800 transition disabled:opacity-50"
                             >
                                 {submitting ? "در حال ارسال..." : "ارسال"}
                             </button>
@@ -338,8 +398,8 @@ export default function AdminDashboard() {
                             key={f.id}
                             onClick={() => setFilter(f.id)}
                             className={`px-4 py-2 rounded-lg text-sm transition ${filter === f.id
-                                ? "bg-black text-white"
-                                : "border border-gray-200 text-gray-600 hover:bg-gray-50"
+                                ? "bg-[var(--color-primary)] text-white"
+                                : "card hover:border-[var(--color-accent)]"
                                 }`}
                         >
                             {f.label}
@@ -348,17 +408,16 @@ export default function AdminDashboard() {
                 </div>
 
                 {tasksError && (
-                    <div className="mb-4 rounded-lg bg-red-50 border border-red-100 px-4 py-3 text-sm text-red-600">
-                        {tasksError}
+                    <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-500">                        {tasksError}
                     </div>
                 )}
 
                 {tasksLoading ? (
-                    <div className="text-center py-8 text-gray-400 text-sm">
+                    <div className="text-center py-8 text-zinc-500 text-sm">
                         در حال بارگذاری...
                     </div>
                 ) : tasks.length === 0 ? (
-                    <div className="text-center py-8 text-gray-400 text-sm">
+                    <div className="text-center py-8 text-zinc-500 dark:text-zinc-400 text-sm">
                         تسکی وجود ندارد
                     </div>
                 ) : (
@@ -366,17 +425,17 @@ export default function AdminDashboard() {
                         {tasks.map((task) => (
                             <div
                                 key={task.id}
-                                className={`rounded-xl border p-4 transition ${task.done
-                                    ? "bg-gray-50 border-gray-100 opacity-70"
-                                    : "bg-white border-gray-200"
+                                className={`card p-4 border border-[var(--color-border)] transition-colors ${task.done
+                                    ? "opacity-70 border-[var(--color-border)]"
+                                    : "hover:border-[var(--color-accent)]"
                                     }`}
                             >
                                 <div className="flex items-start gap-3">
                                     <button
                                         onClick={() => toggleDone(task)}
                                         className={`w-5 h-5 rounded-full border-2 shrink-0 mt-1 flex items-center justify-center transition ${task.done
-                                            ? "bg-black border-black"
-                                            : "border-gray-300 hover:border-black"
+                                            ? "bg-[var(--color-accent)] border-[var(--color-accent)]"
+                                            : "border-gray-300 hover:border-[var(--color-accent)]"
                                             }`}
                                     >
                                         {task.done && (
@@ -401,7 +460,7 @@ export default function AdminDashboard() {
                                             <span
                                                 className={`text-sm font-medium break-words ${task.done
                                                     ? "line-through text-gray-400"
-                                                    : "text-gray-800"
+                                                    : "text-[var(--color-primary)] dark:text-white"
                                                     }`}
                                             >
                                                 {task.title}
@@ -415,7 +474,7 @@ export default function AdminDashboard() {
                                         </div>
 
                                         {task.description && (
-                                            <p className="text-xs sm:text-sm text-gray-500 mb-2 break-words">
+                                            <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mb-2 break-words">
                                                 {task.description}
                                             </p>
                                         )}
@@ -433,8 +492,7 @@ export default function AdminDashboard() {
 
                                     <button
                                         onClick={() => deleteTask(task.id)}
-                                        className="text-gray-300 hover:text-red-500 transition text-lg shrink-0"
-                                    >
+                                        className="text-zinc-400 hover:text-red-500 transition text-lg shrink-0"                                    >
                                         ✕
                                     </button>
                                 </div>
