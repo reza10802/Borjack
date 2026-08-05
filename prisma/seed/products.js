@@ -1,3 +1,11 @@
+function slugify(text) {
+  return text
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^\w\u0600-\u06FF-]+/g, "")
+    .replace(/--+/g, "-");
+}
+
 function random(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
@@ -62,6 +70,27 @@ export async function seedProducts(prisma) {
       update: {},
       create: {
         title: category,
+        slug: slugify(category),
+      },
+    });
+  }
+
+  // ساخت برندها
+  const allBrands = [
+    ...new Set(
+      Object.values(categoryConfig).flatMap((c) => c.brands)
+    ),
+  ];
+
+  for (const brand of allBrands) {
+    await prisma.brand.upsert({
+      where: {
+        title: brand,
+      },
+      update: {},
+      create: {
+        title: brand,
+        slug: slugify(brand),
       },
     });
   }
@@ -85,9 +114,17 @@ export async function seedProducts(prisma) {
         data: {
           title: `${brand} ${category} ${index}`,
 
+          slug: slugify(`${brand}-${category}-${index}`),
+
           category: {
             connect: {
               title: category,
+            },
+          },
+
+          brand: {
+            connect: {
+              title: brand,
             },
           },
 
@@ -99,10 +136,12 @@ export async function seedProducts(prisma) {
 
           description: `محصول ${brand} در دسته ${category} با کیفیت بالا و گارانتی معتبر.`,
 
-          inStock: Math.random() > 0.2,
+          stock: random(0, 30),
 
           rating: 0,
           reviewCount: 0,
+
+          isPublished: true,
         },
       });
 

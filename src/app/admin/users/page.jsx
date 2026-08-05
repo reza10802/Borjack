@@ -13,9 +13,14 @@ const ROLE_LABELS = {
 };
 
 const ROLE_COLORS = {
-  CUSTOMER: "bg-gray-100 text-gray-600",
-  ADMIN: "bg-black text-white",
-  MANAGER: "bg-blue-100 text-blue-700",
+  CUSTOMER:
+    "bg-[var(--color-surface-2)] text-[var(--color-text-muted)]",
+
+  ADMIN:
+    "bg-[var(--color-accent)] text-white",
+
+  MANAGER:
+    "bg-blue-500/10 text-blue-500",
 };
 
 export default function AdminUsersPage() {
@@ -128,7 +133,15 @@ export default function AdminUsersPage() {
 
   return (
     <div>
-      <h1 className="text-xl font-bold text-gray-800 mb-6">مدیریت کاربران</h1>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-[var(--color-text)]">
+          مدیریت کاربران
+        </h1>
+
+        <p className="mt-1 text-sm text-[var(--color-text-muted)]">
+          {filteredUsers.length} کاربر
+        </p>
+      </div>
 
       {error && (
         <div className="mb-4 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
@@ -136,44 +149,48 @@ export default function AdminUsersPage() {
         </div>
       )}
 
-      <div className="mb-5">
+      <div className="card mb-6 p-4">
         <input
           type="text"
           placeholder="جستجوی نام یا شماره موبایل..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full rounded-xl border border-gray-200 px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-black/20"
+          className="w-full h-11 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-accent)] focus:outline-none transition"
         />
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
+      <div className="card overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center text-gray-400">در حال بارگذاری...</div>
+          <div className="p-8 text-center text-[var(--color-text-muted)]">
+            در حال بارگذاری...
+          </div>
         ) : filteredUsers.length === 0 ? (
-          <div className="p-8 text-center text-gray-400">کاربری یافت نشد</div>
+          <div className="p-10 text-center text-[var(--color-text-muted)]">
+            کاربری یافت نشد
+          </div>
         ) : (
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-gray-500 text-right">
+            <thead className="bg-[var(--color-surface-2)] text-[var(--color-text-muted)]">
               <tr>
-                <th className="px-4 py-3 font-medium">نام</th>
-                <th className="px-4 py-3 font-medium">شناسه</th>
-                <th className="px-4 py-3 font-medium">سفارشات</th>
-                <th className="px-4 py-3 font-medium">نقش</th>
-                <th className="px-4 py-3 font-medium">وضعیت</th>
-                <th className="px-4 py-3 font-medium">عملیات</th>
+                <th className="px-4 py-4 text-right font-semibold">نام</th>
+                <th className="px-4 py-4 text-right font-semibold">شناسه</th>
+                <th className="px-4 py-4 text-right font-semibold">سفارشات</th>
+                <th className="px-4 py-4 text-right font-semibold">نقش</th>
+                <th className="px-4 py-4 text-right font-semibold">وضعیت</th>
+                <th className="px-4 py-4 text-right font-semibold">عملیات</th>
               </tr>
             </thead>
 
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-[var(--color-border)]">
               {filteredUsers.map((u) => {
                 const isSelf = u.id === me?.id;
                 const isAdmin = u.role === "ADMIN";
 
                 return (
-                  <tr key={u.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 font-medium text-gray-800">{u.name}</td>
-                    <td className="px-4 py-3 text-gray-500 text-xs">{u.phone}</td>
-                    <td className="px-4 py-3 text-gray-600">{u._count?.orders ?? 0}</td>
+                  <tr className="transition hover:bg-[var(--color-surface-2)]">
+                    <td className="px-4 py-4 font-medium text-[var(--color-text)]">{u.name}</td>
+                    <td className="px-4 py-4 text-xs text-[var(--color-text-muted)]">{u.phone}</td>
+                    <td className="px-4 py-4 text-[var(--color-text)]">{u._count?.orders ?? 0}</td>
                     <td className="px-4 py-3">
                       <span
                         className={`text-xs px-2 py-0.5 rounded-full font-medium ${ROLE_COLORS[u.role]}`}
@@ -183,16 +200,24 @@ export default function AdminUsersPage() {
                     </td>
                     <td className="px-4 py-3">
                       {u.isActive ? (
-                        <span className="text-green-600">فعال</span>
+                        <span className="text-green-500 font-medium">
+                          فعال
+                        </span>
                       ) : (
-                        <span className="text-red-600">مسدود</span>
+                        <span className="text-red-500 font-medium">
+                          مسدود
+                        </span>
                       )}
                     </td>
                     <td className="px-4 py-3">
                       {isSelf ? (
-                        <span className="text-xs text-gray-400">حساب شما</span>
+                        <span className="text-xs text-[var(--color-text-muted)]">
+                          حساب شما
+                        </span>
                       ) : isAdmin ? (
-                        <span className="text-xs text-gray-400">ادمین اصلی</span>
+                        <span className="text-xs text-[var(--color-text-muted)]">
+                          ادمین اصلی
+                        </span>
                       ) : (
                         <div className="flex items-center gap-2">
                           <button
@@ -227,8 +252,8 @@ export default function AdminUsersPage() {
                             onClick={() => toggleUserStatus(u.id, !u.isActive)}
                             disabled={toggling === u.id}
                             className={`px-3 py-1 rounded-lg text-xs transition ${u.isActive
-                              ? "bg-red-100 text-red-700 hover:bg-red-200"
-                              : "bg-green-100 text-green-700 hover:bg-green-200"
+                              ? "h-9 px-4 rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500/20 transition text-xs"
+                              : "h-9 px-4 rounded-xl bg-green-500/10 text-green-500 hover:bg-green-500/20 transition text-xs"
                               }`}
 
                           >
@@ -254,38 +279,63 @@ export default function AdminUsersPage() {
         title="اطلاعات کاربر"
       >
         {selectedUser && (
-          <div className="space-y-3 text-sm">
+          <div className="space-y-3 text-sm text-[var(--color-text)]">
 
-            <div>
-              <span className="font-bold">نام:</span>{" "}
-              {selectedUser.name}
+            <div className="flex justify-between border-b border-[var(--color-border)] pb-2">
+              <span className="font-semibold text-[var(--color-text)]">
+                نام
+              </span>
+
+              <span className="text-[var(--color-text-muted)]">
+                {selectedUser.name}
+              </span>
+            </div>
+            <div className="flex justify-between border-b border-[var(--color-border)] pb-2">
+              <span className="font-semibold text-[var(--color-text)]">
+                شماره تلفن
+              </span>
+
+              <span className="text-[var(--color-text-muted)]">
+                {selectedUser.phone}
+              </span>
+            </div>
+            <div className="flex justify-between border-b border-[var(--color-border)] pb-2">
+              <span className="font-semibold text-[var(--color-text)]">
+                نقش
+              </span>
+
+              <span className="text-[var(--color-text-muted)]">
+                {ROLE_LABELS[selectedUser.role]}
+              </span>
+            </div>
+            <div className="flex justify-between border-b border-[var(--color-border)] pb-2">
+              <span className="font-semibold text-[var(--color-text)]">
+                وضعیت:
+              </span>
+
+              <span className="text-[var(--color-text-muted)]">
+                {selectedUser.isActive ? "فعال" : "مسدود"}
+              </span>
+            </div>
+            <div className="flex justify-between border-b border-[var(--color-border)] pb-2">
+              <span className="font-semibold text-[var(--color-text)]">
+                تعداد سفارش:
+              </span>
+
+              <span className="text-[var(--color-text-muted)]">
+                {selectedUser._count.orders}
+              </span>
             </div>
 
-            <div>
-              <span className="font-bold">شماره:</span>{" "}
-              {selectedUser.phone}
-            </div>
+            <div className="flex justify-between border-b border-[var(--color-border)] pb-2">
+              <span className="font-semibold text-[var(--color-text)]">
+                تاریخ عضویت:
+              </span>
 
-            <div>
-              <span className="font-bold">نقش:</span>{" "}
-              {ROLE_LABELS[selectedUser.role]}
+              <span className="text-[var(--color-text-muted)]">
+                {new Date(selectedUser.createdAt).toLocaleDateString("fa-IR")}
+              </span>
             </div>
-
-            <div>
-              <span className="font-bold">وضعیت:</span>{" "}
-              {selectedUser.isActive ? "فعال" : "مسدود"}
-            </div>
-
-            <div>
-              <span className="font-bold">تعداد سفارش:</span>{" "}
-              {selectedUser._count.orders}
-            </div>
-
-            <div>
-              <span className="font-bold">تاریخ عضویت:</span>{" "}
-              {new Date(selectedUser.createdAt).toLocaleDateString("fa-IR")}
-            </div>
-
           </div>
         )}
       </Modal>

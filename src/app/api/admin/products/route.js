@@ -48,7 +48,7 @@ export async function POST(req) {
       image,
       gallery = [],
       description,
-      inStock,
+      stock,
     } = body;
 
     if (!title || price == null || !categoryId || !image || !description) {
@@ -79,7 +79,7 @@ export async function POST(req) {
 
         description: description.trim(),
 
-        inStock: Boolean(inStock),
+        stock: Number(stock ?? 0),
 
         images: {
           create: gallery.map((url) => ({

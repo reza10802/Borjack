@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
+import { addToCartSchema } from "@/lib/validations/cart";
 
+const MAX_QUANTITY_PER_ITEM = 20;
 // گرفتن آیتم‌های سبد خرید
 export async function GET() {
   try {
@@ -43,60 +45,54 @@ export async function POST(req) {
     }
 
     const body = await req.json();
-    const productId = Number(body.productId);
-    const quantity = Number(body.quantity) || 1;
 
-    if (!productId || Number.isNaN(productId)) {
+    const parsed = addToCartSchema.safeParse({
+      productId: Number(body.productId),
+      quantity: Number(body.quantity),
+    });
+
+    if (!parsed.success) {
       return NextResponse.json(
-        { error: "شناسه محصول نامعتبر است" },
+        { error: parsed.error.issues[0]?.message || "اطلاعات نامعتبر است" },
         { status: 400 },
       );
     }
 
+    const { productId, quantity } = parsed.data;
+
+    const product = await prisma.product.findUnique({
+      where: { id: productId },
+    });
+
+    if (!product) {
+      return NextResponse.json({ error: "محصول یافت نشد" }, { status: 404 });
+    }
+
     const existingItem = await prisma.cartItem.findUnique({
       where: {
-        userId_productId: {
-          userId: user.id,
-          productId,
-        },
+        userId_productId: { userId: user.id, productId },
       },
     });
 
     let cartItem;
 
     if (existingItem) {
+      const newQuantity = Math.min(
+        existingItem.quantity + quantity,
+        MAX_QUANTITY_PER_ITEM,
+      );
+
       cartItem = await prisma.cartItem.update({
         where: {
-          userId_productId: {
-            userId: user.id,
-            productId,
-          },
+          userId_productId: { userId: user.id, productId },
         },
-        data: {
-          quantity: existingItem.quantity + quantity,
-        },
-        include: {
-          product: {
-            include: {
-              images: true,
-            },
-          },
-        },
+        data: { quantity: newQuantity },
+        include: { product: { include: { images: true } } },
       });
     } else {
       cartItem = await prisma.cartItem.create({
-        data: {
-          userId: user.id,
-          productId,
-          quantity,
-        },
-        include: {
-          product: {
-            include: {
-              images: true,
-            },
-          },
-        },
+        data: { userId: user.id, productId, quantity },
+        include: { product: { include: { images: true } } },
       });
     }
 
@@ -110,7 +106,7 @@ export async function POST(req) {
   }
 }
 
-// حذف کل یک آیتم از سبد با productId
+// حذف کل سبد یا یک آیتم مشخص (اگر productId داده نشود، کل سبد پاک می‌شود)
 export async function DELETE(req) {
   try {
     const user = await getSessionUser();
@@ -120,7 +116,16 @@ export async function DELETE(req) {
     }
 
     const { searchParams } = new URL(req.url);
-    const productId = Number(searchParams.get("productId"));
+    const productIdParam = searchParams.get("productId");
+
+    if (!productIdParam) {
+      await prisma.cartItem.deleteMany({
+        where: { userId: user.id },
+      });
+      return NextResponse.json({ success: true });
+    }
+
+    const productId = Number(productIdParam);
 
     if (!productId || Number.isNaN(productId)) {
       return NextResponse.json(

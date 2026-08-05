@@ -2,7 +2,6 @@
   "name": "borjack",
   "version": "0.1.0",
   "private": true,
-
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -10,11 +9,9 @@
     "lint": "eslint",
     "postinstall": "prisma generate"
   },
-
   "prisma": {
     "seed": "node prisma/seed.js"
   },
-
   "dependencies": {
     "@heroicons/react": "^2.2.0",
     "@prisma/adapter-pg": "^7.8.0",
@@ -24,18 +21,20 @@
     "iran-cities-json": "^2.0.0",
     "jose": "^6.2.3",
     "jsonwebtoken": "^9.0.3",
+    "kavenegar": "^1.1.4",
     "lucide-react": "^1.23.0",
     "next": "16.2.9",
+    "next-themes": "^0.4.6",
     "pg": "^8.22.0",
     "prisma": "^7.8.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
+    "react-medium-image-zoom": "^5.4.8",
     "react-select": "^5.10.2",
     "sharp": "^0.35.2",
     "swiper": "^12.2.0",
     "zod": "^4.4.3"
   },
-
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/bcryptjs": "^2.4.6",

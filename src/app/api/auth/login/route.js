@@ -58,6 +58,7 @@ export async function POST(req) {
       {
         id: user.id,
         role: user.role,
+        isPhoneVerified: user.isPhoneVerified,
       },
       JWT_SECRET,
       { expiresIn: "7d" },

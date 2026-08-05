@@ -18,7 +18,10 @@ const MANAGER_ALLOWED_PAGES = [
   "/admin/reviews",
 ];
 
-function getRoleFromToken(req) {
+// صفحاتی که کاربر باید حتماً شماره‌اش رو تایید کرده باشه
+const VERIFIED_ONLY_PAGES = ["/checkout"];
+
+function getTokenPayload(req) {
   try {
     const token =
       req.cookies.get("token")?.value ||
@@ -27,8 +30,7 @@ function getRoleFromToken(req) {
 
     if (!token) return null;
 
-    const decoded = jwt.verify(token, JWT_SECRET);
-    return decoded?.role || null;
+    return jwt.verify(token, JWT_SECRET);
   } catch {
     return null;
   }
@@ -37,11 +39,32 @@ function getRoleFromToken(req) {
 export function middleware(req) {
   const { pathname } = req.nextUrl;
 
-  if (!pathname.startsWith("/admin")) {
+  const needsVerifiedCheck = VERIFIED_ONLY_PAGES.some(
+    (page) => pathname === page || pathname.startsWith(page + "/"),
+  );
+
+  if (!pathname.startsWith("/admin") && !needsVerifiedCheck) {
     return NextResponse.next();
   }
 
-  const role = getRoleFromToken(req);
+  const payload = getTokenPayload(req);
+  const role = payload?.role || null;
+
+  if (needsVerifiedCheck) {
+    if (!payload) {
+      return NextResponse.redirect(new URL("/login", req.url));
+    }
+
+    if (!payload.isPhoneVerified) {
+      const verifyUrl = new URL("/verify-phone", req.url);
+      verifyUrl.searchParams.set("redirect", pathname);
+      return NextResponse.redirect(verifyUrl);
+    }
+  }
+
+  if (!pathname.startsWith("/admin")) {
+    return NextResponse.next();
+  }
 
   // لاگین نیست
   if (!role) {
@@ -76,5 +99,5 @@ export function middleware(req) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*"],
+  matcher: ["/admin/:path*", "/checkout/:path*"],
 };

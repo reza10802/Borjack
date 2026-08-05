@@ -1,9 +1,10 @@
 "use client";
 
-import { useState,Suspense } from "react";
+import { useState, Suspense } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import ThemeToggle from "@/components/ThemeToggle";
 
 function LoginContent() {
   const { login } = useAuth();
@@ -26,7 +27,13 @@ function LoginContent() {
     setLoading(true);
 
     try {
-      await login(phone, password);
+      const data = await login(phone, password);
+
+      if (!data.isPhoneVerified) {
+        router.push(`/verify-phone?redirect=${encodeURIComponent(redirect)}`);
+        return;
+      }
+
       router.push(redirect);
     } catch (err) {
       setError(err.message);
@@ -37,19 +44,24 @@ function LoginContent() {
 
   return (
     <div
-      className="min-h-screen flex items-center justify-center bg-gray-50"
+      className="min-h-screen bg-[var(--background-app)] flex items-center justify-center px-4"
       dir="rtl"
     >
-      <div className="bg-white p-8 rounded-2xl border border-gray-200 shadow-sm w-full max-w-sm">
+      <div className="card relative w-full max-w-md p-8">
+        <div className="absolute top-5 left-5">
+          <ThemeToggle />
+        </div>
         <div className="flex justify-center mb-6">
           <img
-            src="/images/photo_2026-06-20_01-20-44.jpg"
-            className="w-12 h-12 rounded-xl object-cover"
+            src="/images/logo.png"
+            className="w-16 h-16 rounded-2xl object-cover"
             alt="لوگو"
           />
         </div>
 
-        <h1 className="text-xl font-bold text-center mb-6">ورود</h1>
+        <h1 className="text-2xl font-black text-center mb-6 text-[var(--color-primary)] dark:text-white">
+          ورود
+        </h1>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <input
@@ -59,7 +71,7 @@ function LoginContent() {
             onChange={(e) => setPhone(e.target.value)}
             autoComplete="tel"
             dir="rtl"
-            className="w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm text-right focus:outline-none focus:border-blue-500"
+            className="w-full h-12 rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-4 text-sm text-zinc-800 dark:text-zinc-100 transition"
           />
 
           <div className="relative w-full">
@@ -70,13 +82,13 @@ function LoginContent() {
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="current-password"
               dir="rtl"
-              className="w-full h-12 border border-gray-300 rounded-lg pr-4 pl-12 text-sm text-right focus:outline-none focus:border-blue-500"
+              className="w-full h-12 rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 pr-4 pl-12 text-sm text-zinc-800 dark:text-zinc-100 transition"
             />
 
             <button
               type="button"
               onClick={() => setShowPassword((prev) => !prev)}
-              className="absolute left-1 top-1/2 -translate-y-1/2 z-10 flex items-center justify-center text-gray-500 hover:text-gray-700"
+              className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-[var(--color-primary)] transition"
               aria-label={showPassword ? "مخفی کردن رمز عبور" : "نمایش رمز عبور"}
             >
               {showPassword ? (
@@ -116,19 +128,21 @@ function LoginContent() {
           {error && (
             <p className="text-red-500 text-sm text-center">{error}</p>
           )}
-
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-black text-white rounded-lg py-2.5 text-sm font-medium hover:bg-gray-800 transition disabled:opacity-50"
+            className="btn-primary w-full h-12 rounded-2xl text-sm font-bold disabled:opacity-50"
           >
             {loading ? "در حال ورود..." : "ورود"}
           </button>
         </form>
 
-        <p className="text-center text-sm text-gray-500 mt-4">
+        <p className="text-center text-sm text-zinc-500 dark:text-zinc-400 mt-5">
           حساب نداری؟{" "}
-          <Link href={`/register?redirect=${encodeURIComponent(redirect)}`} className="text-black font-medium hover:underline">
+          <Link
+            href={`/register?redirect=${encodeURIComponent(redirect)}`}
+            className="font-bold text-zinc-700 dark:text-zinc-300 hover:text-[var(--color-accent)] transition"
+          >
             ثبت‌نام
           </Link>
         </p>

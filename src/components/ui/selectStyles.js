@@ -1,22 +1,61 @@
 export const selectStyles = {
   control: (base, state) => ({
     ...base,
-    minHeight: 40,
-    borderRadius: 10,
-    borderColor: state.isFocused ? "#000" : "#e5e7eb",
+    minHeight: 44,
+    minWidth: 140,
+
+    borderRadius: 12,
     boxShadow: "none",
-    direction: "rtl",
-    fontSize: "14px",
+
+    backgroundColor: "var(--color-surface)",
+    borderColor: state.isFocused
+      ? "var(--color-accent)"
+      : "var(--color-border)",
+
+    transition: "all .2s ease",
+
     "&:hover": {
-      borderColor: "#000",
+      borderColor: "var(--color-accent)",
     },
+  }),
+
+  valueContainer: (base) => ({
+    ...base,
+    direction: "rtl",
+    paddingInline: "12px",
+  }),
+  input: (base) => ({
+    ...base,
+    direction: "rtl",
+    textAlign: "right",
+    margin: 0,
+  }),
+
+  placeholder: (base) => ({
+    ...base,
+    color: "var(--color-text-muted)",
+    direction: "rtl",
+    textAlign: "right",
+    margin: 0,
+  }),
+
+  singleValue: (base) => ({
+    ...base,
+    color: "var(--color-text)",
+    direction: "rtl",
+    textAlign: "right",
+    margin: 0,
   }),
 
   menu: (base) => ({
     ...base,
     zIndex: 9999,
-    direction: "rtl",
-    textAlign: "right",
+    overflow: "hidden",
+
+    borderRadius: 12,
+    border: "1px solid var(--color-border)",
+
+    backgroundColor: "var(--color-surface)",
   }),
 
   menuPortal: (base) => ({
@@ -24,25 +63,24 @@ export const selectStyles = {
     zIndex: 9999,
   }),
 
+  menuList: (base) => ({
+    ...base,
+    padding: 4,
+  }),
+
   option: (base, state) => ({
     ...base,
+
     backgroundColor: state.isSelected
-      ? "#000"
+      ? "var(--color-accent)"
       : state.isFocused
-      ? "#f3f4f6"
-      : "#fff",
-    color: state.isSelected ? "#fff" : "#111827",
+        ? "rgba(220,151,80,.15)"
+        : "transparent",
+
+    color: state.isSelected ? "#fff" : "var(--color-text)",
+
+    borderRadius: 8,
     cursor: "pointer",
-  }),
-
-  valueContainer: (base) => ({
-    ...base,
-    padding: "2px 10px",
-  }),
-
-  singleValue: (base) => ({
-    ...base,
-    color: "#111827",
   }),
 
   indicatorSeparator: () => ({
@@ -51,9 +89,19 @@ export const selectStyles = {
 
   dropdownIndicator: (base) => ({
     ...base,
-    color: "#6b7280",
+    color: "var(--color-text-muted)",
+
     "&:hover": {
-      color: "#111827",
+      color: "var(--color-accent)",
+    },
+  }),
+
+  clearIndicator: (base) => ({
+    ...base,
+    color: "var(--color-text-muted)",
+
+    "&:hover": {
+      color: "#ef4444",
     },
   }),
 };

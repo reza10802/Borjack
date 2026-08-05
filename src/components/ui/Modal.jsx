@@ -43,34 +43,59 @@ export default function Modal({
     <div className="fixed inset-0 z-[999] flex items-center justify-center p-4">
       {/* Overlay */}
       <div
-        className="absolute inset-0 bg-black/50 backdrop-blur-[2px]"
+        className="absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity"
         onClick={() => closeOnOverlay && onClose?.()}
       />
 
       {/* Modal */}
       <div
-        className={`relative w-full ${sizes[size]} max-h-[90vh] bg-white rounded-2xl shadow-2xl overflow-hidden`}
+        className={`
+        relative
+        w-full
+        ${sizes[size]}
+        max-h-[90vh]
+        rounded-2xl
+        border
+        border-[var(--color-border)]
+        bg-[var(--color-surface)]
+        shadow-2xl
+        overflow-hidden
+        animate-[fadeIn_.2s_ease]
+      `}
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
-          <h2 className="text-lg font-bold text-gray-800">{title}</h2>
+        <div className="flex items-center justify-between border-b border-[var(--color-border)] px-6 py-5">
+          <h2 className="text-lg font-bold text-[var(--color-text)]">
+            {title}
+          </h2>
 
           <button
             onClick={onClose}
-            className="w-9 h-9 rounded-lg hover:bg-gray-100 flex items-center justify-center transition"
+            className="
+            flex
+            h-10
+            w-10
+            items-center
+            justify-center
+            rounded-xl
+            text-[var(--color-text-muted)]
+            hover:bg-[var(--color-surface-2)]
+            hover:text-[var(--color-text)]
+            transition
+          "
           >
-            <XMarkIcon className="w-5 h-5" />
+            <XMarkIcon className="h-5 w-5" />
           </button>
         </div>
 
         {/* Body */}
-        <div className="overflow-y-auto max-h-[calc(90vh-140px)] px-6 py-5">
+        <div className="max-h-[calc(90vh-150px)] overflow-y-auto px-6 py-6 text-[var(--color-text)]">
           {children}
         </div>
 
         {/* Footer */}
         {footer && (
-          <div className="border-t border-gray-100 px-6 py-4 bg-gray-50">
+          <div className="border-t border-[var(--color-border)] bg-[var(--color-surface-2)] px-6 py-5">
             {footer}
           </div>
         )}

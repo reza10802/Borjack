@@ -2,10 +2,30 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import {
+    DevicePhoneMobileIcon,
+    ComputerDesktopIcon,
+    ShoppingBagIcon,
+    SpeakerWaveIcon,
+    TvIcon,
+    ClockIcon
+} from "@heroicons/react/24/outline";
+
+const categoryIcons = {
+    "موبایل": DevicePhoneMobileIcon,
+    "لپ-تاپ": ComputerDesktopIcon,
+    "پوشاک": ShoppingBagIcon,
+    "هدفون": SpeakerWaveIcon,
+    "دوربین": TvIcon,
+    "ساعت": ClockIcon,
+
+};
 
 export default function CategorySection() {
     const [categories, setCategories] = useState([]);
-
+    useEffect(() => {
+        console.log(document.documentElement.className);
+    }, []);
     useEffect(() => {
         fetch("/api/categories")
             .then(r => r.ok ? r.json() : [])
@@ -16,17 +36,42 @@ export default function CategorySection() {
     if (categories.length === 0) return null;
 
     return (
-        <section className="mb-10">
-            <h2 className="mb-6 text-xl font-bold">دسته‌بندی‌ها</h2>
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+        <section className="py-10">
+            <div className="mb-10">
+                <h2 className="section-title">
+                    دسته‌بندی‌ها
+                </h2>
+
+                <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
+                    سریع‌تر محصول مورد نظر خودت را پیدا کن
+                </p>
+            </div>
+            <div className="grid grid-cols-2 gap-5 md:grid-cols-3 xl:grid-cols-6">
                 {categories.map((category) => (
                     <Link
                         key={category.id}
                         href={`/search?category=${encodeURIComponent(category.title)}`}
-                        className="flex flex-col items-center rounded-xl bg-white p-4 shadow-sm hover:shadow-md hover:-translate-y-1 transition cursor-pointer"
+                        className=" card group flex flex-col items-center justify-center p-6 text-center transition-all duration-300 hover:-translate-y-1 hover:border-[var(--color-accent)] hover:shadow-lg hover:shadow-[var(--color-accent)]/10 "
                     >
-                        <span className="mb-2 text-3xl">{category.icon}</span>
-                        <span className="text-sm text-gray-700">{category.title}</span>
+                        {(() => {
+                            const Icon =
+                                categoryIcons[category.slug] || categoryIcons.default;
+
+                            return (
+                                <span className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-zinc-100 dark:bg-[var(--color-accent)]/10 transition-all duration-300 group-hover:scale-110 group-hover:bg-[var(--color-accent)]">
+                                    <Icon
+                                        className="
+                                    h-8 w-8
+                                    text-zinc-700
+                                    dark:text-[var(--color-accent)]
+                                    group-hover:text-white
+                                    transition-colors duration-300
+        "
+                                    />
+                                </span>
+                            );
+                        })()}
+                        <span className=" text-sm font-semibold text-zinc-500 dark:text-zinc-400 transition-colors duration-300 group-hover:text-[var(--color-accent)] ">{category.title}</span>
                     </Link>
                 ))}
             </div>

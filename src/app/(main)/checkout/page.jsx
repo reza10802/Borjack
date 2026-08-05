@@ -2,58 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import Select from "react-select";
+import Select from "@/components/ui/Select";
 import { useAuth } from "@/context/AuthContext";
 import { getAllProvinces, getCitiesByProvinceId } from "@/lib/iranLocations";
-
-const selectStyles = {
-  control: (base, state) => ({
-    ...base,
-    minHeight: "48px",
-    borderRadius: "14px",
-    borderColor: state.isFocused ? "#111827" : "#e5e7eb",
-    boxShadow: "none",
-    direction: "rtl",
-    textAlign: "right",
-    "&:hover": {
-      borderColor: "#111827",
-    },
-  }),
-  menu: (base) => ({
-    ...base,
-    zIndex: 9999,
-    direction: "rtl",
-    textAlign: "right",
-  }),
-  menuList: (base) => ({
-    ...base,
-    direction: "rtl",
-    textAlign: "right",
-  }),
-  option: (base, state) => ({
-    ...base,
-    direction: "rtl",
-    textAlign: "right",
-    backgroundColor: state.isFocused ? "#f3f4f6" : "#fff",
-    color: "#111827",
-    cursor: "pointer",
-  }),
-  singleValue: (base) => ({
-    ...base,
-    direction: "rtl",
-    textAlign: "right",
-  }),
-  input: (base) => ({
-    ...base,
-    direction: "rtl",
-    textAlign: "right",
-  }),
-  placeholder: (base) => ({
-    ...base,
-    color: "#9ca3af",
-    textAlign: "right",
-  }),
-};
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -108,12 +59,6 @@ export default function CheckoutPage() {
     }));
   }, [user]);
 
-  const selectedProvince =
-    provinces.find((item) => item.value === String(form.provinceId)) || null;
-
-  const selectedCity =
-    cityOptions.find((item) => item.value === String(form.cityId)) || null;
-
   const onChange = (e) => {
     const { name, value } = e.target;
     setError("");
@@ -123,22 +68,22 @@ export default function CheckoutPage() {
     }));
   };
 
-  const handleProvinceChange = (option) => {
-    setError("");
-    setForm((prev) => ({
-      ...prev,
-      provinceId: option ? String(option.value) : "",
-      cityId: "",
-    }));
-  };
+const handleProvinceChange = (value) => {
+  setError("");
+  setForm((prev) => ({
+    ...prev,
+    provinceId: value,
+    cityId: "",
+  }));
+};
 
-  const handleCityChange = (option) => {
-    setError("");
-    setForm((prev) => ({
-      ...prev,
-      cityId: option ? String(option.value) : "",
-    }));
-  };
+const handleCityChange = (value) => {
+  setError("");
+  setForm((prev) => ({
+    ...prev,
+    cityId: value,
+  }));
+};
 
   const validateForm = () => {
     if (!form.receiverName.trim()) {
@@ -231,16 +176,16 @@ export default function CheckoutPage() {
   }
 
   return (
-    <div className="container mx-auto max-w-3xl px-4 py-10">
-      <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm md:p-8">
-        <h1 className="mb-6 text-2xl font-bold text-gray-900">
+    <div className="container-page max-w-3xl py-10">
+      <div className="card p-6 md:p-8">
+        <h1 className="section-title mb-6 text-[var(--color-text)]">
           تکمیل اطلاعات سفارش
         </h1>
 
         <form onSubmit={handleSubmit} className="space-y-5">
-          <div className="grid gap-5 md:grid-cols-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700">
+              <label className="mb-2 block text-sm font-medium text-[var(--color-text)]">
                 نام گیرنده
               </label>
               <input
@@ -248,13 +193,13 @@ export default function CheckoutPage() {
                 name="receiverName"
                 value={form.receiverName}
                 onChange={onChange}
-                className="w-full rounded-xl border border-gray-200 px-4 py-3 outline-none transition focus:border-black"
+                className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] outline-none transition focus:border-[var(--color-accent)]"
                 placeholder="مثلاً رضا ندایی"
               />
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700">
+              <label className="mb-2 block text-sm font-medium text-[var(--color-text)]">
                 شماره موبایل گیرنده
               </label>
               <input
@@ -262,7 +207,7 @@ export default function CheckoutPage() {
                 name="receiverPhone"
                 value={form.receiverPhone}
                 onChange={onChange}
-                className="w-full rounded-xl border border-gray-200 px-4 py-3 outline-none transition focus:border-black"
+                className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] outline-none transition focus:border-[var(--color-accent)]"
                 placeholder="0912xxxxxxx"
               />
             </div>
@@ -270,41 +215,39 @@ export default function CheckoutPage() {
 
           <div className="grid gap-5 md:grid-cols-2">
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700">
+              <label className="mb-2 block text-sm font-medium text-[var(--color-text)]">
                 استان
               </label>
               <Select
-                options={provinces}
-                value={selectedProvince}
+                value={form.provinceId}
                 onChange={handleProvinceChange}
-                isSearchable
+                options={provinces}
                 placeholder="انتخاب استان"
-                noOptionsMessage={() => "موردی پیدا نشد"}
-                styles={selectStyles}
+                instanceId="checkout-province"
               />
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700">
+              <label className="mb-2 block text-sm font-medium text-[var(--color-text)]">
                 شهر
               </label>
               <Select
-                options={cityOptions}
-                value={selectedCity}
+                value={form.cityId}
                 onChange={handleCityChange}
-                isSearchable
+                options={cityOptions}
                 isDisabled={!form.provinceId}
                 placeholder={
-                  form.provinceId ? "انتخاب شهر" : "ابتدا استان را انتخاب کنید"
+                  form.provinceId
+                    ? "انتخاب شهر"
+                    : "ابتدا استان را انتخاب کنید"
                 }
-                noOptionsMessage={() => "موردی پیدا نشد"}
-                styles={selectStyles}
+                instanceId="checkout-city"
               />
             </div>
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-gray-700">
+            <label className="mb-2 block text-sm font-medium text-[var(--color-text)]">
               آدرس کامل
             </label>
             <textarea
@@ -312,13 +255,13 @@ export default function CheckoutPage() {
               value={form.address}
               onChange={onChange}
               rows={4}
-              className="w-full rounded-xl border border-gray-200 px-4 py-3 outline-none transition focus:border-black"
+              className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] outline-none transition focus:border-[var(--color-accent)]"
               placeholder="آدرس دقیق، پلاک، واحد، توضیحات لازم برای ارسال"
             />
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-gray-700">
+            <label className="mb-2 block text-sm font-medium text-[var(--color-text)]">
               کد پستی
             </label>
             <input
@@ -326,13 +269,13 @@ export default function CheckoutPage() {
               name="postalCode"
               value={form.postalCode}
               onChange={onChange}
-              className="w-full rounded-xl border border-gray-200 px-4 py-3 outline-none transition focus:border-black"
+              className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] outline-none transition focus:border-[var(--color-accent)]"
               placeholder="کد پستی ۱۰ رقمی"
             />
           </div>
 
           {error && (
-            <div className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600">
+            <div className="rounded-xl border border-red-300 bg-red-50 dark:border-red-700 dark:bg-red-900/20 px-4 py-3 text-sm text-red-600 dark:text-red-400">
               {error}
             </div>
           )}
@@ -340,7 +283,7 @@ export default function CheckoutPage() {
           <button
             type="submit"
             disabled={submitting}
-            className="w-full rounded-xl bg-black py-3 text-sm font-medium text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+            className="btn-primary w-full disabled:cursor-not-allowed disabled:opacity-50"
           >
             {submitting ? "در حال انتقال به درگاه..." : "ثبت سفارش و ادامه پرداخت"}
           </button>

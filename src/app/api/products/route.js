@@ -9,6 +9,8 @@ export async function GET(req) {
     const { searchParams } = new URL(req.url);
 
     const category = searchParams.get("category");
+    const brand = searchParams.get("brand");
+    const tag = searchParams.get("tag");
     const search = searchParams.get("search");
     const sort = searchParams.get("sort") || "default";
     const minPrice = searchParams.get("minPrice");
@@ -16,16 +18,68 @@ export async function GET(req) {
     const onlyDiscount = searchParams.get("discount") === "true";
     const onlyInStock = searchParams.get("inStock") === "true";
 
-    const where = {};
+    const page = Number(searchParams.get("page")) || 1;
+    const limit = Number(searchParams.get("limit")) || 20;
+    const skip = (page - 1) * limit;
 
+    const where = {
+      isPublished: true,
+    };
     if (category) {
       where.category = {
         title: category,
       };
     }
-    if (search) where.title = { contains: search };
+    if (brand) {
+      where.brand = {
+        title: brand,
+      };
+    }
+    if (tag) {
+      where.tags = {
+        some: {
+          tag: {
+            title: tag,
+          },
+        },
+      };
+    }
+    if (search) {
+      where.OR = [
+        {
+          title: {
+            contains: search,
+            mode: "insensitive",
+          },
+        },
+        {
+          brand: {
+            title: {
+              contains: search,
+              mode: "insensitive",
+            },
+          },
+        },
+        {
+          tags: {
+            some: {
+              tag: {
+                title: {
+                  contains: search,
+                  mode: "insensitive",
+                },
+              },
+            },
+          },
+        },
+      ];
+    }
     if (onlyDiscount) where.discount = { gt: 0 };
-    if (onlyInStock) where.inStock = true;
+    if (onlyInStock) {
+      where.stock = {
+        gt: 0,
+      };
+    }
 
     if (minPrice || maxPrice) {
       where.price = {};
@@ -39,12 +93,25 @@ export async function GET(req) {
     if (sort === "rating") orderBy = { rating: "desc" };
     if (sort === "discount") orderBy = { discount: "desc" };
 
+    const total = await prisma.product.count({
+      where,
+    });
+
     const products = await prisma.product.findMany({
       where,
       orderBy,
+      skip,
+      take: limit,
       include: {
+        category: true,
+        brand: true,
         images: true,
         specs: true,
+        tags: {
+          include: {
+            tag: true,
+          },
+        },
         ...(user
           ? {
               wishlistItems: {
@@ -62,7 +129,15 @@ export async function GET(req) {
       isWishlisted: user ? product.wishlistItems.length > 0 : false,
     }));
 
-    return NextResponse.json(normalized);
+    return NextResponse.json({
+      products: normalized,
+      pagination: {
+        total,
+        currentPage: page,
+        totalPages: Math.ceil(total / limit),
+        limit,
+      },
+    });
   } catch (error) {
     console.error(error);
     return NextResponse.json(

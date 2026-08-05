@@ -86,6 +86,19 @@ export async function GET(req) {
         },
       });
 
+      console.log("STATUS:", status);
+      console.log("VERIFY RESULT:", result);
+      console.log("ORDER:", order);
+
+      console.log("Deleting cart for user:", order.userId);
+
+      const deleted = await prisma.cartItem.deleteMany({
+        where: {
+          userId: order.userId,
+        },
+      });
+
+      console.log("Deleted:", deleted);
       // پاک کردن سبد خرید
       await prisma.cartItem.deleteMany({
         where: {

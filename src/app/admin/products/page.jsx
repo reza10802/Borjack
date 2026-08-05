@@ -18,7 +18,7 @@ const emptyForm = {
   image: "",
   gallery: [],
   description: "",
-  inStock: true,
+  stock: 0,
 };
 
 const selectStyles = {
@@ -110,7 +110,7 @@ export default function AdminProductsPage() {
       const res = await fetch(`/api/admin/products/${product.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ inStock: !product.inStock }),
+        body: JSON.stringify({ stock: product.stock > 0 ? 0 : 1 }),
       });
 
       const data = await res.json();
@@ -194,7 +194,7 @@ export default function AdminProductsPage() {
           image: form.image,
           gallery: form.gallery,
           description: form.description,
-          inStock: form.inStock,
+          stock: Number(form.stock),
         }),
       });
       const data = await res.json();
@@ -245,45 +245,46 @@ export default function AdminProductsPage() {
   };
 
   const handleGalleryUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    console.log(file)
+    const files = [...e.target.files];
+    if (!files.length) return;
+
     setGalleryUploading(true);
     setFormError("");
 
     try {
-      const body = new FormData();
-      body.append("image", file);
+      const uploaded = [];
 
-      const res = await fetch("/api/admin/upload", {
-        method: "POST",
-        body,
-      });
+      for (const file of files) {
+        const body = new FormData();
+        body.append("image", file);
 
-      const data = await res.json();
+        const res = await fetch("/api/admin/upload", {
+          method: "POST",
+          body,
+        });
 
-      if (!res.ok) {
-        setFormError(data.error);
-        return;
+        const data = await res.json();
+
+        if (!res.ok) {
+          setFormError(data.error);
+          continue;
+        }
+
+        uploaded.push(data.url);
       }
 
       setForm((prev) => {
-        // اولین عکس = عکس اصلی
-        if (!prev.image) {
-          return {
-            ...prev,
-            image: data.url,
-            gallery: [data.url],
-          };
-        }
+        const gallery = [...prev.gallery, ...uploaded];
 
         return {
           ...prev,
-          gallery: [...prev.gallery, data.url],
+          image: prev.image || gallery[0] || "",
+          gallery,
         };
       });
     } finally {
       setGalleryUploading(false);
+      e.target.value = "";
     }
   };
 
@@ -321,7 +322,7 @@ export default function AdminProductsPage() {
                 setShowForm(true);
               }
             }}
-            className="px-4 py-2 text-sm bg-black text-white rounded-xl hover:bg-gray-800 transition"
+            className="btn-primary text-sm px-5 py-2.5"
           >
             {showForm ? "بستن فرم" : "+ محصول جدید"}
           </button>
@@ -331,7 +332,7 @@ export default function AdminProductsPage() {
       {isAdmin && showForm && (
         <form
           onSubmit={handleSubmit}
-          className="bg-white rounded-2xl border border-gray-100 p-5 flex flex-col gap-4"
+          className="card p-6 flex flex-col gap-5"
         >
           <h3 className="text-lg font-bold">
             {editingProduct ? "ویرایش محصول" : "ثبت محصول جدید"}
@@ -341,7 +342,7 @@ export default function AdminProductsPage() {
               placeholder="عنوان محصول"
               value={form.title}
               onChange={(e) => setForm({ ...form, title: e.target.value })}
-              className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-gray-400"
+              className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm text-[var(--color-text)] focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent)] outline-none transition"
             />
 
             <Select
@@ -369,7 +370,7 @@ export default function AdminProductsPage() {
               placeholder="قیمت اصلی"
               value={form.originalPrice}
               onChange={(e) => setForm({ ...form, originalPrice: e.target.value })}
-              className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-gray-400"
+              className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm text-[var(--color-text)] focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent)] outline-none transition"
             />
 
             <input
@@ -377,10 +378,10 @@ export default function AdminProductsPage() {
               placeholder="قیمت فروش"
               value={form.price}
               onChange={(e) => setForm({ ...form, price: e.target.value })}
-              className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-gray-400"
+              className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm text-[var(--color-text)] focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent)] outline-none transition"
             />
 
-            <div className="sm:col-span-2 bg-gray-50 rounded-xl p-3 flex justify-between items-center">
+            <div className="sm:col-span-2 card px-4 py-3 flex justify-between items-center">
               <span className="text-sm text-gray-500">
                 درصد تخفیف
               </span>
@@ -400,7 +401,7 @@ export default function AdminProductsPage() {
 
 
                 {form.gallery.length === 0 && (
-                  <div className="w-32 h-32 rounded-xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center text-gray-400">
+                  <div className="w-32 h-32 rounded-xl border-2 border-dashed border-[var(--color-border)] bg-[var(--color-surface-2)] flex flex-col items-center justify-center text-[var(--color-text-muted)]">
                     <PhotoIcon className="w-10 h-10" />
                     <span className="text-xs mt-2">
                       بدون تصویر
@@ -411,7 +412,7 @@ export default function AdminProductsPage() {
                 {form.gallery.map((img, index) => (
                   <div
                     key={index}
-                    className="relative w-32 h-32 rounded-xl overflow-hidden border border-gray-200"
+                    className="relative w-32 h-32 rounded-xl overflow-hidden border border-[var(--color-border)]"
                   >
                     <img
                       src={img}
@@ -455,11 +456,12 @@ export default function AdminProductsPage() {
                 ))}
 
                 {/* دکمه افزودن */}
-                <label className="w-32 h-32 border-2 border-dashed border-gray-300 rounded-xl flex items-center justify-center cursor-pointer hover:border-black hover:bg-gray-50 transition">
+                <label className="w-32 h-32 rounded-xl border-2 border-dashed border-[var(--color-border)] bg-[var(--color-surface-2)] flex items-center justify-center cursor-pointer hover:border-[var(--color-accent)] hover:bg-[var(--background-app)] transition">
 
                   <input
                     type="file"
                     hidden
+                    multiple
                     accept="image/jpeg,image/png,image/webp"
                     onChange={handleGalleryUpload}
                   />
@@ -482,14 +484,19 @@ export default function AdminProductsPage() {
             value={form.description}
             rows={3}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
-            className="border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-gray-400 resize-none"
+            className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm text-[var(--color-text)] resize-none focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent)] outline-none transition"
           />
 
           <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
             <input
               type="checkbox"
-              checked={form.inStock}
-              onChange={(e) => setForm({ ...form, inStock: e.target.checked })}
+              checked={form.stock > 0}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  stock: e.target.checked ? 1 : 0,
+                })
+              }
               className="w-4 h-4"
             />
             موجود است
@@ -504,7 +511,7 @@ export default function AdminProductsPage() {
               galleryUploading ||
               categories.length === 0
             }
-            className="self-start px-5 py-2.5 bg-black text-white rounded-xl text-sm font-medium hover:bg-gray-800 transition disabled:opacity-50"
+            className="btn-primary self-start disabled:opacity-50"
           >
             {editingProduct ? "ویرایش محصول" : "ثبت محصول"}
           </button>
@@ -522,9 +529,9 @@ export default function AdminProductsPage() {
           {products.map((product) => (
             <div
               key={product.id}
-              className="bg-white rounded-2xl border border-gray-100 p-4 flex items-center gap-4"
+              className="card p-4 flex items-center gap-4"
             >
-              <div className="w-14 h-14 rounded-xl bg-gray-100 overflow-hidden shrink-0">
+              <div className="w-14 h-14 rounded-xl bg-[var(--color-surface-2)] overflow-hidden shrink-0">
                 {product.image && (
                   <img
                     src={product.image}
@@ -536,40 +543,47 @@ export default function AdminProductsPage() {
               </div>
 
               <div className="flex-1">
-                <p className="text-sm font-medium text-gray-800 line-clamp-1">{product.title}</p>
-                <p className="text-xs text-gray-400">
+                <p className="text-sm font-medium text-[var(--color-text)]">{product.title}</p>
+                <p className="text-xs muted">
                   {product.category?.title} • {product.price?.toLocaleString()} تومان
                 </p>
               </div>
 
               <button
                 onClick={() => toggleStock(product)}
-                className={`text-xs px-3 py-1.5 rounded-lg font-medium transition ${product.inStock
-                  ? "bg-green-100 text-green-700 hover:bg-green-200"
-                  : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                className={`px-4 py-2 rounded-xl text-xs font-medium transition ${product.stock > 0
+                  ? "bg-green-100 text-green-700"
+                  : "bg-red-100 text-red-700"
                   }`}
               >
-                {product.inStock ? "موجود" : "ناموجود"}
+                {product.stock > 0 ? "موجود" : "ناموجود"}
               </button>
 
               <button
                 onClick={() => {
                   setEditingProduct(product);
 
+                  const gallery =
+                    product.images?.length > 0
+                      ? product.images.map((i) => i.url)
+                      : product.image
+                        ? [product.image]
+                        : [];
+
                   setForm({
                     title: product.title,
                     price: String(product.price),
                     originalPrice: String(product.originalPrice),
                     categoryId: product.categoryId,
-                    image: product.image,
-                    gallery: product.images.map((i) => i.url),
+                    image: gallery[0] || "",
+                    gallery,
                     description: product.description,
-                    inStock: product.inStock,
+                    stock: product.stock,
                   });
 
                   setShowForm(true);
                 }}
-                className="text-blue-500 hover:text-blue-700"
+                className="text-[var(--color-accent)] hover:scale-110 transition"
               >
                 <PencilSquareIcon className="w-5 h-5" />
               </button>
@@ -577,7 +591,7 @@ export default function AdminProductsPage() {
               {isAdmin && (
                 <button
                   onClick={() => deleteProduct(product.id)}
-                  className="text-gray-300 hover:text-red-500 transition text-lg leading-none px-1"
+                  className="text-[var(--color-text-muted)] hover:text-red-500 transition"
                 >
                   <XMarkIcon className="w-5 h-5" />
                 </button>

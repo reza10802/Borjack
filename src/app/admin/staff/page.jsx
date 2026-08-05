@@ -75,9 +75,15 @@ export default function AdminStaffPage() {
   };
   return (
     <div>
-      <h1 className="text-xl font-bold text-gray-800 mb-6">
-        مدیریت کارکنان
-      </h1>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-[var(--color-text)]">
+          مدیریت کارکنان
+        </h1>
+
+        <p className="mt-1 text-sm text-[var(--color-text-muted)]">
+          {filteredStaff.length} کارمند
+        </p>
+      </div>
 
       {error && (
         <div className="mb-4 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
@@ -85,52 +91,55 @@ export default function AdminStaffPage() {
         </div>
       )}
 
-      <div className="bg-white rounded-xl border border-gray-100 p-4 mb-5">
+      <div className="card mb-6 p-4">
         <input
           type="text"
           placeholder="جستجوی کارکنان..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full border border-gray-200 rounded-lg px-3 py-2"
+          className=" w-full h-11 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-accent)] focus:outline-none transition "
         />
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-100">
+      <div className="card overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center text-gray-400">
+          <div className="p-10 text-center text-[var(--color-text-muted)]">
             در حال بارگذاری...
           </div>
         ) : filteredStaff.length === 0 ? (
-          <div className="p-8 text-center text-gray-400">
+          <div className="p-10 text-center text-[var(--color-text-muted)]">
             کارمندی پیدا نشد
           </div>
         ) : (
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-gray-500 text-right">
+            <thead className="bg-[var(--color-surface-2)] text-[var(--color-text-muted)]">
               <tr>
-                <th className="px-4 py-3">نام</th>
-                <th className="px-4 py-3">شماره</th>
-                <th className="px-4 py-3">نقش</th>
-                <th className="px-4 py-3">تغییر نقش</th>
+                <th className="px-5 py-4 text-right font-semibold">نام</th>
+                <th className="px-5 py-4 text-right font-semibold">شماره</th>
+                <th className="px-5 py-4 text-right font-semibold">نقش</th>
+                <th className="px-5 py-4 text-right font-semibold">تغییر نقش</th>
               </tr>
             </thead>
 
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-[var(--color-border)]">
               {filteredStaff.map((u) => (
-                <tr key={u.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 font-medium">
+                <tr
+                  key={u.id}
+                  className="transition hover:bg-[var(--color-surface-2)]"
+                >
+                  <td className="px-5 py-4 font-medium text-[var(--color-text)]">
                     {u.name}
                   </td>
 
-                  <td className="px-4 py-3 text-gray-500">
+                  <td className="px-5 py-4 text-[var(--color-text-muted)]">
                     {u.phone}
                   </td>
 
                   <td className="px-4 py-3">
                     <span
-                      className={`text-xs px-2 py-1 rounded-full ${u.role === "ADMIN"
-                        ? "bg-black text-white"
-                        : "bg-blue-100 text-blue-700"
+                      className={`rounded-full px-3 py-1 text-xs font-medium ${u.role === "ADMIN"
+                        ? "bg-[var(--color-accent)] text-white"
+                        : "bg-blue-500/10 text-blue-500"
                         }`}
                     >
                       {u.role === "ADMIN" ? "ادمین" : "منیجر"}
@@ -138,25 +147,22 @@ export default function AdminStaffPage() {
                   </td>
 
                   <td className="px-4 py-3">
-                    <Select
-                      styles={selectStyles}
-                      menuPortalTarget={document.body}
-                      isDisabled={updating === u.id}
-                      options={[
-                        { value: "MANAGER", label: "منیجر" },
-                        { value: "CUSTOMER", label: "کاربر عادی" },
-                      ]}
-                      value={{
-                        value: u.role,
-                        label:
-                          u.role === "ADMIN"
-                            ? "ادمین"
-                            : "منیجر",
-                      }}
-                      onChange={(option) =>
-                        changeRole(u.id, option.value)
-                      }
-                    />
+                    <div className="w-44">
+                      <Select
+                        styles={selectStyles}
+                        menuPortalTarget={document.body}
+                        isDisabled={updating === u.id}
+                        options={[
+                          { value: "MANAGER", label: "منیجر" },
+                          { value: "CUSTOMER", label: "کاربر عادی" },
+                        ]}
+                        value={{
+                          value: u.role,
+                          label: u.role === "ADMIN" ? "ادمین" : "منیجر",
+                        }}
+                        onChange={(option) => changeRole(u.id, option.value)}
+                      />
+                    </div>
                   </td>
                 </tr>
               ))}

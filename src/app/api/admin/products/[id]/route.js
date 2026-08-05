@@ -10,15 +10,10 @@ const ADMIN_ALLOWED_FIELDS = [
   "categoryId",
   "image",
   "description",
-  "inStock",
+  "stock",
 ];
 
-const MANAGER_ALLOWED_FIELDS = [
-  "price",
-  "originalPrice",
-  "discount",
-  "inStock",
-];
+const MANAGER_ALLOWED_FIELDS = ["price", "originalPrice", "discount", "stock"];
 
 export async function PATCH(req, { params }) {
   const auth = await requireManagerOrAdmin();
@@ -41,7 +36,9 @@ export async function PATCH(req, { params }) {
       auth.user.role === "ADMIN"
         ? ADMIN_ALLOWED_FIELDS
         : MANAGER_ALLOWED_FIELDS;
-
+    console.log(body);
+    console.log("PATCH BODY =>", JSON.stringify(body, null, 2));
+    console.log(Object.keys(body));
     const data = {};
 
     for (const field of allowedFields) {
@@ -57,9 +54,12 @@ export async function PATCH(req, { params }) {
       } else if (
         field === "price" ||
         field === "originalPrice" ||
-        field === "discount"
+        field === "discount" ||
+        field === "stock"
       ) {
         data[field] = Number(body[field]);
+      } else if (field === "stock") {
+        data.stock = Number(body.stock);
       } else {
         data[field] = body[field];
       }
@@ -107,7 +107,7 @@ export async function PATCH(req, { params }) {
       },
     });
 
-    const isStockOnly = Object.keys(data).length === 1 && "inStock" in data;
+    const isStockOnly = Object.keys(data).length === 1 && "stock" in data;
 
     await logAction({
       userId: auth.user.id,

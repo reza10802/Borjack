@@ -14,7 +14,7 @@ export default function OrdersFilters({
   setPage,
 }) {
   return (
-    <div className="flex flex-wrap gap-3 mb-5">
+    <div className="card mb-6 flex flex-wrap gap-3 p-4">
       <input
         value={search}
         onChange={(e) => {
@@ -22,7 +22,7 @@ export default function OrdersFilters({
           setExpanded(null);
         }}
         placeholder="نام یا شماره مشتری..."
-        className="border rounded-lg px-3 py-2"
+        className=" h-11 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-accent)] focus:outline-none transition "
       />
 
       <select
@@ -32,7 +32,7 @@ export default function OrdersFilters({
           setExpanded(null);
           setPage(1);
         }}
-        className="border rounded-lg px-3 py-2"
+        className=" h-11 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 text-sm text-[var(--color-text)] focus:border-[var(--color-accent)] focus:outline-none transition "
       >
         <option value="">همه وضعیت‌ها</option>
 
@@ -50,7 +50,7 @@ export default function OrdersFilters({
           setExpanded(null);
           setPage(1);
         }}
-        className="border rounded-lg px-3 py-2"
+        className=" h-11 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 text-sm text-[var(--color-text)] focus:border-[var(--color-accent)] focus:outline-none transition "
       >
         <option value="">همه پرداخت‌ها</option>
 

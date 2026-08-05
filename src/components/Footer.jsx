@@ -1,49 +1,65 @@
+import Image from "next/image";
 import Link from "next/link";
 
 export default function Footer() {
   return (
-    <footer className="mt-16 border-t border-gray-200 bg-white">
-      <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
+    <footer className="mt-20 border-t border-zinc-200/60 dark:border-zinc-700/60 bg-white dark:bg-[#1E2640] text-zinc-700 dark:text-zinc-200">
+      <div className="h-1 bg-gradient-to-r from-[var(--color-primary)] via-[var(--color-accent)] to-[var(--color-primary)]" />
+      <div className="container-page py-16">
 
-        <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-4 items-start">
 
-          <div>
-            <h3 className="mb-4 text-sm font-bold">درباره ما</h3>
-            <p className="text-sm text-gray-600 leading-6">
+          <div className="text-lg font-bold text-white mb-5">
+            <div className="mb-5 flex items-center gap-3">
+              <Image
+                src="/images/logo.png"
+                alt="Borjak"
+                width={48}
+                height={48}
+                className="rounded-2xl"
+              />
+              <span className="text-2xl font-black text-[var(--color-accent)]">
+                BORJAK
+              </span>
+            </div>
+            <Link className="text-lg font-bold text-zinc-900 dark:text-white text-white mb-5" href="/about">درباره ما</Link>
+            <p className="text-sm leading-7 text-zinc-500 dark:text-zinc-400">
               فروشگاه ما با هدف ارائه بهترین محصولات دیجیتال و پوشاک با قیمت مناسب فعالیت می‌کند.
             </p>
           </div>
 
-          <div>
-            <h3 className="mb-4 text-sm font-bold">دسترسی سریع</h3>
-            <ul className="space-y-2 text-sm text-gray-600">
-              <li><Link href="/" className="hover:text-black transition">خانه</Link></li>
-              <li><Link href="/search" className="hover:text-black transition">محصولات</Link></li>
-              <li><Link href="/cart" className="hover:text-black transition">سبد خرید</Link></li>
-              <li><Link href="/profile" className="hover:text-black transition">پروفایل</Link></li>
+          <div className="text-lg font-bold text-white mb-5">
+            <h3 className="mb-5 text-base font-bold text-zinc-900 dark:text-white">دسترسی سریع</h3>
+            <ul className="space-y-3 text-sm">
+              <li><Link href="/" className="text-zinc-500 dark:text-zinc-400 hover:text-[var(--color-accent)] transition-colors">خانه</Link></li>
+              <li><Link href="/search" className="text-zinc-500 dark:text-zinc-400 hover:text-[var(--color-accent)] transition-colors">محصولات</Link></li>
+              <li><Link href="/cart" className="text-zinc-500 dark:text-zinc-400 hover:text-[var(--color-accent)] transition-colors">سبد خرید</Link></li>
+              <li><Link href="/profile" className="text-zinc-500 dark:text-zinc-400 hover:text-[var(--color-accent)] transition-colors">پروفایل</Link></li>
+              <li><Link href="/contact" className="text-zinc-500 dark:text-zinc-400 hover:text-[var(--color-accent)] transition-colors">تماس با ما</Link></li>
             </ul>
           </div>
 
-          <div>
+          <div className="text-lg font-bold text-white mb-5">
             <h3 className="mb-4 text-sm font-bold">دسته‌بندی‌ها</h3>
-            <ul className="space-y-2 text-sm text-gray-600">
-              <li><Link href="/search?category=موبایل" className="hover:text-black transition">موبایل</Link></li>
-              <li><Link href="/search?category=لپ‌تاپ" className="hover:text-black transition">لپ‌تاپ</Link></li>
-              <li><Link href="/search?category=پوشاک" className="hover:text-black transition">پوشاک</Link></li>
-              <li><Link href="/search?category=لوازم جانبی" className="hover:text-black transition">لوازم جانبی</Link></li>
+            <ul className="space-y-3 text-sm">
+              <li><Link href="/search?category=موبایل" className="text-zinc-500 dark:text-zinc-400 hover:text-[var(--color-accent)] transition-colors">موبایل</Link></li>
+              <li><Link href="/search?category=لپ‌تاپ" className="text-zinc-500 dark:text-zinc-400 hover:text-[var(--color-accent)] transition-colors">لپ‌تاپ</Link></li>
+              <li><Link href="/search?category=پوشاک" className="text-zinc-500 dark:text-zinc-400 hover:text-[var(--color-accent)] transition-colors">پوشاک</Link></li>
+              <li><Link href="/search?category=لوازم جانبی" className="text-zinc-500 dark:text-zinc-400 hover:text-[var(--color-accent)] transition-colors">لوازم جانبی</Link></li>
             </ul>
           </div>
 
-          <div>
+          <div className="text-lg font-bold text-white mb-5">
             <h3 className="mb-4 text-sm font-bold">تماس با ما</h3>
-            <p className="text-sm text-gray-600">ایمیل: info@shop.com</p>
-            <p className="text-sm text-gray-600 mt-2">تلفن: 0000-000-000</p>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">ایمیل: reza.nedae8080@gmail.com</p>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-2">تلفن: ۰۹۱۱۶۰۰۱۲۶۰</p>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-2">آدرس: تهران، میدان خراسان</p>
           </div>
 
         </div>
 
-        <div className="mt-10 border-t pt-6 text-center text-sm text-gray-500">
-          © 2026 MyShop. All rights reserved.
+        <div className="mt-12 border-t border-zinc-200 dark:border-zinc-700 pt-8 text-center text-sm text-zinc-500 dark:text-zinc-400">
+          © 2026 BORJAK — تمامی حقوق محفوظ است.
         </div>
 
       </div>
