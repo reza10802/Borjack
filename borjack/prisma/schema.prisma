@@ -83,6 +83,12 @@ enum Priority {
   HIGH
 }
 
+enum ShippingMethod {
+  POST
+  SNAPPBOX
+  TIPAX
+}
+
 model OtpCode {
   id        String   @id @default(cuid())
   phone     String
@@ -270,7 +276,7 @@ model Order {
   id Int @id @default(autoincrement())
 
   userId String
-  user   User   @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id])
 
   total Int
 
@@ -279,26 +285,30 @@ model Order {
   paymentStatus PaymentStatus @default(PENDING)
 
   authority String? @unique
-
   paymentExpiresAt DateTime?
-
   refId String?
-
   paidAt DateTime?
 
+  // اطلاعات گیرنده
   receiverName String
-
   receiverPhone String
 
-  provinceId   Int
+  provinceId Int
   provinceName String
 
-  cityId   Int
+  cityId Int
   cityName String
 
   address String
-
   postalCode String
+
+  // اطلاعات ارسال
+  shippingMethod ShippingMethod?
+  shippingCost Int @default(0)
+
+  trackingCode String?
+  shippedAt DateTime?
+  deliveredAt DateTime?
 
   items OrderItem[]
 

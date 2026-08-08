@@ -17,6 +17,7 @@ export default function CheckoutPage() {
     cityId: "",
     address: "",
     postalCode: "",
+    shippingMethod: "POST",
   });
 
   const [submitting, setSubmitting] = useState(false);
@@ -68,22 +69,22 @@ export default function CheckoutPage() {
     }));
   };
 
-const handleProvinceChange = (value) => {
-  setError("");
-  setForm((prev) => ({
-    ...prev,
-    provinceId: value,
-    cityId: "",
-  }));
-};
+  const handleProvinceChange = (value) => {
+    setError("");
+    setForm((prev) => ({
+      ...prev,
+      provinceId: value,
+      cityId: "",
+    }));
+  };
 
-const handleCityChange = (value) => {
-  setError("");
-  setForm((prev) => ({
-    ...prev,
-    cityId: value,
-  }));
-};
+  const handleCityChange = (value) => {
+    setError("");
+    setForm((prev) => ({
+      ...prev,
+      cityId: value,
+    }));
+  };
 
   const validateForm = () => {
     if (!form.receiverName.trim()) {
@@ -138,6 +139,7 @@ const handleCityChange = (value) => {
           cityId: Number(form.cityId),
           address: form.address.trim(),
           postalCode: form.postalCode.trim(),
+          shippingMethod: form.shippingMethod,
         }),
       });
 
@@ -272,6 +274,64 @@ const handleCityChange = (value) => {
               className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] outline-none transition focus:border-[var(--color-accent)]"
               placeholder="کد پستی ۱۰ رقمی"
             />
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-medium text-[var(--color-text)]">
+              روش ارسال
+            </label>
+
+            <div className="grid gap-3">
+
+              <label className="flex items-center gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 cursor-pointer hover:border-[var(--color-accent)] transition">
+                <input
+                  type="radio"
+                  name="shippingMethod"
+                  value="POST"
+                  checked={form.shippingMethod === "POST"}
+                  onChange={onChange}
+                />
+                <div>
+                  <p className="font-bold">پست پیشتاز</p>
+                  <p className="text-sm text-zinc-500">
+                    ارسال به سراسر کشور (۲ تا ۵ روز کاری)
+                  </p>
+                </div>
+              </label>
+
+              <label className="flex items-center gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 cursor-pointer hover:border-[var(--color-accent)] transition">
+                <input
+                  type="radio"
+                  name="shippingMethod"
+                  value="TIPAX"
+                  checked={form.shippingMethod === "TIPAX"}
+                  onChange={onChange}
+                />
+                <div>
+                  <p className="font-bold">تیپاکس</p>
+                  <p className="text-sm text-zinc-500">
+                    سریع‌تر از پست، هزینه هنگام ارسال محاسبه می‌شود.
+                  </p>
+                </div>
+              </label>
+
+              <label className="flex items-center gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 cursor-pointer hover:border-[var(--color-accent)] transition">
+                <input
+                  type="radio"
+                  name="shippingMethod"
+                  value="SNAPPBOX"
+                  checked={form.shippingMethod === "SNAPPBOX"}
+                  onChange={onChange}
+                />
+                <div>
+                  <p className="font-bold">اسنپ باکس</p>
+                  <p className="text-sm text-zinc-500">
+                    فقط برای شهر تهران (ارسال همان روز)
+                  </p>
+                </div>
+              </label>
+
+            </div>
           </div>
 
           {error && (
