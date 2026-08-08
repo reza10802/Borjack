@@ -129,6 +129,10 @@ function VerifyPhoneContent() {
         <p className="text-center text-sm text-zinc-500 dark:text-zinc-400 mb-6">
           کد تایید به شماره {user.phone} ارسال شد
         </p>
+        <div className="mb-4 rounded-xl bg-yellow-100 text-yellow-800 p-3 text-sm text-center">
+          جهت بررسی سایت، کد تایید آزمایشی:
+          <strong className="mx-1">123456</strong>
+        </div>
 
         <form onSubmit={handleVerify} className="flex flex-col gap-4">
           <input

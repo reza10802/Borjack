@@ -13,10 +13,14 @@ export default function Header() {
     const { user, logout } = useAuth();
 
     const navLinks = [
+        { label: "خانه", href: "/" },
+        { label: "محصولات", href: "/search" },
         { label: "موبایل", href: "/search?category=موبایل" },
         { label: "لپ‌تاپ", href: "/search?category=لپ‌تاپ" },
         { label: "لوازم جانبی", href: "/search?category=لوازم جانبی" },
         { label: "پوشاک", href: "/search?category=پوشاک" },
+        { label: "درباره ما", href: "/about" },
+        { label: "ارتباط با ما", href: "/contact" },
     ];
 
     const pathname = usePathname();

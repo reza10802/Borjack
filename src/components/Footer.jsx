@@ -22,10 +22,17 @@ export default function Footer() {
                 BORJAK
               </span>
             </div>
-            <Link className="text-lg font-bold text-zinc-900 dark:text-white text-white mb-5" href="/about">درباره ما</Link>
-            <p className="text-sm leading-7 text-zinc-500 dark:text-zinc-400">
+            <p className="text-sm leading-7 text-zinc-500 dark:text-zinc-400 mb-5">
               فروشگاه ما با هدف ارائه بهترین محصولات دیجیتال و پوشاک با قیمت مناسب فعالیت می‌کند.
             </p>
+
+            <Link
+              href="/about"
+              className="text-sm font-bold text-[var(--color-accent)] hover:underline"
+            >
+              بیشتر درباره ما →
+            </Link>
+
           </div>
 
           <div className="text-lg font-bold text-white mb-5">
@@ -36,6 +43,7 @@ export default function Footer() {
               <li><Link href="/cart" className="text-zinc-500 dark:text-zinc-400 hover:text-[var(--color-accent)] transition-colors">سبد خرید</Link></li>
               <li><Link href="/profile" className="text-zinc-500 dark:text-zinc-400 hover:text-[var(--color-accent)] transition-colors">پروفایل</Link></li>
               <li><Link href="/contact" className="text-zinc-500 dark:text-zinc-400 hover:text-[var(--color-accent)] transition-colors">تماس با ما</Link></li>
+              <li><Link href="/rules" className="text-zinc-500 dark:text-zinc-400 hover:text-[var(--color-accent)] transition-colors">قوانین و مقررات</Link></li>
             </ul>
           </div>
 
@@ -54,6 +62,43 @@ export default function Footer() {
             <p className="text-sm text-zinc-500 dark:text-zinc-400">ایمیل: reza.nedae8080@gmail.com</p>
             <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-2">تلفن: ۰۹۱۱۶۰۰۱۲۶۰</p>
             <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-2">آدرس: تهران، میدان خراسان</p>
+          </div>
+
+        </div>
+        <div className="mt-12 border-t border-zinc-200 dark:border-zinc-700 pt-8">
+
+          <div className="flex flex-col md:flex-row items-center justify-between gap-8">
+
+            <div className="space-y-2 text-sm text-zinc-500 dark:text-zinc-400">
+              <p>خریدی امن با نماد اعتماد الکترونیکی</p>
+              <p>پرداخت از طریق درگاه‌های امن بانکی</p>
+            </div>
+
+            <div className="flex items-center gap-4 rounded-3xl bg-white dark:bg-zinc-200 border border-zinc-200 dark:border-zinc-700 px-6 py-4 shadow-md">
+              {/* اینماد */}
+              <a
+                referrerPolicy="origin"
+                target="_blank"
+                href="https://trustseal.enamad.ir/?id=7192715&Code=feow9op4jNHTPQg6uAEfJy931bamyQw2"
+              >
+                <img
+                  referrerPolicy="origin"
+                  src="https://trustseal.enamad.ir/logo.aspx?id=7192715&Code=feow9op4jNHTPQg6uAEfJy931bamyQw2"
+                  alt="اینماد"
+                  className="w-20 transition hover:scale-105"
+                  style={{ cursor: "pointer" }}
+                  code="feow9op4jNHTPQg6uAEfJy931bamyQw2"
+                />
+              </a>
+              <Image
+                src="/images/zarinpal.svg"
+                width={80}
+                height={80}
+                alt="زرین پال"
+                className="transition hover:scale-105"
+              />
+            </div>
+
           </div>
 
         </div>

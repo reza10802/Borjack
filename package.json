@@ -19,7 +19,7 @@
     "bcryptjs": "^3.0.3",
     "dotenv": "^16.6.1",
     "iran-cities-json": "^2.0.0",
-    "jose": "^6.2.3",
+    "jose": "^6.2.8",
     "jsonwebtoken": "^9.0.3",
     "kavenegar": "^1.1.4",
     "lucide-react": "^1.23.0",
