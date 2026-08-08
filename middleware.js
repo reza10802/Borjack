@@ -47,6 +47,8 @@ async function getTokenPayload(req) {
 export async function middleware(req) {
   const { pathname } = req.nextUrl;
 
+
+
   const needsVerifiedCheck = VERIFIED_ONLY_PAGES.some(
     (page) => pathname === page || pathname.startsWith(page + "/")
   );
@@ -57,6 +59,13 @@ export async function middleware(req) {
 
   const payload = await getTokenPayload(req);
   const role = payload?.role || null;
+
+  console.log("=== MIDDLEWARE ===");
+  console.log("PATH:", pathname);
+  console.log("HAS TOKEN:", !!payload);
+  console.log("USER ID:", payload?.id);
+  console.log("ROLE:", role);
+  console.log("PHONE VERIFIED:", payload?.isPhoneVerified);
 
   // Checkout
   if (needsVerifiedCheck) {
