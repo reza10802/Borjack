@@ -1,8 +1,14 @@
 // src/middleware.js
 import { NextResponse } from "next/server";
-import jwt from "jsonwebtoken";
+import { jwtVerify } from "jose";
 
 const JWT_SECRET = process.env.JWT_SECRET;
+
+if (!JWT_SECRET) {
+  throw new Error("JWT_SECRET is not set");
+}
+
+const secret = new TextEncoder().encode(JWT_SECRET);
 
 const ADMIN_ONLY_PAGES = [
   "/admin/users",
@@ -18,10 +24,9 @@ const MANAGER_ALLOWED_PAGES = [
   "/admin/reviews",
 ];
 
-// صفحاتی که کاربر باید حتماً شماره‌اش رو تایید کرده باشه
 const VERIFIED_ONLY_PAGES = ["/checkout"];
 
-function getTokenPayload(req) {
+async function getTokenPayload(req) {
   try {
     const token =
       req.cookies.get("token")?.value ||
@@ -30,64 +35,89 @@ function getTokenPayload(req) {
 
     if (!token) return null;
 
-    return jwt.verify(token, JWT_SECRET);
-  } catch {
+    const { payload } = await jwtVerify(token, secret);
+
+    return payload;
+  } catch (error) {
+    console.error("MIDDLEWARE JWT ERROR:", error);
     return null;
   }
 }
 
-export function middleware(req) {
+export async function proxy(req) {
+  console.log("🔥 MIDDLEWARE RUNNING:", req.nextUrl.pathname);
   const { pathname } = req.nextUrl;
 
+
+
   const needsVerifiedCheck = VERIFIED_ONLY_PAGES.some(
-    (page) => pathname === page || pathname.startsWith(page + "/"),
+    (page) => pathname === page || pathname.startsWith(page + "/")
   );
 
   if (!pathname.startsWith("/admin") && !needsVerifiedCheck) {
     return NextResponse.next();
   }
 
-  const payload = getTokenPayload(req);
+  const payload = await getTokenPayload(req);
   const role = payload?.role || null;
 
+  console.log("=== MIDDLEWARE ===");
+  console.log("PATH:", pathname);
+  console.log("HAS TOKEN:", !!payload);
+  console.log("USER ID:", payload?.id);
+  console.log("ROLE:", role);
+  console.log("PHONE VERIFIED:", payload?.isPhoneVerified);
+
+  // Checkout
   if (needsVerifiedCheck) {
     if (!payload) {
-      return NextResponse.redirect(new URL("/login", req.url));
+      return NextResponse.redirect(
+        new URL(`/login?redirect=${pathname}`, req.url)
+      );
     }
 
     if (!payload.isPhoneVerified) {
       const verifyUrl = new URL("/verify-phone", req.url);
       verifyUrl.searchParams.set("redirect", pathname);
+
       return NextResponse.redirect(verifyUrl);
     }
   }
 
+  // سایر صفحات غیر ادمین
   if (!pathname.startsWith("/admin")) {
     return NextResponse.next();
   }
 
   // لاگین نیست
   if (!role) {
-    const loginUrl = new URL("/login", req.url);
-    return NextResponse.redirect(loginUrl);
+    return NextResponse.redirect(
+      new URL(`/login?redirect=${pathname}`, req.url)
+    );
   }
 
-  // فقط ADMIN و MANAGER حق ورود به admin دارند
+  // فقط ADMIN و MANAGER
   if (!["ADMIN", "MANAGER"].includes(role)) {
     return NextResponse.redirect(new URL("/403", req.url));
   }
 
-  // صفحات فقط مخصوص ADMIN
-  if (ADMIN_ONLY_PAGES.some((page) => pathname === page || pathname.startsWith(page + "/"))) {
+  // فقط ADMIN
+  if (
+    ADMIN_ONLY_PAGES.some(
+      (page) =>
+        pathname === page || pathname.startsWith(page + "/")
+    )
+  ) {
     if (role !== "ADMIN") {
       return NextResponse.redirect(new URL("/403", req.url));
     }
   }
 
-  // اگر MANAGER خواست به صفحه‌ای خارج از محدوده خودش برود
+  // محدودیت MANAGER
   if (role === "MANAGER") {
     const allowed = MANAGER_ALLOWED_PAGES.some(
-      (page) => pathname === page || pathname.startsWith(page + "/")
+      (page) =>
+        pathname === page || pathname.startsWith(page + "/")
     );
 
     if (!allowed) {
