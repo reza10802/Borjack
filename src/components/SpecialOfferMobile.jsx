@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { BookmarkIcon } from "@heroicons/react/24/outline";
 import { toPersianPrice } from "@/lib/utils";
 
 export default function SpecialOfferMobileCard({ product }) {
@@ -67,12 +66,12 @@ export default function SpecialOfferMobileCard({ product }) {
 
                         {product.discount > 0 && (
                             <div className="text-xs text-zinc-400 line-through">
-                                {product.originalPrice.toLocaleString()} تومان
+                                {toPersianPrice(product.originalPrice)} تومان
                             </div>
                         )}
 
                         <div className="mt-1 text-2xl font-black text-[var(--color-primary)] dark:text-[var(--color-accent)]">
-                            {product.price.toLocaleString()}
+                            {toPersianPrice(product.price)}
                             <span className="mr-1 text-sm font-bold">
                                 تومان
                             </span>

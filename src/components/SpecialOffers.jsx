@@ -20,7 +20,6 @@ export default function SpecialOffers() {
         fetch("/api/products?discount=true")
             .then((res) => res.json())
             .then((data) => {
-                console.log("special offers api:", data);
 
                 if (Array.isArray(data)) {
                     setProducts(data);

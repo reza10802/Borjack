@@ -89,15 +89,21 @@ enum ShippingMethod {
   TIPAX
 }
 
+enum OtpPurpose {
+  VERIFY_PHONE
+  RESET_PASSWORD
+}
+
 model OtpCode {
-  id        String   @id @default(cuid())
+  id        String     @id @default(cuid())
   phone     String
   code      String
+  purpose   OtpPurpose
   expiresAt DateTime
-  createdAt DateTime @default(now())
-  used      Boolean   @default(false)
+  createdAt DateTime   @default(now())
+  used      Boolean    @default(false)
 
-  @@index([phone])
+  @@index([phone, purpose])
 }
 
 model User {

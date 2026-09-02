@@ -4,6 +4,11 @@ const iranPhoneRegex = /^09\d{9}$/;
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const iranPostalCodeRegex = /^\d{10}$/;
 
+const otpPurposeSchema = z.enum([
+  "VERIFY_PHONE",
+  "RESET_PASSWORD",
+]);
+
 export const registerSchema = z.object({
   name: z
     .string()
@@ -11,7 +16,10 @@ export const registerSchema = z.object({
     .min(2, "نام باید حداقل ۲ کاراکتر باشد")
     .max(100, "نام خیلی طولانی است"),
 
-  phone: z.string().trim().regex(iranPhoneRegex, "شماره موبایل معتبر نیست"),
+  phone: z
+    .string()
+    .trim()
+    .regex(iranPhoneRegex, "شماره موبایل معتبر نیست"),
 
   password: z
     .string()
@@ -20,19 +28,35 @@ export const registerSchema = z.object({
 });
 
 export const loginSchema = z.object({
-  phone: z.string().trim().regex(iranPhoneRegex, "شماره موبایل معتبر نیست"),
+  phone: z
+    .string()
+    .trim()
+    .regex(iranPhoneRegex, "شماره موبایل معتبر نیست"),
 
   password: z.string().min(1, "رمز عبور الزامی است"),
 });
 
 export const sendOtpSchema = z.object({
-  phone: z.string().trim().regex(iranPhoneRegex, "شماره موبایل معتبر نیست"),
+  phone: z
+    .string()
+    .trim()
+    .regex(iranPhoneRegex, "شماره موبایل معتبر نیست"),
+
+  purpose: otpPurposeSchema,
 });
 
 export const verifyOtpSchema = z.object({
-  phone: z.string().trim().regex(iranPhoneRegex, "شماره موبایل معتبر نیست"),
+  phone: z
+    .string()
+    .trim()
+    .regex(iranPhoneRegex, "شماره موبایل معتبر نیست"),
 
-  code: z.string().trim().length(6, "کد تایید باید ۶ رقم باشد"),
+  code: z
+    .string()
+    .trim()
+    .regex(/^\d{6}$/, "کد تایید باید ۶ رقم باشد"),
+
+  purpose: otpPurposeSchema,
 });
 
 export const addressSchema = z.object({
@@ -42,7 +66,10 @@ export const addressSchema = z.object({
     .min(2, "نام گیرنده الزامی است")
     .max(100, "نام خیلی طولانی است"),
 
-  phone: z.string().trim().regex(iranPhoneRegex, "شماره موبایل معتبر نیست"),
+  phone: z
+    .string()
+    .trim()
+    .regex(iranPhoneRegex, "شماره موبایل معتبر نیست"),
 
   province: z.string().trim().min(2, "استان را انتخاب کنید"),
 
@@ -69,14 +96,20 @@ export const checkoutSchema = z.object({
     .min(2, "نام گیرنده الزامی است")
     .max(100, "نام خیلی طولانی است"),
 
-  phone: z.string().trim().regex(iranPhoneRegex, "شماره موبایل معتبر نیست"),
+  phone: z
+    .string()
+    .trim()
+    .regex(iranPhoneRegex, "شماره موبایل معتبر نیست"),
 
   email: z
     .string()
     .trim()
     .optional()
     .or(z.literal(""))
-    .refine((value) => !value || emailRegex.test(value), "ایمیل معتبر نیست"),
+    .refine(
+      (value) => !value || emailRegex.test(value),
+      "ایمیل معتبر نیست",
+    ),
 
   province: z.string().trim().min(2, "استان را انتخاب کنید"),
 
@@ -94,6 +127,7 @@ export const checkoutSchema = z.object({
     .regex(iranPostalCodeRegex, "کد پستی باید ۱۰ رقم باشد"),
 
   saveAddress: z.boolean().optional(),
+
   addressId: z.number().optional().nullable(),
 });
 
@@ -109,7 +143,10 @@ export const profileSchema = z.object({
     .trim()
     .optional()
     .or(z.literal(""))
-    .refine((value) => !value || emailRegex.test(value), "ایمیل معتبر نیست"),
+    .refine(
+      (value) => !value || emailRegex.test(value),
+      "ایمیل معتبر نیست",
+    ),
 
   address: z
     .string()

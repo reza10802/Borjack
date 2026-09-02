@@ -1,21 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { verifyOtpSchema } from "@/lib/validations/auth";
-import { getSessionUser } from "@/lib/auth";
-import jwt from "jsonwebtoken";
-const JWT_SECRET = process.env.JWT_SECRET;
 
 export async function POST(req) {
   try {
-    const authUser = await getSessionUser();
-
-    if (!authUser) {
-      return NextResponse.json(
-        { error: "ابتدا وارد حساب شوید" },
-        { status: 401 }
-      );
-    }
-
     const body = await req.json();
 
     const parsed = verifyOtpSchema.safeParse(body);
@@ -23,15 +11,20 @@ export async function POST(req) {
     if (!parsed.success) {
       const firstError =
         parsed.error.issues[0]?.message || "اطلاعات نامعتبر است";
-      return NextResponse.json({ error: firstError }, { status: 400 });
+
+      return NextResponse.json(
+        { error: firstError },
+        { status: 400 },
+      );
     }
 
-    const { phone, code } = parsed.data;
+    const { phone, code, purpose } = parsed.data;
 
-    if (authUser.phone !== phone) {
+    // این endpoint فقط برای تایید شماره است
+    if (purpose !== "VERIFY_PHONE") {
       return NextResponse.json(
-        { error: "این شماره متعلق به حساب فعلی نیست" },
-        { status: 403 }
+        { error: "نوع درخواست نامعتبر است." },
+        { status: 400 },
       );
     }
 
@@ -39,6 +32,7 @@ export async function POST(req) {
       where: {
         phone,
         code,
+        purpose: "VERIFY_PHONE",
         used: false,
       },
       orderBy: {
@@ -48,60 +42,55 @@ export async function POST(req) {
 
     if (!otp) {
       return NextResponse.json(
-        { error: "کد تایید اشتباه است" },
-        { status: 400 }
+        {
+          error: "کد تایید اشتباه یا منقضی شده است.",
+        },
+        { status: 400 },
       );
     }
 
-    if (otp.expiresAt < new Date()) {
+    if (otp.expiresAt.getTime() < Date.now()) {
+      await prisma.otpCode.update({
+        where: { id: otp.id },
+        data: { used: true },
+      });
+
       return NextResponse.json(
-        { error: "کد تایید منقضی شده است" },
-        { status: 400 }
+        {
+          error: "کد تایید منقضی شده است.",
+        },
+        { status: 400 },
       );
     }
 
+    // مصرف OTP
     await prisma.otpCode.update({
       where: { id: otp.id },
       data: { used: true },
     });
 
+    // تایید شماره
     await prisma.user.update({
-      where: { id: authUser.id },
+      where: { phone },
       data: {
         isPhoneVerified: true,
         phoneVerifiedAt: new Date(),
       },
     });
 
-    const newToken = jwt.sign(
-      {
-        id: authUser.id,
-        role: authUser.role,
-        isPhoneVerified: true,
-      },
-      JWT_SECRET,
-      { expiresIn: "7d" },
-    );
-
-    const response = NextResponse.json({
+    return NextResponse.json({
       success: true,
-      message: "شماره موبایل با موفقیت تایید شد",
+      purpose: "VERIFY_PHONE",
+      message: "شماره موبایل با موفقیت تایید شد.",
     });
-
-    response.cookies.set("token", newToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 60 * 60 * 24 * 7,
-      path: "/",
-    });
-
-    return response;
   } catch (error) {
     console.error("VERIFY OTP ERROR:", error);
+
     return NextResponse.json(
-      { error: "خطا در تایید کد" },
-      { status: 500 }
+      {
+        error: "خطا در تایید کد.",
+      },
+      { status: 500 },
     );
   }
 }

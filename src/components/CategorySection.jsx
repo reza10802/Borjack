@@ -24,9 +24,6 @@ const categoryIcons = {
 export default function CategorySection() {
     const [categories, setCategories] = useState([]);
     useEffect(() => {
-        console.log(document.documentElement.className);
-    }, []);
-    useEffect(() => {
         fetch("/api/categories")
             .then(r => r.ok ? r.json() : [])
             .then(d => setCategories(Array.isArray(d) ? d : []))

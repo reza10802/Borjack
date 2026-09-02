@@ -76,7 +76,7 @@ export default function Footer() {
 
             <div className="flex items-center gap-4 rounded-3xl bg-white dark:bg-zinc-200 border border-zinc-200 dark:border-zinc-700 px-6 py-4 shadow-md">
               {/* اینماد */}
-              <a referrerpolicy='origin' target='_blank' href='https://trustseal.enamad.ir/?id=769934&Code=feow9op4jNHTPQg6uAEfJy931bamyQw2'><img referrerpolicy='origin' src='https://trustseal.enamad.ir/logo.aspx?id=769934&Code=feow9op4jNHTPQg6uAEfJy931bamyQw2' alt='' style={{cursor:"pointer"}} code='feow9op4jNHTPQg6uAEfJy931bamyQw2' /></a>
+              <a referrerolicy='origin' target='_blank' href='https://trustseal.enamad.ir/?id=769934&Code=feow9op4jNHTPQg6uAEfJy931bamyQw2'><img referrerPolicy='origin' src='https://trustseal.enamad.ir/logo.aspx?id=769934&Code=feow9op4jNHTPQg6uAEfJy931bamyQw2' alt='' style={{cursor:"pointer"}} code='feow9op4jNHTPQg6uAEfJy931bamyQw2' /></a>
               <Image
                 src="/images/zarinpal.svg"
                 width={80}
