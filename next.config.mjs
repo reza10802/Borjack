@@ -1,8 +1,8 @@
-/** @type {import('next').NextConfig} */
+import { withSerwist } from "@serwist/turbopack";
+
 const nextConfig = {
-  /* config options here */
   reactCompiler: true,
   poweredByHeader: false,
 };
 
-export default nextConfig;
+export default withSerwist(nextConfig);

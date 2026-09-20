@@ -2,6 +2,7 @@ import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
 import { CartProvider } from "@/context/CartContext";
 import ThemeProvider from "@/context/ThemeProvider";
+import SWRegister from "./sw-register";
 
 const BASE_URL =
   process.env.NEXT_PUBLIC_SITE_URL || "https://example.com";
@@ -79,6 +80,7 @@ export default function RootLayout({ children }) {
     <html lang="fa" dir="rtl" suppressHydrationWarning>
       
       <body className="min-h-screen flex flex-col">
+        <SWRegister />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
