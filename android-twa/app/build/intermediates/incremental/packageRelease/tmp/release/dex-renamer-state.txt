@@ -1,0 +1,4 @@
+#Mon Sep 21 18:26:56 IRST 2026
+base.0=G\:\\Reza's WorkSpace\\Borjak\\Borjack\\android-twa\\app\\build\\intermediates\\dex\\release\\minifyReleaseWithR8\\classes.dex
+renamed.0=classes.dex
+path.0=classes.dex
