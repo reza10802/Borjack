@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "site.borjak.twa",
+      "sha256_cert_fingerprints": [
+        "C7:9E:57:EA:1F:E0:7A:79:65:55:68:CC:68:D5:99:32:14:8F:50:7E:82:56:47:1F:ED:05:24:3F:1E:B2:A8:9C"
+      ]
+    }
+  }
+]
