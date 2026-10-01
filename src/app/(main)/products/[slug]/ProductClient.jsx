@@ -267,49 +267,8 @@ export default function ProductPage({ params }) {
         );
     };
 
-
-    const jsonLd = {
-        "@context": "https://schema.org",
-        "@type": "Product",
-
-        name: product.title,
-        image: gallery.map((g) => g.url),
-        description: product.description,
-
-        sku: product.id.toString(),
-
-        brand: {
-            "@type": "Brand",
-            name: product.brand.title,
-        },
-
-        category: product.category.title,
-
-        aggregateRating: {
-            "@type": "AggregateRating",
-            ratingValue: product.rating,
-            reviewCount: product.reviewCount,
-        },
-
-        offers: {
-            "@type": "Offer",
-            priceCurrency: "IRR",
-            price: product.price,
-            availability:
-                product.stock > 0
-                    ? "https://schema.org/InStock"
-                    : "https://schema.org/OutOfStock",
-        },
-    };
     return (
         <>
-            <script
-                type="application/ld+json"
-                dangerouslySetInnerHTML={{
-                    __html: JSON.stringify(jsonLd),
-                }}
-            />
-
             <div className="container-page py-10" dir="rtl">
                 <BackButton />
                 <Breadcrumb

@@ -3,7 +3,7 @@ import { AuthProvider } from "@/context/AuthContext";
 import { CartProvider } from "@/context/CartContext";
 import ThemeProvider from "@/context/ThemeProvider";
 import SWRegister from "./sw-register";
-import SplashScreen from "@/components/appIntro/SplashScreen";
+import InstallPrompt from "@/components/pwa/InstallPrompt";
 
 const BASE_URL =
   process.env.NEXT_PUBLIC_SITE_URL || "https://example.com";
@@ -11,16 +11,11 @@ const BASE_URL =
 const websiteJsonLd = {
   "@context": "https://schema.org",
   "@type": "WebSite",
-
   name: "برجک",
-
   url: BASE_URL,
-
   potentialAction: {
     "@type": "SearchAction",
-
-    target: `${BASE_URL}/products?search={search_term_string}`,
-
+    target: `${BASE_URL}/search?q={search_term_string}`,
     "query-input": "required name=search_term_string",
   },
 };
@@ -43,6 +38,10 @@ const organizationJsonLd = {
 
 export const metadata = {
   metadataBase: new URL(BASE_URL),
+
+  alternates: {
+    canonical: "/",
+  },
 
   title: {
     default: "برجک",
@@ -94,14 +93,14 @@ export default function RootLayout({ children }) {
             __html: JSON.stringify(websiteJsonLd),
           }}
         />
-          <ThemeProvider>
-            <AuthProvider>
-              <CartProvider>
-                {children}
-              </CartProvider>
-            </AuthProvider>
-          </ThemeProvider>
-        <SplashScreen />
+        <ThemeProvider>
+          <AuthProvider>
+            <CartProvider>
+              {children}
+              <InstallPrompt />
+            </CartProvider>
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

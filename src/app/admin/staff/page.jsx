@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import Select from "react-select";
 import { selectStyles } from "@/components/ui/selectStyles";
 
@@ -11,7 +10,6 @@ export default function AdminStaffPage() {
   const [error, setError] = useState("");
   const [updating, setUpdating] = useState(null);
   const [search, setSearch] = useState("");
-  const router = useRouter();
 
   useEffect(() => {
     load();
@@ -19,17 +17,26 @@ export default function AdminStaffPage() {
 
   async function load() {
     setLoading(true);
+    setError("");
 
     try {
-      const res = await fetch("/api/admin/users?role=staff");
+      const res = await fetch("/api/admin/users?role=staff", {
+        cache: "no-store",
+      });
+
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.error);
+        setError(data.error || "خطا در دریافت کارکنان");
+        setStaff([]);
         return;
       }
 
-      setStaff(data.users);
+      setStaff(Array.isArray(data.users) ? data.users : []);
+    } catch (error) {
+      console.error("LOAD STAFF ERROR:", error);
+      setError("خطا در ارتباط با سرور");
+      setStaff([]);
     } finally {
       setLoading(false);
     }
@@ -41,19 +48,23 @@ export default function AdminStaffPage() {
     if (!q) return true;
 
     return (
-      u.name.toLowerCase().includes(q) ||
-      u.phone.includes(q)
+      u.name?.toLowerCase().includes(q) ||
+      u.phone?.includes(q)
     );
   });
 
   async function changeRole(userId, role) {
+    if (!role) return;
+
     setUpdating(userId);
     setError("");
 
     try {
       const res = await fetch(`/api/admin/users/${userId}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({ role }),
       });
 
@@ -67,14 +78,17 @@ export default function AdminStaffPage() {
       setStaff((prev) =>
         prev.map((u) => (u.id === userId ? data.user : u))
       );
-    } catch {
+    } catch (error) {
+      console.error("CHANGE STAFF ROLE ERROR:", error);
       setError("خطا در ارتباط با سرور");
     } finally {
       setUpdating(null);
     }
-  };
+  }
+
   return (
-    <div>
+    <div className="min-w-0">
+      {/* Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-[var(--color-text)]">
           مدیریت کارکنان
@@ -85,23 +99,26 @@ export default function AdminStaffPage() {
         </p>
       </div>
 
+      {/* Error */}
       {error && (
-        <div className="mb-4 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
+        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400">
           {error}
         </div>
       )}
 
-      <div className="card mb-6 p-4">
+      {/* Search */}
+      <div className="card mb-6 min-w-0 p-4">
         <input
           type="text"
-          placeholder="جستجوی کارکنان..."
+          placeholder="جستجوی نام یا شماره موبایل..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className=" w-full h-11 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-accent)] focus:outline-none transition "
+          className="h-11 w-full min-w-0 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] transition focus:border-[var(--color-accent)] focus:outline-none"
         />
       </div>
 
-      <div className="card overflow-hidden">
+      {/* Staff Table */}
+      <div className="card min-w-0 overflow-hidden">
         {loading ? (
           <div className="p-10 text-center text-[var(--color-text-muted)]">
             در حال بارگذاری...
@@ -111,63 +128,120 @@ export default function AdminStaffPage() {
             کارمندی پیدا نشد
           </div>
         ) : (
-          <table className="w-full text-sm">
-            <thead className="bg-[var(--color-surface-2)] text-[var(--color-text-muted)]">
-              <tr>
-                <th className="px-5 py-4 text-right font-semibold">نام</th>
-                <th className="px-5 py-4 text-right font-semibold">شماره</th>
-                <th className="px-5 py-4 text-right font-semibold">نقش</th>
-                <th className="px-5 py-4 text-right font-semibold">تغییر نقش</th>
-              </tr>
-            </thead>
+          <div className="w-full min-w-0 overflow-x-auto">
+            <table className="w-full min-w-[720px] border-collapse text-sm">
+              <colgroup>
+                <col className="w-[240px]" />
+                <col className="w-[190px]" />
+                <col className="w-[140px]" />
+                <col className="w-[180px]" />
+              </colgroup>
 
-            <tbody className="divide-y divide-[var(--color-border)]">
-              {filteredStaff.map((u) => (
-                <tr
-                  key={u.id}
-                  className="transition hover:bg-[var(--color-surface-2)]"
-                >
-                  <td className="px-5 py-4 font-medium text-[var(--color-text)]">
-                    {u.name}
-                  </td>
+              <thead>
+                <tr className="bg-[var(--color-surface-2)]">
+                  <th className="border-b border-[var(--color-border)] px-5 py-4 text-right font-semibold text-[var(--color-text-muted)]">
+                    نام
+                  </th>
 
-                  <td className="px-5 py-4 text-[var(--color-text-muted)]">
-                    {u.phone}
-                  </td>
+                  <th className="border-b border-[var(--color-border)] px-5 py-4 text-right font-semibold text-[var(--color-text-muted)]">
+                    شماره موبایل
+                  </th>
 
-                  <td className="px-4 py-3">
-                    <span
-                      className={`rounded-full px-3 py-1 text-xs font-medium ${u.role === "ADMIN"
-                        ? "bg-[var(--color-accent)] text-white"
-                        : "bg-blue-500/10 text-blue-500"
-                        }`}
-                    >
-                      {u.role === "ADMIN" ? "ادمین" : "منیجر"}
-                    </span>
-                  </td>
+                  <th className="border-b border-[var(--color-border)] px-4 py-4 text-center font-semibold text-[var(--color-text-muted)]">
+                    نقش
+                  </th>
 
-                  <td className="px-4 py-3">
-                    <div className="w-44">
-                      <Select
-                        styles={selectStyles}
-                        menuPortalTarget={document.body}
-                        isDisabled={updating === u.id}
-                        options={[
-                          { value: "MANAGER", label: "منیجر" },
-                          { value: "CUSTOMER", label: "کاربر عادی" },
-                        ]}
-                        value={{
-                          value: u.role,
-                          label: u.role === "ADMIN" ? "ادمین" : "منیجر",
-                        }}
-                        onChange={(option) => changeRole(u.id, option.value)}
-                      />
-                    </div>
-                  </td>
+                  <th className="border-b border-[var(--color-border)] px-4 py-4 text-right font-semibold text-[var(--color-text-muted)]">
+                    تغییر نقش
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+
+              <tbody>
+                {filteredStaff.map((u) => (
+                  <tr
+                    key={u.id}
+                    className="border-b border-[var(--color-border)] last:border-b-0 transition-colors hover:bg-[var(--color-surface-2)]"
+                  >
+                    {/* Name */}
+                    <td className="px-5 py-4 align-middle">
+                      <div className="max-w-[210px] truncate font-medium text-[var(--color-text)]">
+                        {u.name || "—"}
+                      </div>
+                    </td>
+
+                    {/* Phone */}
+                    <td className="px-5 py-4 align-middle">
+                      <span
+                        dir="ltr"
+                        className="block whitespace-nowrap text-right text-[var(--color-text-muted)]"
+                      >
+                        {u.phone || "—"}
+                      </span>
+                    </td>
+
+                    {/* Role */}
+                    <td className="px-4 py-4 text-center align-middle">
+                      <span
+                        className={`inline-flex min-w-[78px] justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium ${
+                          u.role === "ADMIN"
+                            ? "bg-[var(--color-accent)] text-white"
+                            : "bg-blue-500/10 text-blue-500"
+                        }`}
+                      >
+                        {u.role === "ADMIN" ? "ادمین" : "منیجر"}
+                      </span>
+                    </td>
+
+                    {/* Change Role */}
+                    <td className="px-4 py-4 align-middle">
+                      <div className="w-[130px]">
+                        <Select
+                          styles={{
+                            ...selectStyles,
+                            control: (base, state) => ({
+                              ...selectStyles.control?.(base, state),
+                              minHeight: "36px",
+                              height: "36px",
+                            }),
+                          }}
+                          menuPortalTarget={
+                            typeof window !== "undefined"
+                              ? document.body
+                              : null
+                          }
+                          menuPosition="fixed"
+                          menuPlacement="auto"
+                          isSearchable={false}
+                          isDisabled={updating === u.id}
+                          options={[
+                            {
+                              value: "MANAGER",
+                              label: "منیجر",
+                            },
+                            {
+                              value: "CUSTOMER",
+                              label: "کاربر عادی",
+                            },
+                          ]}
+                          value={{
+                            value: u.role,
+                            label:
+                              u.role === "ADMIN"
+                                ? "ادمین"
+                                : "منیجر",
+                          }}
+                          onChange={(option) =>
+                            changeRole(u.id, option?.value)
+                          }
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     </div>

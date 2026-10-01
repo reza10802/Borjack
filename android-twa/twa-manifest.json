@@ -10,7 +10,7 @@
   "navigationColorDark": "#000000",
   "navigationDividerColor": "#000000",
   "navigationDividerColorDark": "#000000",
-  "backgroundColor": "#F97316",
+  "backgroundColor": "#080706",
   "enableNotifications": true,
   "startUrl": "/",
   "iconUrl": "https://borjak.site/images/logo2.png",
@@ -19,8 +19,8 @@
     "path": "G:\\Reza's WorkSpace\\Borjak\\Borjack\\android-twa\\android.keystore",
     "alias": "android"
   },
-  "appVersionName": "1",
-  "appVersionCode": 1,
+  "appVersionName": "2",
+  "appVersionCode": 2,
   "shortcuts": [],
   "generatorApp": "bubblewrap-cli",
   "webManifestUrl": "https://borjak.site/manifest.webmanifest",
@@ -46,5 +46,5 @@
   "fileHandlers": [],
   "launchHandlerClientMode": "",
   "displayOverride": [],
-  "appVersion": "1"
+  "appVersion": "2"
 }

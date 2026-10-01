@@ -6,6 +6,9 @@ import ProductGrid from "@/components/ProductGrid";
 export default function Home() {
   return (
     <div className="container-page py-6">
+      <h1 className="mb-6 text-2xl font-black">
+        فروشگاه اینترنتی برجک
+      </h1>
       <HeroSlider />
       <CategorySection />
       <SpecialOffers />

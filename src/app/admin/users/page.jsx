@@ -15,21 +15,20 @@ const ROLE_LABELS = {
 const ROLE_COLORS = {
   CUSTOMER:
     "bg-[var(--color-surface-2)] text-[var(--color-text-muted)]",
-
   ADMIN:
     "bg-[var(--color-accent)] text-white",
-
   MANAGER:
     "bg-blue-500/10 text-blue-500",
 };
 
 export default function AdminUsersPage() {
   const { user: me } = useAuth();
+
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(null);
-  const [error, setError] = useState("");
   const [toggling, setToggling] = useState(null);
+  const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [selectedUser, setSelectedUser] = useState(null);
   const [showModal, setShowModal] = useState(false);
@@ -48,8 +47,12 @@ export default function AdminUsersPage() {
   const load = async () => {
     setError("");
     setLoading(true);
+
     try {
-      const res = await fetch("/api/admin/users");
+      const res = await fetch("/api/admin/users", {
+        cache: "no-store",
+      });
+
       const data = await res.json();
 
       if (!res.ok) {
@@ -58,8 +61,9 @@ export default function AdminUsersPage() {
         return;
       }
 
-      setUsers(data.users || []);
-    } catch {
+      setUsers(Array.isArray(data.users) ? data.users : []);
+    } catch (error) {
+      console.error("LOAD USERS ERROR:", error);
       setError("خطا در ارتباط با سرور");
       setUsers([]);
     } finally {
@@ -72,13 +76,17 @@ export default function AdminUsersPage() {
   }, []);
 
   const changeRole = async (userId, role) => {
+    if (!role) return;
+
     setUpdating(userId);
     setError("");
 
     try {
       const res = await fetch(`/api/admin/users/${userId}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({ role }),
       });
 
@@ -92,7 +100,12 @@ export default function AdminUsersPage() {
       setUsers((prev) =>
         prev.map((u) => (u.id === userId ? data.user : u))
       );
-    } catch {
+
+      setSelectedUser((prev) =>
+        prev?.id === userId ? data.user : prev
+      );
+    } catch (error) {
+      console.error("CHANGE ROLE ERROR:", error);
       setError("خطا در ارتباط با سرور");
     } finally {
       setUpdating(null);
@@ -109,9 +122,7 @@ export default function AdminUsersPage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          isActive,
-        }),
+        body: JSON.stringify({ isActive }),
       });
 
       const data = await res.json();
@@ -124,15 +135,26 @@ export default function AdminUsersPage() {
       setUsers((prev) =>
         prev.map((u) => (u.id === userId ? data.user : u))
       );
-    } catch {
+
+      setSelectedUser((prev) =>
+        prev?.id === userId ? data.user : prev
+      );
+    } catch (error) {
+      console.error("TOGGLE USER STATUS ERROR:", error);
       setError("خطا در ارتباط با سرور");
     } finally {
       setToggling(null);
     }
   };
 
+  const openUserModal = (user) => {
+    setSelectedUser(user);
+    setShowModal(true);
+  };
+
   return (
-    <div>
+    <div className="min-w-0">
+      {/* Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-[var(--color-text)]">
           مدیریت کاربران
@@ -143,23 +165,26 @@ export default function AdminUsersPage() {
         </p>
       </div>
 
+      {/* Error */}
       {error && (
-        <div className="mb-4 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
+        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400">
           {error}
         </div>
       )}
 
+      {/* Search */}
       <div className="card mb-6 p-4">
         <input
           type="text"
           placeholder="جستجوی نام یا شماره موبایل..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full h-11 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-accent)] focus:outline-none transition"
+          className="h-11 w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] transition focus:border-[var(--color-accent)] focus:outline-none"
         />
       </div>
 
-      <div className="card overflow-hidden">
+      {/* Table */}
+      <div className="card min-w-0 overflow-hidden">
         {loading ? (
           <div className="p-8 text-center text-[var(--color-text-muted)]">
             در حال بارگذاری...
@@ -169,171 +194,244 @@ export default function AdminUsersPage() {
             کاربری یافت نشد
           </div>
         ) : (
-          <table className="w-full text-sm">
-            <thead className="bg-[var(--color-surface-2)] text-[var(--color-text-muted)]">
-              <tr>
-                <th className="px-4 py-4 text-right font-semibold">نام</th>
-                <th className="px-4 py-4 text-right font-semibold">شناسه</th>
-                <th className="px-4 py-4 text-right font-semibold">سفارشات</th>
-                <th className="px-4 py-4 text-right font-semibold">نقش</th>
-                <th className="px-4 py-4 text-right font-semibold">وضعیت</th>
-                <th className="px-4 py-4 text-right font-semibold">عملیات</th>
-              </tr>
-            </thead>
+          <div className="w-full overflow-x-auto">
+            <table className="w-full min-w-[1080px] border-collapse text-sm">
+              <colgroup>
+                <col className="w-[180px]" />
+                <col className="w-[170px]" />
+                <col className="w-[100px]" />
+                <col className="w-[120px]" />
+                <col className="w-[120px]" />
+                <col className="w-[390px]" />
+              </colgroup>
 
-            <tbody className="divide-y divide-[var(--color-border)]">
-              {filteredUsers.map((u) => {
-                const isSelf = u.id === me?.id;
-                const isAdmin = u.role === "ADMIN";
+              <thead>
+                <tr className="bg-[var(--color-surface-2)]">
+                  <th className="border-b border-[var(--color-border)] px-5 py-4 text-right font-semibold text-[var(--color-text-muted)]">
+                    نام
+                  </th>
 
-                return (
-                  <tr className="transition hover:bg-[var(--color-surface-2)]">
-                    <td className="px-4 py-4 font-medium text-[var(--color-text)]">{u.name}</td>
-                    <td className="px-4 py-4 text-xs text-[var(--color-text-muted)]">{u.phone}</td>
-                    <td className="px-4 py-4 text-[var(--color-text)]">{u._count?.orders ?? 0}</td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`text-xs px-2 py-0.5 rounded-full font-medium ${ROLE_COLORS[u.role]}`}
-                      >
-                        {ROLE_LABELS[u.role]}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      {u.isActive ? (
-                        <span className="text-green-500 font-medium">
-                          فعال
-                        </span>
-                      ) : (
-                        <span className="text-red-500 font-medium">
-                          مسدود
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      {isSelf ? (
-                        <span className="text-xs text-[var(--color-text-muted)]">
-                          حساب شما
-                        </span>
-                      ) : isAdmin ? (
-                        <span className="text-xs text-[var(--color-text-muted)]">
-                          ادمین اصلی
-                        </span>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => {
-                              setSelectedUser(u);
-                              setShowModal(true);
-                            }}
-                            className="px-3 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 text-xs"
-                          >
-                            جزئیات
-                          </button>
-                          <Select
-                            styles={selectStyles}
-                            menuPortalTarget={document.body}
-                            isDisabled={updating === u.id}
-                            options={[
-                              { value: "CUSTOMER", label: "کاربر عادی" },
-                              { value: "MANAGER", label: "منیجر" },
-                            ]}
-                            value={{
-                              value: u.role,
-                              label:
-                                u.role === "CUSTOMER"
-                                  ? "کاربر عادی"
-                                  : "منیجر",
-                            }}
-                            onChange={(option) =>
-                              changeRole(u.id, option.value)
-                            }
-                          />
-                          <button
-                            onClick={() => toggleUserStatus(u.id, !u.isActive)}
-                            disabled={toggling === u.id}
-                            className={`px-3 py-1 rounded-lg text-xs transition ${u.isActive
-                              ? "h-9 px-4 rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500/20 transition text-xs"
-                              : "h-9 px-4 rounded-xl bg-green-500/10 text-green-500 hover:bg-green-500/20 transition text-xs"
-                              }`}
+                  <th className="border-b border-[var(--color-border)] px-5 py-4 text-right font-semibold text-[var(--color-text-muted)]">
+                    شماره موبایل
+                  </th>
 
-                          >
-                            {toggling === u.id
-                              ? "..."
-                              : u.isActive
-                                ? "مسدود کردن"
-                                : "فعال کردن"}
-                          </button>
+                  <th className="border-b border-[var(--color-border)] px-4 py-4 text-center font-semibold text-[var(--color-text-muted)]">
+                    سفارشات
+                  </th>
+
+                  <th className="border-b border-[var(--color-border)] px-4 py-4 text-center font-semibold text-[var(--color-text-muted)]">
+                    نقش
+                  </th>
+
+                  <th className="border-b border-[var(--color-border)] px-4 py-4 text-center font-semibold text-[var(--color-text-muted)]">
+                    وضعیت
+                  </th>
+
+                  <th className="border-b border-[var(--color-border)] px-5 py-4 text-right font-semibold text-[var(--color-text-muted)]">
+                    عملیات
+                  </th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {filteredUsers.map((u) => {
+                  const isSelf = u.id === me?.id;
+                  const isAdmin = u.role === "ADMIN";
+
+                  return (
+                    <tr
+                      key={u.id}
+                      className="border-b border-[var(--color-border)] last:border-b-0 hover:bg-[var(--color-surface-2)] transition-colors"
+                    >
+                      {/* Name */}
+                      <td className="px-5 py-4 align-middle">
+                        <div className="max-w-[160px] truncate font-medium text-[var(--color-text)]">
+                          {u.name || "—"}
                         </div>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                      </td>
+
+                      {/* Phone */}
+                      <td className="px-5 py-4 align-middle">
+                        <span
+                          dir="ltr"
+                          className="block text-right whitespace-nowrap text-[var(--color-text-muted)]"
+                        >
+                          {u.phone || "—"}
+                        </span>
+                      </td>
+
+                      {/* Orders */}
+                      <td className="px-4 py-4 text-center align-middle">
+                        <span className="inline-flex h-8 min-w-8 items-center justify-center rounded-lg bg-[var(--color-surface-2)] px-2 text-xs font-medium text-[var(--color-text)]">
+                          {u._count?.orders ?? 0}
+                        </span>
+                      </td>
+
+                      {/* Role */}
+                      <td className="px-4 py-4 text-center align-middle">
+                        <span
+                          className={`inline-flex min-w-[72px] justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium ${ROLE_COLORS[u.role] ||
+                            "bg-[var(--color-surface-2)] text-[var(--color-text-muted)]"
+                            }`}
+                        >
+                          {ROLE_LABELS[u.role] || u.role}
+                        </span>
+                      </td>
+
+                      {/* Status */}
+                      <td className="px-4 py-4 text-center align-middle">
+                        <span
+                          className={`inline-flex min-w-[72px] justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium ${u.isActive
+                            ? "bg-green-500/10 text-green-500"
+                            : "bg-red-500/10 text-red-500"
+                            }`}
+                        >
+                          {u.isActive ? "فعال" : "مسدود"}
+                        </span>
+                      </td>
+
+                      {/* Actions */}
+                      <td className="px-4 py-4 align-middle">
+                        <div className="flex min-w-max items-center gap-2.5">
+                          {/* View */}
+                          <button
+                            type="button"
+                            onClick={() => openUserModal(u)}
+                            className="h-9 w-[110px] shrink-0 rounded-lg border border-[var(--color-border)] px-3 text-xs text-[var(--color-text)] transition hover:bg-[var(--color-surface-2)]"
+                          >
+                            مشاهده
+                          </button>
+
+                          {!isSelf && !isAdmin ? (
+                            <div className="flex align-middle gap-4.5">
+                              {/* Role select */}
+                              <div className="w-[130px] shrink-0">
+                                <Select
+                                  value={{
+                                    value: u.role,
+                                    label: ROLE_LABELS[u.role],
+                                  }}
+                                  onChange={(option) =>
+                                    changeRole(u.id, option?.value)
+                                  }
+                                  options={[
+                                    {
+                                      value: "CUSTOMER",
+                                      label: "مشتری",
+                                    },
+                                    {
+                                      value: "MANAGER",
+                                      label: "منیجر",
+                                    },
+                                  ]}
+                                  isDisabled={updating === u.id}
+                                  styles={{
+                                    ...selectStyles,
+                                    control: (base, state) => ({
+                                      ...selectStyles.control?.(base, state),
+                                      minHeight: "36px",
+                                      height: "36px",
+                                    }),
+                                  }}
+                                  isSearchable={false}
+                                  menuPlacement="auto"
+                                />
+                              </div>
+
+                              {/* Status button */}
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  toggleUserStatus(u.id, !u.isActive)
+                                }
+                                disabled={toggling === u.id}
+                                className={`h-9 shrink-0 rounded-lg px-4 text-xs text-white transition disabled:cursor-not-allowed disabled:opacity-50 ${u.isActive
+                                  ? "bg-red-500 hover:bg-red-600"
+                                  : "bg-green-500 hover:bg-green-600"
+                                  }`}
+                              >
+                                {toggling === u.id
+                                  ? "..."
+                                  : u.isActive
+                                    ? "مسدود کردن"
+                                    : "فعال کردن"}
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-[var(--color-text-muted)]">
+                              {isSelf
+                                ? "حساب فعلی"
+                                : "تغییرات این ادمین محدود است"}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
+
+      {/* User Modal */}
       <Modal
         open={showModal}
-        onClose={() => setShowModal(false)}
+        onClose={() => {
+          setShowModal(false);
+          setSelectedUser(null);
+        }}
         title="اطلاعات کاربر"
       >
         {selectedUser && (
           <div className="space-y-3 text-sm text-[var(--color-text)]">
-
-            <div className="flex justify-between border-b border-[var(--color-border)] pb-2">
-              <span className="font-semibold text-[var(--color-text)]">
-                نام
-              </span>
-
-              <span className="text-[var(--color-text-muted)]">
-                {selectedUser.name}
+            <div className="flex items-center justify-between gap-4 border-b border-[var(--color-border)] pb-2">
+              <span className="font-semibold">نام</span>
+              <span className="text-left text-[var(--color-text-muted)]">
+                {selectedUser.name || "—"}
               </span>
             </div>
-            <div className="flex justify-between border-b border-[var(--color-border)] pb-2">
-              <span className="font-semibold text-[var(--color-text)]">
-                شماره تلفن
-              </span>
 
-              <span className="text-[var(--color-text-muted)]">
-                {selectedUser.phone}
+            <div className="flex items-center justify-between gap-4 border-b border-[var(--color-border)] pb-2">
+              <span className="font-semibold">شماره تلفن</span>
+              <span
+                dir="ltr"
+                className="text-left text-[var(--color-text-muted)]"
+              >
+                {selectedUser.phone || "—"}
               </span>
             </div>
-            <div className="flex justify-between border-b border-[var(--color-border)] pb-2">
-              <span className="font-semibold text-[var(--color-text)]">
-                نقش
-              </span>
 
+            <div className="flex items-center justify-between gap-4 border-b border-[var(--color-border)] pb-2">
+              <span className="font-semibold">نقش</span>
               <span className="text-[var(--color-text-muted)]">
-                {ROLE_LABELS[selectedUser.role]}
+                {ROLE_LABELS[selectedUser.role] || selectedUser.role}
               </span>
             </div>
-            <div className="flex justify-between border-b border-[var(--color-border)] pb-2">
-              <span className="font-semibold text-[var(--color-text)]">
-                وضعیت:
-              </span>
 
+            <div className="flex items-center justify-between gap-4 border-b border-[var(--color-border)] pb-2">
+              <span className="font-semibold">وضعیت</span>
               <span className="text-[var(--color-text-muted)]">
                 {selectedUser.isActive ? "فعال" : "مسدود"}
               </span>
             </div>
-            <div className="flex justify-between border-b border-[var(--color-border)] pb-2">
-              <span className="font-semibold text-[var(--color-text)]">
-                تعداد سفارش:
-              </span>
 
+            <div className="flex items-center justify-between gap-4 border-b border-[var(--color-border)] pb-2">
+              <span className="font-semibold">تعداد سفارش</span>
               <span className="text-[var(--color-text-muted)]">
-                {selectedUser._count.orders}
+                {selectedUser._count?.orders ?? 0}
               </span>
             </div>
 
-            <div className="flex justify-between border-b border-[var(--color-border)] pb-2">
-              <span className="font-semibold text-[var(--color-text)]">
-                تاریخ عضویت:
-              </span>
-
+            <div className="flex items-center justify-between gap-4 border-b border-[var(--color-border)] pb-2">
+              <span className="font-semibold">تاریخ عضویت</span>
               <span className="text-[var(--color-text-muted)]">
-                {new Date(selectedUser.createdAt).toLocaleDateString("fa-IR")}
+                {selectedUser.createdAt
+                  ? new Date(selectedUser.createdAt).toLocaleDateString(
+                    "fa-IR"
+                  )
+                  : "—"}
               </span>
             </div>
           </div>

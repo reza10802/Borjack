@@ -11,7 +11,7 @@ export default function manifest() {
 
     background_color: "#ffffff",
 
-    theme_color: "#f97316",
+    theme_color: "#000000",
 
     lang: "fa",
 

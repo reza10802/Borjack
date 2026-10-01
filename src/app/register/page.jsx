@@ -25,7 +25,7 @@ function RegisterContent() {
     e.preventDefault();
     setError("");
 
-    if (!name || !phone || !password) {
+    if (!name.trim() || !phone.trim() || !password) {
       setError("همه فیلدها الزامی هستند");
       return;
     }
@@ -33,16 +33,22 @@ function RegisterContent() {
     setLoading(true);
 
     try {
-      const data = await register({ name, phone, password });
+      const data = await register({
+        name: name.trim(),
+        phone: phone.trim(),
+        password,
+      });
 
       if (!data.isPhoneVerified) {
-        router.push(`/verify-phone?redirect=${encodeURIComponent(redirect)}`);
+        router.push(
+          `/verify-phone?redirect=${encodeURIComponent(redirect)}`
+        );
         return;
       }
 
       router.push(redirect);
     } catch (err) {
-      setError(err.message);
+      setError(err?.message || "خطا در ثبت‌نام");
     } finally {
       setLoading(false);
     }
@@ -50,26 +56,32 @@ function RegisterContent() {
 
   return (
     <div
-      className="min-h-screen bg-[var(--background-app)] flex items-center justify-center px-4"
+      className="relative flex min-h-screen items-center justify-center bg-[var(--background-app)] px-4 py-6"
       dir="rtl"
     >
-      <div className="card relative w-full max-w-md p-8">
-        <div className="absolute top-5 left-5">
-          <ThemeToggle />
-        </div>
-        <div className="flex justify-center mb-6">
+      {/* Theme - top left of page */}
+      <div className="fixed left-4 top-4 z-50 sm:left-5 sm:top-5">
+        <ThemeToggle />
+      </div>
+
+      {/* Register Card */}
+      <div className="card w-full max-w-md p-6 sm:p-8">
+        {/* Logo */}
+        <div className="mb-6 flex justify-center">
           <img
             src="/images/logo.png"
-            className="w-16 h-16 rounded-2xl object-cover"
-            alt="لوگو"
+            className="h-16 w-16 rounded-2xl object-cover"
+            alt="لوگو برجک"
           />
         </div>
 
-        <h1 className="text-2xl font-black text-center mb-6 text-[var(--color-primary)] dark:text-white">
+        {/* Title */}
+        <h1 className="mb-6 text-center text-2xl font-black text-[var(--color-primary)] dark:text-white">
           ثبت‌نام
         </h1>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          {/* Name */}
           <input
             type="text"
             placeholder="نام و نام خانوادگی"
@@ -77,19 +89,26 @@ function RegisterContent() {
             onChange={(e) => setName(e.target.value)}
             autoComplete="name"
             dir="rtl"
-            className=" w-full h-12 rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-4 text-sm text-zinc-700 dark:text-zinc-100 placeholder:text-zinc-400  transition "
+            className="h-12 w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] px-4 text-sm text-[var(--color-text)] transition placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-accent)] focus:outline-none"
           />
 
+          {/* Phone */}
           <input
-            type="text"
+            type="tel"
+            inputMode="numeric"
             placeholder="شماره موبایل"
             value={phone}
-            onChange={(e) => setPhone(e.target.value)}
+            onChange={(e) =>
+              setPhone(
+                e.target.value.replace(/\D/g, "").slice(0, 11)
+              )
+            }
             autoComplete="tel"
-            dir="rtl"
-            className=" w-full h-12 rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-4 text-sm text-zinc-700 dark:text-zinc-100 placeholder:text-zinc-400  transition "
+            dir="ltr"
+            className="h-12 w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] px-4 text-sm text-[var(--color-text)] transition placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-accent)] focus:outline-none"
           />
 
+          {/* Password */}
           <div className="relative w-full">
             <input
               type={showPassword ? "text" : "password"}
@@ -98,19 +117,23 @@ function RegisterContent() {
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="new-password"
               dir="rtl"
-              className="w-full h-12 rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 pr-4 pl-12 text-sm text-zinc-800 dark:text-zinc-100 transition"
+              className="h-12 w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] py-0 pr-4 pl-12 text-sm text-[var(--color-text)] transition placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-accent)] focus:outline-none"
             />
 
             <button
               type="button"
               onClick={() => setShowPassword((prev) => !prev)}
-              className=" absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-[var(--color-primary)] transition "
-              aria-label={showPassword ? "مخفی کردن رمز عبور" : "نمایش رمز عبور"}
+              className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)] transition hover:text-[var(--color-primary)]"
+              aria-label={
+                showPassword
+                  ? "مخفی کردن رمز عبور"
+                  : "نمایش رمز عبور"
+              }
             >
               {showPassword ? (
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
-                  className="w-5 h-5"
+                  className="h-5 w-5"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
@@ -124,7 +147,7 @@ function RegisterContent() {
               ) : (
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
-                  className="w-5 h-5"
+                  className="h-5 w-5"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
@@ -141,27 +164,35 @@ function RegisterContent() {
             </button>
           </div>
 
+          {/* Error */}
           {error && (
-            <p className="text-red-500 text-sm text-center">{error}</p>
+            <p className="text-center text-sm text-red-500">
+              {error}
+            </p>
           )}
 
+          {/* Submit */}
           <button
             type="submit"
             disabled={loading}
-            className=" btn-primary w-full rounded-2xl py-3 font-bold "
+            className="btn-primary h-12 w-full rounded-2xl text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading ? "در حال ثبت‌نام..." : "ثبت‌نام"}
           </button>
         </form>
 
-        <p className="text-center text-sm text-zinc-500 mt-5">
+        {/* Login */}
+        <p className="mt-5 text-center text-sm text-[var(--color-text-muted)]">
           قبلاً ثبت‌نام کردی؟{" "}
-          <Link href={`/login?redirect=${encodeURIComponent(redirect)}`} className=" font-bold text-[var(--color-primary)] hover:text-[var(--color-accent)] transition ">
+          <Link
+            href={`/login?redirect=${encodeURIComponent(redirect)}`}
+            className="font-bold text-[var(--color-text)] transition hover:text-[var(--color-accent)]"
+          >
             ورود
           </Link>
         </p>
       </div>
-    </div >
+    </div>
   );
 }
 

@@ -47,7 +47,7 @@ export default function CategorySection() {
                 {categories.map((category) => (
                     <Link
                         key={category.id}
-                        href={`/search?category=${encodeURIComponent(category.title)}`}
+                        href={`/category/${encodeURIComponent(category.slug)}`}
                         className=" card group flex flex-col items-center justify-center p-6 text-center transition-all duration-300 hover:-translate-y-1 hover:border-[var(--color-accent)] hover:shadow-lg hover:shadow-[var(--color-accent)]/10 "
                     >
                         {(() => {

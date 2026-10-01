@@ -80,26 +80,27 @@ function LoginContent() {
 
   return (
     <div
-      className="min-h-screen bg-[var(--background-app)] flex items-center justify-center px-4"
+      className="relative flex min-h-screen items-center justify-center bg-[var(--background-app)] px-4 py-6"
       dir="rtl"
     >
-      <div className="card relative w-full max-w-md p-8">
-        {/* Theme */}
-        <div className="absolute top-5 left-5">
-          <ThemeToggle />
-        </div>
+      {/* Theme - top left of the page */}
+      <div className="fixed left-4 top-4 z-50 sm:left-5 sm:top-5">
+        <ThemeToggle />
+      </div>
 
+      {/* Login Card */}
+      <div className="card w-full max-w-md p-6 sm:p-8">
         {/* Logo */}
-        <div className="flex justify-center mb-6">
+        <div className="mb-6 flex justify-center">
           <img
             src="/images/logo.png"
-            className="w-16 h-16 rounded-2xl object-cover"
+            className="h-16 w-16 rounded-2xl object-cover"
             alt="لوگو برجک"
           />
         </div>
 
         {/* Title */}
-        <h1 className="text-2xl font-black text-center mb-6 text-[var(--color-primary)] dark:text-white">
+        <h1 className="mb-6 text-center text-2xl font-black text-[var(--color-primary)] dark:text-white">
           ورود
         </h1>
 
@@ -117,7 +118,7 @@ function LoginContent() {
             }
             autoComplete="tel"
             dir="ltr"
-            className="w-full h-12 rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-4 text-sm text-zinc-800 dark:text-zinc-100 transition"
+            className="h-12 w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] px-4 text-sm text-[var(--color-text)] transition placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-accent)] focus:outline-none"
           />
 
           {/* Password */}
@@ -129,13 +130,13 @@ function LoginContent() {
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="current-password"
               dir="rtl"
-              className="w-full h-12 rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 pr-4 pl-12 text-sm text-zinc-800 dark:text-zinc-100 transition"
+              className="h-12 w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] py-0 pr-4 pl-12 text-sm text-[var(--color-text)] transition placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-accent)] focus:outline-none"
             />
 
             <button
               type="button"
               onClick={() => setShowPassword((prev) => !prev)}
-              className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-[var(--color-primary)] transition"
+              className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)] transition hover:text-[var(--color-primary)]"
               aria-label={
                 showPassword
                   ? "مخفی کردن رمز عبور"
@@ -145,7 +146,7 @@ function LoginContent() {
               {showPassword ? (
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
-                  className="w-5 h-5"
+                  className="h-5 w-5"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
@@ -159,7 +160,7 @@ function LoginContent() {
               ) : (
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
-                  className="w-5 h-5"
+                  className="h-5 w-5"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
@@ -178,7 +179,7 @@ function LoginContent() {
 
           {/* Error */}
           {error && (
-            <p className="text-red-500 text-sm text-center">
+            <p className="text-center text-sm text-red-500">
               {error}
             </p>
           )}
@@ -187,27 +188,28 @@ function LoginContent() {
           <button
             type="submit"
             disabled={loading}
-            className="btn-primary w-full h-12 rounded-2xl text-sm font-bold disabled:opacity-50"
+            className="btn-primary h-12 w-full rounded-2xl text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading ? "در حال ورود..." : "ورود"}
           </button>
         </form>
 
         {/* Register */}
-        <p className="text-center text-sm text-zinc-500 dark:text-zinc-400 mt-5">
+        <p className="mt-5 text-center text-sm text-[var(--color-text-muted)]">
           حساب کاربری ندارید؟{" "}
           <Link
             href={`/register?redirect=${encodeURIComponent(redirect)}`}
-            className="font-bold text-zinc-700 dark:text-zinc-300 hover:text-[var(--color-accent)] transition"
+            className="font-bold text-[var(--color-text)] transition hover:text-[var(--color-accent)]"
           >
             ثبت‌نام
           </Link>
         </p>
+
         {/* Forgot password */}
-        <p className="text-center text-sm text-zinc-500 dark:text-zinc-400 mt-5">
+        <p className="mt-4 text-center text-sm text-[var(--color-text-muted)]">
           <Link
             href="/forgot-password"
-            className="text-sm font-bold text-zinc-500 dark:text-zinc-400 hover:text-[var(--color-accent)] transition"
+            className="font-bold text-[var(--color-text-muted)] transition hover:text-[var(--color-accent)]"
           >
             رمز عبور را فراموش کرده‌اید؟
           </Link>

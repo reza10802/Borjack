@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import jwt from "jsonwebtoken";
 import { prisma } from "@/lib/db";
+import { headers } from "next/headers";
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -158,6 +159,17 @@ export async function logAction({
   newValue = null,
 }) {
   try {
+    const headersList = await headers();
+
+    // اولویت با x-forwarded-for
+    // چون روی VPS / reverse proxy معمولاً IP واقعی کلاینت در این هدر قرار می‌گیرد.
+    const forwardedFor = headersList.get("x-forwarded-for");
+
+    const ipAddress =
+      forwardedFor?.split(",")[0]?.trim() ||
+      headersList.get("x-real-ip") ||
+      null;
+
     await prisma.auditLog.create({
       data: {
         userId,
@@ -167,6 +179,7 @@ export async function logAction({
         description,
         oldValue,
         newValue,
+        ipAddress,
       },
     });
   } catch (e) {

@@ -2,7 +2,7 @@
 <resources>
     <bool name="enableNotification">true</bool>
     <bool name="enableSiteSettingsShortcut">true</bool>
-    <color name="backgroundColor">#F97316</color>
+    <color name="backgroundColor">#080706</color>
     <color name="colorPrimary">#F97316</color>
     <color name="colorPrimaryDark">#000000</color>
     <color name="navigationColor">#000000</color>

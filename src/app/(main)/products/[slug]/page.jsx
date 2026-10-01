@@ -1,6 +1,12 @@
+import { notFound } from "next/navigation";
 import ProductClient from "./ProductClient";
 
-const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+const BASE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+
+function absoluteUrl(path) {
+  return new URL(path, BASE_URL).toString();
+}
 
 export async function generateMetadata({ params }) {
   const { slug } = await params;
@@ -12,52 +18,21 @@ export async function generateMetadata({ params }) {
 
     if (!res.ok) {
       return {
-        title: "محصول پیدا نشد",
+        title: "محصول پیدا نشد | برجک",
+        robots: {
+          index: false,
+          follow: false,
+        },
       };
     }
 
     const product = await res.json();
-    const productJsonLd = {
-      "@context": "https://schema.org",
-      "@type": "Product",
 
-      name: product.title,
+    const productUrl = absoluteUrl(`/products/${product.slug}`);
 
-      image: product.images?.length
-        ? product.images.map((i) => i.url)
-        : [product.image],
-
-      description: product.description,
-
-      sku: product.id.toString(),
-
-      brand: {
-        "@type": "Brand",
-        name: product.brand.title,
-      },
-
-      category: product.category.title,
-
-      aggregateRating: {
-        "@type": "AggregateRating",
-        ratingValue: product.rating,
-        reviewCount: product.reviewCount,
-      },
-
-      offers: {
-        "@type": "Offer",
-        priceCurrency: "IRR",
-        price: product.price,
-        availability:
-          product.stock > 0
-            ? "https://schema.org/InStock"
-            : "https://schema.org/OutOfStock",
-      },
-    };
     return {
       title: product.title,
-
-      description: product.description,
+      description: product.description || `خرید ${product.title} از برجک`,
 
       keywords: [
         product.title,
@@ -69,32 +44,37 @@ export async function generateMetadata({ params }) {
       ].filter(Boolean),
 
       alternates: {
-        canonical: `${BASE_URL}/products/${product.slug}`,
+        canonical: productUrl,
       },
 
       openGraph: {
+        type: "website",
         title: product.title,
-        description: product.description,
-        url: `${BASE_URL}/products/${product.slug}`,
-
-        images: [
-          {
-            url: product.image,
-            width: 1200,
-            height: 630,
-          },
-        ],
+        description:
+          product.description || `خرید ${product.title} از برجک`,
+        url: productUrl,
+        images: product.image
+          ? [
+              {
+                url: absoluteUrl(product.image),
+                width: 1200,
+                height: 630,
+                alt: product.title,
+              },
+            ]
+          : [],
       },
 
       twitter: {
         card: "summary_large_image",
         title: product.title,
-        description: product.description,
-        images: [product.image],
+        description:
+          product.description || `خرید ${product.title} از برجک`,
+        images: product.image
+          ? [absoluteUrl(product.image)]
+          : [],
       },
     };
-
-
   } catch {
     return {
       title: "برجک",
@@ -109,74 +89,129 @@ export default async function Page({ params }) {
     cache: "no-store",
   });
 
+  if (!res.ok) {
+    notFound();
+  }
+
   const product = await res.json();
+
+  const productUrl = absoluteUrl(`/products/${product.slug}`);
+
+  const productImages = product.images?.length
+    ? product.images
+        .map((image) => image.url)
+        .filter(Boolean)
+        .map((image) => absoluteUrl(image))
+    : product.image
+      ? [absoluteUrl(product.image)]
+      : [];
+
   const productJsonLd = {
     "@context": "https://schema.org",
     "@type": "Product",
-
     name: product.title,
 
-    image: product.images?.length
-      ? product.images.map((i) => i.url)
-      : [product.image],
+    ...(productImages.length
+      ? {
+          image: productImages,
+        }
+      : {}),
 
-    description: product.description,
+    ...(product.description
+      ? {
+          description: product.description,
+        }
+      : {}),
 
-    sku: product.id.toString(),
+    ...(product.id
+      ? {
+          sku: String(product.id),
+        }
+      : {}),
 
-    brand: {
-      "@type": "Brand",
-      name: product.brand?.title,
-    },
+    ...(product.brand?.title
+      ? {
+          brand: {
+            "@type": "Brand",
+            name: product.brand.title,
+          },
+        }
+      : {}),
 
-    category: product.category?.title,
+    ...(product.category?.title
+      ? {
+          category: product.category.title,
+        }
+      : {}),
 
-    aggregateRating: {
-      "@type": "AggregateRating",
-      ratingValue: product.rating,
-      reviewCount: product.reviewCount,
-    },
+    ...(product.reviewCount > 0 && product.rating
+      ? {
+          aggregateRating: {
+            "@type": "AggregateRating",
+            ratingValue: Number(product.rating),
+            reviewCount: Number(product.reviewCount),
+          },
+        }
+      : {}),
 
-    offers: {
-      "@type": "Offer",
-      priceCurrency: "IRR",
-      price: product.price,
-      availability:
-        product.stock > 0
-          ? "https://schema.org/InStock"
-          : "https://schema.org/OutOfStock",
-    },
+    ...(product.price != null
+      ? {
+          offers: {
+            "@type": "Offer",
+            url: productUrl,
+            priceCurrency: "IRR",
+            price: Number(product.price),
+            availability:
+              product.stock > 0
+                ? "https://schema.org/InStock"
+                : "https://schema.org/OutOfStock",
+          },
+        }
+      : {}),
   };
+
+  const breadcrumbItems = [
+    {
+      "@type": "ListItem",
+      position: 1,
+      name: "خانه",
+      item: BASE_URL,
+    },
+  ];
+
+  if (product.category?.title && product.category?.slug) {
+    breadcrumbItems.push({
+      "@type": "ListItem",
+      position: breadcrumbItems.length + 1,
+      name: product.category.title,
+      item: absoluteUrl(
+        `/category/${product.category.slug}`
+      ),
+    });
+  }
+
+  if (product.brand?.title && product.brand?.slug) {
+    breadcrumbItems.push({
+      "@type": "ListItem",
+      position: breadcrumbItems.length + 1,
+      name: product.brand.title,
+      item: absoluteUrl(
+        `/brand/${product.brand.slug}`
+      ),
+    });
+  }
+
+  breadcrumbItems.push({
+    "@type": "ListItem",
+    position: breadcrumbItems.length + 1,
+    name: product.title,
+    item: productUrl,
+  });
 
   const breadcrumbJsonLd = {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
-    itemListElement: [
-      {
-        "@type": "ListItem",
-        position: 1,
-        name: "خانه",
-        item: `${BASE_URL}`,
-      },
-      {
-        "@type": "ListItem",
-        position: 2,
-        name: "محصولات",
-        item: `${BASE_URL}/products`,
-      },
-      {
-        "@type": "ListItem",
-        position: 3,
-        name: product.category.title,
-        item: `${BASE_URL}/products?category=${product.category.slug}`,
-      },
-      {
-        "@type": "ListItem",
-        position: 4,
-        name: product.title,
-        item: `${BASE_URL}/products/${product.slug}`,
-      },
-    ],
+    itemListElement: breadcrumbItems,
   };
 
   return (
@@ -184,13 +219,14 @@ export default async function Page({ params }) {
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify(breadcrumbJsonLd),
+          __html: JSON.stringify(productJsonLd),
         }}
       />
+
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify(productJsonLd),
+          __html: JSON.stringify(breadcrumbJsonLd),
         }}
       />
 
