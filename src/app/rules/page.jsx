@@ -1,3 +1,6 @@
+import Link from "next/link";
+import { ArrowRight } from "lucide-react";
+
 export const metadata = {
   title: "قوانین و مقررات | برجک",
   description: "قوانین و شرایط استفاده از فروشگاه اینترنتی برجک",
@@ -11,7 +14,7 @@ export default function RulesPage() {
     },
     {
       title: "۲. ثبت سفارش",
-      body: "ثبت سفارش تنها پس از پرداخت موفق یا انتخاب روش پرداخت معتبر نهایی خواهد شد. فروشگاه حق لغو سفارش‌هایی که به علت خطا در قیمت، موجودی یا مشکلات فنی ثبت شده‌اند را دارد.",
+      body: "ثبت سفارش تنها پس از پرداخت موفق یا انتخاب روش پرداخت معتبر نهایی خواهد بود. فروشگاه حق لغو سفارش‌هایی که به علت خطا در قیمت، موجودی یا مشکلات فنی ثبت شده‌اند را دارد.",
     },
     {
       title: "۳. قیمت کالاها",
@@ -50,7 +53,19 @@ export default function RulesPage() {
     >
       {/* Hero */}
       <section className="bg-[var(--color-primary)] text-white">
-        <div className="max-w-6xl mx-auto px-6 py-20 text-center">
+        <div className="max-w-6xl mx-auto px-6 py-12 sm:py-20 text-center">
+
+          {/* Back to site */}
+          <div className="flex justify-start mb-10">
+            <Link
+              href="/"
+              className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-bold text-white border border-white/20 backdrop-blur-sm transition-all hover:bg-white/20"
+            >
+              <ArrowRight size={18} />
+              برگشت به سایت
+            </Link>
+          </div>
+
           <h1 className="text-4xl font-black mb-5">
             قوانین و مقررات
           </h1>
