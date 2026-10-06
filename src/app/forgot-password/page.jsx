@@ -7,6 +7,46 @@ import ThemeToggle from "@/components/ThemeToggle";
 
 const RESEND_COOLDOWN = 120;
 
+// تبدیل اعداد فارسی و عربی به انگلیسی
+function normalizeDigits(value) {
+  return value
+    .replace(/[۰-۹]/g, (char) =>
+      String("۰۱۲۳۴۵۶۷۸۹".indexOf(char))
+    )
+    .replace(/[٠-٩]/g, (char) =>
+      String("٠١٢٣٤٥٦٧٨٩".indexOf(char))
+    );
+}
+
+// تبدیل شماره ایران به فرمت استاندارد:
+// 09xxxxxxxxx
+function normalizeIranPhone(value) {
+  let phone = normalizeDigits(value);
+
+  // حذف فاصله، خط تیره و پرانتز
+  phone = phone.replace(/[\s()-]/g, "");
+
+  // فقط + در ابتدای شماره مجاز است
+  phone = phone.replace(/(?!^)\+/g, "");
+
+  // +989xxxxxxxxx → 989xxxxxxxxx
+  if (phone.startsWith("+98")) {
+    phone = phone.slice(1);
+  }
+
+  // 989xxxxxxxxx → 09xxxxxxxxx
+  if (/^989\d{9}$/.test(phone)) {
+    return `0${phone.slice(2)}`;
+  }
+
+  // 09xxxxxxxxx
+  if (/^09\d{9}$/.test(phone)) {
+    return phone;
+  }
+
+  return null;
+}
+
 export default function ForgotPasswordPage() {
   const router = useRouter();
 
@@ -20,7 +60,9 @@ export default function ForgotPasswordPage() {
 
     setError("");
 
-    if (!/^09\d{9}$/.test(phone)) {
+    const normalizedPhone = normalizeIranPhone(phone);
+
+    if (!normalizedPhone) {
       setError("شماره موبایل معتبر نیست");
       return;
     }
@@ -34,7 +76,7 @@ export default function ForgotPasswordPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          phone,
+          phone: normalizedPhone,
           purpose: "RESET_PASSWORD",
         }),
       });
@@ -48,10 +90,12 @@ export default function ForgotPasswordPage() {
       setCooldown(RESEND_COOLDOWN);
 
       router.push(
-        `/reset-password?phone=${encodeURIComponent(phone)}`
+        `/reset-password?phone=${encodeURIComponent(
+          normalizedPhone
+        )}`
       );
     } catch (err) {
-      setError(err.message);
+      setError(err?.message || "خطا در ارسال کد");
     } finally {
       setSending(false);
     }
@@ -80,17 +124,18 @@ export default function ForgotPasswordPage() {
           className="flex flex-col gap-4"
         >
           <input
-            type="text"
-            inputMode="numeric"
+            type="tel"
+            inputMode="tel"
             value={phone}
-            onChange={(e) =>
-              setPhone(
-                e.target.value
-                  .replace(/\D/g, "")
-                  .slice(0, 11)
-              )
-            }
+            onChange={(e) => {
+              const value = normalizeDigits(e.target.value)
+                .replace(/[^\d+]/g, "")
+                .slice(0, 13);
+
+              setPhone(value);
+            }}
             placeholder="شماره موبایل"
+            autoComplete="tel"
             dir="ltr"
             className="w-full h-12 rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-4 text-center text-zinc-800 dark:text-zinc-100"
           />

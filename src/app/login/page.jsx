@@ -11,12 +11,51 @@ function getSafeRedirect(value) {
     return "/";
   }
 
-  // جلوگیری از redirect loop
   if (value.startsWith("/login") || value.startsWith("/verify-phone")) {
     return "/";
   }
 
   return value;
+}
+
+// تبدیل اعداد فارسی و عربی به انگلیسی
+function normalizeDigits(value) {
+  return value
+    .replace(/[۰-۹]/g, (char) =>
+      String("۰۱۲۳۴۵۶۷۸۹".indexOf(char))
+    )
+    .replace(/[٠-٩]/g, (char) =>
+      String("٠١٢٣٤٥٦٧٨٩".indexOf(char))
+    );
+}
+
+// تبدیل شماره ایران به فرمت استاندارد دیتابیس:
+// 09xxxxxxxxx
+function normalizeIranPhone(value) {
+  let phone = normalizeDigits(value);
+
+  // حذف فاصله، خط تیره و پرانتز
+  phone = phone.replace(/[\s()-]/g, "");
+
+  // فقط + ابتدای شماره مجاز است
+  phone = phone.replace(/(?!^)\+/g, "");
+
+  // +989xxxxxxxxx → 989xxxxxxxxx
+  if (phone.startsWith("+98")) {
+    phone = phone.slice(1);
+  }
+
+  // 989xxxxxxxxx → 09xxxxxxxxx
+  if (/^989\d{9}$/.test(phone)) {
+    return `0${phone.slice(2)}`;
+  }
+
+  // 09xxxxxxxxx
+  if (/^09\d{9}$/.test(phone)) {
+    return phone;
+  }
+
+  return null;
 }
 
 function LoginContent() {
@@ -37,14 +76,9 @@ function LoginContent() {
     e.preventDefault();
     setError("");
 
-    const cleanPhone = phone.trim();
+    const normalizedPhone = normalizeIranPhone(phone);
 
-    if (!cleanPhone) {
-      setError("شماره موبایل را وارد کنید");
-      return;
-    }
-
-    if (!/^09\d{9}$/.test(cleanPhone)) {
+    if (!normalizedPhone) {
       setError("شماره موبایل معتبر نیست");
       return;
     }
@@ -57,17 +91,19 @@ function LoginContent() {
     setLoading(true);
 
     try {
-      const data = await login(cleanPhone, password);
+      const data = await login(normalizedPhone, password);
 
-      // کاربر لاگین شده ولی شماره‌اش هنوز تأیید نشده
-      if (!data.isPhoneVerified) {
+      // کاربر وارد شده ولی شماره موبایل هنوز تأیید نشده
+      if (!data?.isPhoneVerified) {
         router.replace(
-          `/verify-phone?redirect=${encodeURIComponent(redirect)}`
+          `/verify-phone?phone=${encodeURIComponent(
+            normalizedPhone
+          )}&redirect=${encodeURIComponent(redirect)}`
         );
         return;
       }
 
-      // ورود کامل
+      // کاربر تأیید شده
       router.replace(redirect);
     } catch (err) {
       setError(
@@ -83,14 +119,11 @@ function LoginContent() {
       className="relative flex min-h-screen items-center justify-center bg-[var(--background-app)] px-4 py-6"
       dir="rtl"
     >
-      {/* Theme - top left of the page */}
       <div className="fixed left-4 top-4 z-50 sm:left-5 sm:top-5">
         <ThemeToggle />
       </div>
 
-      {/* Login Card */}
       <div className="card w-full max-w-md p-6 sm:p-8">
-        {/* Logo */}
         <div className="mb-6 flex justify-center">
           <img
             src="/images/logo.png"
@@ -99,7 +132,6 @@ function LoginContent() {
           />
         </div>
 
-        {/* Title */}
         <h1 className="mb-6 text-center text-2xl font-black text-[var(--color-primary)] dark:text-white">
           ورود
         </h1>
@@ -108,14 +140,16 @@ function LoginContent() {
           {/* Phone */}
           <input
             type="tel"
-            inputMode="numeric"
+            inputMode="tel"
             placeholder="شماره موبایل"
             value={phone}
-            onChange={(e) =>
-              setPhone(
-                e.target.value.replace(/\D/g, "").slice(0, 11)
-              )
-            }
+            onChange={(e) => {
+              const value = normalizeDigits(e.target.value)
+                .replace(/[^\d+]/g, "")
+                .slice(0, 13);
+
+              setPhone(value);
+            }}
             autoComplete="tel"
             dir="ltr"
             className="h-12 w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] px-4 text-sm text-[var(--color-text)] transition placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-accent)] focus:outline-none"
@@ -177,14 +211,12 @@ function LoginContent() {
             </button>
           </div>
 
-          {/* Error */}
           {error && (
             <p className="text-center text-sm text-red-500">
               {error}
             </p>
           )}
 
-          {/* Submit */}
           <button
             type="submit"
             disabled={loading}
@@ -194,7 +226,6 @@ function LoginContent() {
           </button>
         </form>
 
-        {/* Register */}
         <p className="mt-5 text-center text-sm text-[var(--color-text-muted)]">
           حساب کاربری ندارید؟{" "}
           <Link
@@ -205,7 +236,6 @@ function LoginContent() {
           </Link>
         </p>
 
-        {/* Forgot password */}
         <p className="mt-4 text-center text-sm text-[var(--color-text-muted)]">
           <Link
             href="/forgot-password"

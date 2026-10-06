@@ -12,6 +12,7 @@ export async function seedUsers(prisma) {
       password,
       role: "ADMIN",
       isActive: true,
+      isPhoneVerified: true,
     },
 
     {
@@ -20,6 +21,7 @@ export async function seedUsers(prisma) {
       password,
       role: "MANAGER",
       isActive: true,
+      isPhoneVerified: true,
     },
 
     {
@@ -28,14 +30,17 @@ export async function seedUsers(prisma) {
       password,
       role: "MANAGER",
       isActive: true,
+      isPhoneVerified: true,
     },
 
+    // این کاربر برای تست مسیر OTP عمداً تأییدنشده است
     {
       name: "امیر محمدی",
       phone: "09120000004",
       password,
       role: "CUSTOMER",
       isActive: true,
+      isPhoneVerified: false,
     },
 
     {
@@ -44,6 +49,7 @@ export async function seedUsers(prisma) {
       password,
       role: "CUSTOMER",
       isActive: true,
+      isPhoneVerified: true,
     },
 
     {
@@ -52,6 +58,7 @@ export async function seedUsers(prisma) {
       password,
       role: "CUSTOMER",
       isActive: true,
+      isPhoneVerified: true,
     },
 
     {
@@ -60,6 +67,7 @@ export async function seedUsers(prisma) {
       password,
       role: "CUSTOMER",
       isActive: true,
+      isPhoneVerified: true,
     },
 
     {
@@ -68,6 +76,7 @@ export async function seedUsers(prisma) {
       password,
       role: "CUSTOMER",
       isActive: true,
+      isPhoneVerified: true,
     },
 
     {
@@ -76,6 +85,7 @@ export async function seedUsers(prisma) {
       password,
       role: "CUSTOMER",
       isActive: true,
+      isPhoneVerified: true,
     },
 
     {
@@ -84,6 +94,7 @@ export async function seedUsers(prisma) {
       password,
       role: "CUSTOMER",
       isActive: true,
+      isPhoneVerified: true,
     },
 
     {
@@ -92,6 +103,7 @@ export async function seedUsers(prisma) {
       password,
       role: "CUSTOMER",
       isActive: true,
+      isPhoneVerified: true,
     },
 
     {
@@ -100,6 +112,7 @@ export async function seedUsers(prisma) {
       password,
       role: "CUSTOMER",
       isActive: true,
+      isPhoneVerified: true,
     },
 
     {
@@ -108,6 +121,7 @@ export async function seedUsers(prisma) {
       password,
       role: "CUSTOMER",
       isActive: false,
+      isPhoneVerified: true,
     },
 
     {
@@ -116,6 +130,7 @@ export async function seedUsers(prisma) {
       password,
       role: "CUSTOMER",
       isActive: true,
+      isPhoneVerified: true,
     },
 
     {
@@ -124,6 +139,7 @@ export async function seedUsers(prisma) {
       password,
       role: "CUSTOMER",
       isActive: true,
+      isPhoneVerified: true,
     },
   ];
 

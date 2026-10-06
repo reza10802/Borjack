@@ -1,7 +1,16 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
+import jwt from "jsonwebtoken";
+import { randomInt } from "node:crypto";
 import { prisma } from "@/lib/db";
 import { sendOtpSchema } from "@/lib/validations/auth";
 import { sendOtpSms } from "@/lib/sms";
+
+const JWT_SECRET = process.env.JWT_SECRET;
+
+if (!JWT_SECRET) {
+  throw new Error("JWT_SECRET is not set in environment variables");
+}
 
 const OTP_RESEND_COOLDOWN_MS = 2 * 60 * 1000;
 const OTP_EXPIRES_MS = 2 * 60 * 1000;
@@ -18,11 +27,16 @@ export async function POST(req) {
 
       return NextResponse.json(
         { error: firstError },
-        { status: 400 },
+        { status: 400 }
       );
     }
 
+    // auth.js شماره را به فرمت 09xxxxxxxxx نرمال می‌کند
     const { phone, purpose } = parsed.data;
+
+    // ─────────────────────────────────────────────
+    // بررسی کاربر
+    // ─────────────────────────────────────────────
 
     const user = await prisma.user.findUnique({
       where: { phone },
@@ -34,27 +48,27 @@ export async function POST(req) {
       },
     });
 
-    // -------------------------
-    // بررسی کاربر
-    // -------------------------
-
     if (!user) {
       return NextResponse.json(
-        { error: "کاربری با این شماره موبایل پیدا نشد." },
-        { status: 404 },
+        {
+          error: "کاربری با این شماره موبایل پیدا نشد.",
+        },
+        { status: 404 }
       );
     }
 
     if (!user.isActive) {
       return NextResponse.json(
-        { error: "حساب کاربری شما مسدود شده است." },
-        { status: 403 },
+        {
+          error: "حساب کاربری شما مسدود شده است.",
+        },
+        { status: 403 }
       );
     }
 
-    // -------------------------
+    // ─────────────────────────────────────────────
     // VERIFY PHONE
-    // -------------------------
+    // ─────────────────────────────────────────────
 
     if (purpose === "VERIFY_PHONE") {
       if (user.isPhoneVerified) {
@@ -62,14 +76,61 @@ export async function POST(req) {
           {
             error: "شماره موبایل شما قبلاً تایید شده است.",
           },
-          { status: 400 },
+          { status: 400 }
+        );
+      }
+
+      const cookieStore = await cookies();
+
+      const pendingToken = cookieStore.get(
+        "phoneVerificationToken"
+      )?.value;
+
+      if (!pendingToken) {
+        return NextResponse.json(
+          {
+            error:
+              "جلسه تایید شماره منقضی شده است. دوباره وارد شوید.",
+          },
+          { status: 401 }
+        );
+      }
+
+      let pendingPayload;
+
+      try {
+        pendingPayload = jwt.verify(
+          pendingToken,
+          JWT_SECRET
+        );
+      } catch {
+        return NextResponse.json(
+          {
+            error:
+              "جلسه تایید شماره منقضی شده است. دوباره وارد شوید.",
+          },
+          { status: 401 }
+        );
+      }
+
+      if (
+        pendingPayload?.purpose !==
+          "PHONE_VERIFICATION_PENDING" ||
+        pendingPayload?.id !== user.id ||
+        pendingPayload?.phone !== user.phone
+      ) {
+        return NextResponse.json(
+          {
+            error: "جلسه تایید شماره معتبر نیست.",
+          },
+          { status: 403 }
         );
       }
     }
 
-    // -------------------------
+    // ─────────────────────────────────────────────
     // COOLDOWN
-    // -------------------------
+    // ─────────────────────────────────────────────
 
     const lastOtp = await prisma.otpCode.findFirst({
       where: {
@@ -86,39 +147,34 @@ export async function POST(req) {
       Date.now() - lastOtp.createdAt.getTime() <
         OTP_RESEND_COOLDOWN_MS
     ) {
+      const remainingSeconds = Math.ceil(
+        (OTP_RESEND_COOLDOWN_MS -
+          (Date.now() - lastOtp.createdAt.getTime())) /
+          1000
+      );
+
       return NextResponse.json(
         {
-          error: "لطفاً کمی صبر کنید و دوباره تلاش کنید.",
+          error: `لطفاً ${remainingSeconds} ثانیه صبر کنید و دوباره تلاش کنید.`,
         },
-        { status: 429 },
+        { status: 429 }
       );
     }
 
-    // -------------------------
-    // CREATE OTP
-    // -------------------------
+    // ─────────────────────────────────────────────
+    // CREATE SECURE OTP
+    // ─────────────────────────────────────────────
 
-    const code = Math.floor(
-      100000 + Math.random() * 900000,
-    ).toString();
+    const code = randomInt(100000, 1000000).toString();
 
     const expiresAt = new Date(
-      Date.now() + OTP_EXPIRES_MS,
+      Date.now() + OTP_EXPIRES_MS
     );
 
-    // OTPهای قبلی همین purpose باطل شوند
-    await prisma.otpCode.updateMany({
-      where: {
-        phone,
-        purpose,
-        used: false,
-      },
-      data: {
-        used: true,
-      },
-    });
-
-    await prisma.otpCode.create({
+    // فعلاً OTP جدید ساخته می‌شود.
+    // اگر SMS شکست بخورد، همین رکورد حذف می‌شود
+    // تا cooldown بی‌دلیل ایجاد نشود.
+    const newOtp = await prisma.otpCode.create({
       data: {
         phone,
         code,
@@ -127,11 +183,43 @@ export async function POST(req) {
       },
     });
 
-    // -------------------------
+    // ─────────────────────────────────────────────
     // SEND SMS
-    // -------------------------
+    // ─────────────────────────────────────────────
 
-    await sendOtpSms(phone, code, purpose);
+    try {
+      await sendOtpSms(phone, code, purpose);
+    } catch (smsError) {
+      console.error("SMS SEND ERROR:", smsError);
+
+      // OTP ایجادشده بی‌اعتبار و حذف شود
+      await prisma.otpCode.delete({
+        where: {
+          id: newOtp.id,
+        },
+      });
+
+      throw smsError;
+    }
+
+    // ─────────────────────────────────────────────
+    // فقط بعد از موفقیت ارسال SMS،
+    // OTPهای قبلی همین purpose باطل شوند.
+    // ─────────────────────────────────────────────
+
+    await prisma.otpCode.updateMany({
+      where: {
+        phone,
+        purpose,
+        used: false,
+        id: {
+          not: newOtp.id,
+        },
+      },
+      data: {
+        used: true,
+      },
+    });
 
     return NextResponse.json({
       success: true,
@@ -142,9 +230,11 @@ export async function POST(req) {
 
     return NextResponse.json(
       {
-        error: "خطا در ارسال کد تایید.",
+        error:
+          error?.message ||
+          "خطا در ارسال کد تایید.",
       },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }

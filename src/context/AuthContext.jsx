@@ -1,6 +1,11 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect } from "react";
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+} from "react";
 import { useRouter } from "next/navigation";
 
 const AuthContext = createContext(undefined);
@@ -8,43 +13,95 @@ const AuthContext = createContext(undefined);
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+
   const router = useRouter();
+
+  // ─────────────────────────────────────────────
+  // Load current session
+  // ─────────────────────────────────────────────
 
   useEffect(() => {
     const controller = new AbortController();
 
     fetch("/api/auth/me", {
       cache: "no-store",
+      credentials: "include",
       signal: controller.signal,
     })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => setUser(data))
+      .then((res) => {
+        if (!res.ok) {
+          return null;
+        }
+
+        return res.json();
+      })
+      .then((data) => {
+        setUser(data);
+      })
       .catch((err) => {
         if (err.name !== "AbortError") {
+          console.error("AUTH INIT ERROR:", err);
           setUser(null);
         }
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        setLoading(false);
+      });
 
     return () => controller.abort();
   }, []);
 
+  // ─────────────────────────────────────────────
+  // Login
+  // ─────────────────────────────────────────────
+
   const login = async (phone, password) => {
     const res = await fetch("/api/auth/login", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phone, password }),
+      headers: {
+        "Content-Type": "application/json",
+      },
+      credentials: "include",
+      cache: "no-store",
+      body: JSON.stringify({
+        phone,
+        password,
+      }),
     });
 
     const data = await res.json();
 
+    // Login failed
     if (!res.ok) {
-      throw new Error(data.error || "خطا در ورود");
+      throw new Error(data?.error || "خطا در ورود");
     }
 
-    await refreshUser();
+    // شماره هنوز تأیید نشده
+    if (!data?.isPhoneVerified) {
+      setUser(null);
+      return data;
+    }
+
+    // Login موفق
+    // حداقل اطلاعات کاربر را بلافاصله داخل state قرار بده
+    setUser(data);
+
+    // اطلاعات کامل session را از سرور بگیر
+    const refreshedUser = await refreshUser();
+
+    if (refreshedUser) {
+      setUser(refreshedUser);
+      return refreshedUser;
+    }
+
+    // حتی اگر refresh شکست خورد،
+    // login موفق را از بین نمی‌بریم
     return data;
   };
+
+  // ─────────────────────────────────────────────
+  // Register
+  // ─────────────────────────────────────────────
 
   const register = async ({ name, phone, password }) => {
     const res = await fetch("/api/auth/register", {
@@ -52,6 +109,7 @@ export function AuthProvider({ children }) {
       headers: {
         "Content-Type": "application/json",
       },
+      credentials: "include",
       body: JSON.stringify({
         name,
         phone,
@@ -62,36 +120,57 @@ export function AuthProvider({ children }) {
     const data = await res.json();
 
     if (!res.ok) {
-      throw new Error(data.error || "خطا در ثبت‌نام");
+      throw new Error(data?.error || "خطا در ثبت‌نام");
     }
 
+    // بعد از ثبت‌نام، login وضعیت تأیید شماره را تعیین می‌کند
     return login(phone, password);
   };
 
-  const logout = async () => {
-    const res = await fetch("/api/auth/logout", {
-      method: "POST",
-    });
-
-    if (res.ok) {
-      setUser(null);
-      router.push("/login");
-    }
-  };
+  // ─────────────────────────────────────────────
+  // Refresh session
+  // ─────────────────────────────────────────────
 
   const refreshUser = async () => {
     try {
-      const res = await fetch("/api/auth/me", { cache: "no-store" });
+      const res = await fetch("/api/auth/me", {
+        cache: "no-store",
+        credentials: "include",
+      });
+
       if (!res.ok) {
-        setUser(null);
         return null;
       }
+
       const data = await res.json();
+
       setUser(data);
+
       return data;
-    } catch {
-      setUser(null);
+    } catch (error) {
+      console.error("REFRESH USER ERROR:", error);
+
       return null;
+    }
+  };
+
+  // ─────────────────────────────────────────────
+  // Logout
+  // ─────────────────────────────────────────────
+
+  const logout = async () => {
+    try {
+      const res = await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      });
+
+      if (res.ok) {
+        setUser(null);
+        router.push("/login");
+      }
+    } catch (error) {
+      console.error("LOGOUT ERROR:", error);
     }
   };
 

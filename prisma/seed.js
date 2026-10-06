@@ -29,6 +29,7 @@ async function main() {
 
   console.log("🌱 Reset Database");
 
+  await prisma.otpCode.deleteMany();
   await prisma.review.deleteMany();
   await prisma.productSpec.deleteMany();
   await prisma.productImage.deleteMany();

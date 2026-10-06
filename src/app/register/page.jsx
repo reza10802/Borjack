@@ -6,12 +6,76 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import ThemeToggle from "@/components/ThemeToggle";
 
+// ─────────────────────────────────────────────
+// Redirect
+// ─────────────────────────────────────────────
+
+function getSafeRedirect(value) {
+  if (!value || !value.startsWith("/") || value.startsWith("//")) {
+    return "/";
+  }
+
+  if (value.startsWith("/login") || value.startsWith("/register") || value.startsWith("/verify-phone")) {
+    return "/";
+  }
+
+  return value;
+}
+
+// ─────────────────────────────────────────────
+// Phone helpers
+// ─────────────────────────────────────────────
+
+// تبدیل اعداد فارسی و عربی به انگلیسی
+function normalizeDigits(value) {
+  return value
+    .replace(/[۰-۹]/g, (char) =>
+      String("۰۱۲۳۴۵۶۷۸۹".indexOf(char))
+    )
+    .replace(/[٠-٩]/g, (char) =>
+      String("٠١٢٣٤٥٦٧٨٩".indexOf(char))
+    );
+}
+
+// تبدیل شماره ایران به فرمت استاندارد:
+// 09xxxxxxxxx
+function normalizeIranPhone(value) {
+  let phone = normalizeDigits(value);
+
+  // حذف فاصله، خط تیره و پرانتز
+  phone = phone.replace(/[\s()-]/g, "");
+
+  // فقط + در ابتدای شماره مجاز است
+  phone = phone.replace(/(?!^)\+/g, "");
+
+  // +989xxxxxxxxx → 989xxxxxxxxx
+  if (phone.startsWith("+98")) {
+    phone = phone.slice(1);
+  }
+
+  // 989xxxxxxxxx → 09xxxxxxxxx
+  if (/^989\d{9}$/.test(phone)) {
+    return `0${phone.slice(2)}`;
+  }
+
+  // 09xxxxxxxxx
+  if (/^09\d{9}$/.test(phone)) {
+    return phone;
+  }
+
+  return null;
+}
+
+// ─────────────────────────────────────────────
+// Register content
+// ─────────────────────────────────────────────
+
 function RegisterContent() {
   const { register } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const redirect = searchParams.get("redirect") || "/";
+  const redirect = getSafeRedirect(searchParams.get("redirect"));
 
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -30,23 +94,34 @@ function RegisterContent() {
       return;
     }
 
+    const normalizedPhone = normalizeIranPhone(phone);
+
+    if (!normalizedPhone) {
+      setError("شماره موبایل معتبر نیست");
+      return;
+    }
+
     setLoading(true);
 
     try {
       const data = await register({
         name: name.trim(),
-        phone: phone.trim(),
+        phone: normalizedPhone,
         password,
       });
 
-      if (!data.isPhoneVerified) {
-        router.push(
-          `/verify-phone?redirect=${encodeURIComponent(redirect)}`
+      // کاربر ثبت‌نام شده ولی شماره هنوز تأیید نشده
+      if (!data?.isPhoneVerified) {
+        router.replace(
+          `/verify-phone?phone=${encodeURIComponent(
+            normalizedPhone
+          )}&redirect=${encodeURIComponent(redirect)}`
         );
         return;
       }
 
-      router.push(redirect);
+      // کاربر تأیید شده
+      router.replace(redirect);
     } catch (err) {
       setError(err?.message || "خطا در ثبت‌نام");
     } finally {
@@ -59,7 +134,7 @@ function RegisterContent() {
       className="relative flex min-h-screen items-center justify-center bg-[var(--background-app)] px-4 py-6"
       dir="rtl"
     >
-      {/* Theme - top left of page */}
+      {/* Theme */}
       <div className="fixed left-4 top-4 z-50 sm:left-5 sm:top-5">
         <ThemeToggle />
       </div>
@@ -95,16 +170,18 @@ function RegisterContent() {
           {/* Phone */}
           <input
             type="tel"
-            inputMode="numeric"
+            inputMode="tel"
             placeholder="شماره موبایل"
             value={phone}
-            onChange={(e) =>
-              setPhone(
-                e.target.value.replace(/\D/g, "").slice(0, 11)
-              )
-            }
+            onChange={(e) => {
+              const value = normalizeDigits(e.target.value)
+                .replace(/[^\d+]/g, "")
+                .slice(0, 13);
+
+              setPhone(value);
+            }}
             autoComplete="tel"
-            dir="ltr"
+            dir="rtl"
             className="h-12 w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] px-4 text-sm text-[var(--color-text)] transition placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-accent)] focus:outline-none"
           />
 

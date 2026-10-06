@@ -10,6 +10,8 @@ if (!JWT_SECRET) {
   throw new Error("JWT_SECRET is not set in environment variables");
 }
 
+const PENDING_VERIFICATION_MAX_AGE = 10 * 60;
+
 export async function POST(req) {
   try {
     const body = await req.json();
@@ -19,7 +21,11 @@ export async function POST(req) {
     if (!parsed.success) {
       const firstError =
         parsed.error.issues[0]?.message || "اطلاعات نامعتبر است";
-      return NextResponse.json({ error: firstError }, { status: 400 });
+
+      return NextResponse.json(
+        { error: firstError },
+        { status: 400 }
+      );
     }
 
     const { phone, password } = parsed.data;
@@ -31,37 +37,89 @@ export async function POST(req) {
     if (!user) {
       return NextResponse.json(
         { error: "این حساب وجود ندارد" },
-        { status: 404 },
+        { status: 404 }
       );
     }
+
     if (!user.isActive) {
       return NextResponse.json(
         {
           error: "حساب کاربری شما توسط مدیریت غیرفعال شده است.",
         },
-        {
-          status: 403,
-        },
+        { status: 403 }
       );
     }
 
-    const isValid = await bcrypt.compare(password, user.password);
+    const isValid = await bcrypt.compare(
+      password,
+      user.password
+    );
 
     if (!isValid) {
       return NextResponse.json(
         { error: "رمز عبور اشتباه است" },
-        { status: 401 },
+        { status: 401 }
       );
     }
+
+    // ─────────────────────────────────────────────
+    // کاربر هنوز شماره موبایل را تأیید نکرده
+    // فقط یک token موقت برای مرحله OTP می‌سازیم.
+    // این token session اصلی نیست.
+    // ─────────────────────────────────────────────
+
+    if (!user.isPhoneVerified) {
+      const pendingToken = jwt.sign(
+        {
+          id: user.id,
+          phone: user.phone,
+          purpose: "PHONE_VERIFICATION_PENDING",
+        },
+        JWT_SECRET,
+        {
+          expiresIn: "10m",
+        }
+      );
+
+      const response = NextResponse.json({
+        id: user.id,
+        name: user.name,
+        phone: user.phone,
+        email: user.email,
+        role: user.role,
+        isPhoneVerified: false,
+        requiresPhoneVerification: true,
+      });
+
+      response.cookies.set(
+        "phoneVerificationToken",
+        pendingToken,
+        {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === "production",
+          sameSite: "lax",
+          maxAge: PENDING_VERIFICATION_MAX_AGE,
+          path: "/",
+        }
+      );
+
+      return response;
+    }
+
+    // ─────────────────────────────────────────────
+    // کاربر تأیید شده → session اصلی
+    // ─────────────────────────────────────────────
 
     const token = jwt.sign(
       {
         id: user.id,
         role: user.role,
-        isPhoneVerified: user.isPhoneVerified,
+        isPhoneVerified: true,
       },
       JWT_SECRET,
-      { expiresIn: "7d" },
+      {
+        expiresIn: "7d",
+      }
     );
 
     const response = NextResponse.json({
@@ -70,7 +128,8 @@ export async function POST(req) {
       phone: user.phone,
       email: user.email,
       role: user.role,
-      isPhoneVerified: user.isPhoneVerified,
+      isPhoneVerified: true,
+      requiresPhoneVerification: false,
     });
 
     response.cookies.set("token", token, {
@@ -81,9 +140,26 @@ export async function POST(req) {
       path: "/",
     });
 
+    // اگر قبلاً token موقت وجود داشته، پاک شود
+    response.cookies.set(
+      "phoneVerificationToken",
+      "",
+      {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 0,
+        path: "/",
+      }
+    );
+
     return response;
   } catch (error) {
     console.error("LOGIN ERROR:", error);
-    return NextResponse.json({ error: "خطا در ورود" }, { status: 500 });
+
+    return NextResponse.json(
+      { error: "خطا در ورود" },
+      { status: 500 }
+    );
   }
 }

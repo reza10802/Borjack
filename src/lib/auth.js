@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import jwt from "jsonwebtoken";
 import { prisma } from "@/lib/db";
-import { headers } from "next/headers";
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -29,18 +28,27 @@ export async function getSessionUser() {
   try {
     const cookieStore = await cookies();
 
-    const token =
-      cookieStore.get("token")?.value ||
-      cookieStore.get("accessToken")?.value ||
-      cookieStore.get("auth-token")?.value;
+    // فقط session اصلی
+    const token = cookieStore.get("token")?.value;
 
-    if (!token) return null;
+    if (!token) {
+      return null;
+    }
 
     const decoded = jwt.verify(token, JWT_SECRET);
-    if (!decoded?.id) return null;
+
+    // JWT باید session اصلی و متعلق به کاربر تاییدشده باشد
+    if (
+      !decoded?.id ||
+      decoded?.isPhoneVerified !== true
+    ) {
+      return null;
+    }
 
     const user = await prisma.user.findUnique({
-      where: { id: decoded.id },
+      where: {
+        id: decoded.id,
+      },
       select: {
         id: true,
         name: true,
@@ -59,10 +67,23 @@ export async function getSessionUser() {
       },
     });
 
-    if (!user) return null;
-    if (!user.isActive) return null;
+    if (!user) {
+      return null;
+    }
 
-    const defaultAddress = user.addresses[0] || null;
+    if (!user.isActive) {
+      return null;
+    }
+
+    // حتی اگر JWT معتبر باشد،
+    // وضعیت فعلی دیتابیس باید هم تاییدشده باشد.
+    if (!user.isPhoneVerified) {
+      return null;
+    }
+
+    const defaultAddress =
+      user.addresses[0] || null;
+
     return {
       id: user.id,
       name: user.name,
@@ -71,12 +92,23 @@ export async function getSessionUser() {
       role: user.role,
       isPhoneVerified: user.isPhoneVerified,
 
-      address: defaultAddress?.address ?? null,
-      postalCode: defaultAddress?.postalCode ?? null,
-      provinceName: defaultAddress?.provinceName ?? null,
-      cityName: defaultAddress?.cityName ?? null,
-      receiverName: defaultAddress?.receiverName ?? null,
-      receiverPhone: defaultAddress?.receiverPhone ?? null,
+      address:
+        defaultAddress?.address ?? null,
+
+      postalCode:
+        defaultAddress?.postalCode ?? null,
+
+      provinceName:
+        defaultAddress?.provinceName ?? null,
+
+      cityName:
+        defaultAddress?.cityName ?? null,
+
+      receiverName:
+        defaultAddress?.receiverName ?? null,
+
+      receiverPhone:
+        defaultAddress?.receiverPhone ?? null,
     };
   } catch (err) {
     console.error("AUTH ERROR:", err);
@@ -90,42 +122,74 @@ export async function requireAuth() {
   if (!user) {
     return {
       error: NextResponse.json(
-        { error: "ابتدا وارد حساب شوید" },
-        { status: 401 },
+        {
+          error: "ابتدا وارد حساب شوید",
+        },
+        {
+          status: 401,
+        },
       ),
     };
   }
 
-  return { user };
+  return {
+    user,
+  };
 }
 
 export async function requireVerifiedUser() {
   const auth = await requireAuth();
-  if (auth.error) return auth;
+
+  if (auth.error) {
+    return auth;
+  }
 
   if (!auth.user.isPhoneVerified) {
     return {
       error: NextResponse.json(
-        { error: "شماره موبایل هنوز تایید نشده است" },
-        { status: 403 },
+        {
+          error:
+            "شماره موبایل هنوز تایید نشده است",
+        },
+        {
+          status: 403,
+        },
       ),
     };
   }
 
-  return { user: auth.user };
+  return {
+    user: auth.user,
+  };
 }
 
-export async function requireRoles(allowedRoles = []) {
+export async function requireRoles(
+  allowedRoles = [],
+) {
   const auth = await requireAuth();
-  if (auth.error) return auth;
 
-  if (!allowedRoles.includes(auth.user.role)) {
+  if (auth.error) {
+    return auth;
+  }
+
+  if (
+    !allowedRoles.includes(auth.user.role)
+  ) {
     return {
-      error: NextResponse.json({ error: "دسترسی غیرمجاز" }, { status: 403 }),
+      error: NextResponse.json(
+        {
+          error: "دسترسی غیرمجاز",
+        },
+        {
+          status: 403,
+        },
+      ),
     };
   }
 
-  return { user: auth.user };
+  return {
+    user: auth.user,
+  };
 }
 
 export async function requireAdmin() {
@@ -133,10 +197,16 @@ export async function requireAdmin() {
 }
 
 export async function requireManagerOrAdmin() {
-  return requireRoles([ROLES.ADMIN, ROLES.MANAGER]);
+  return requireRoles([
+    ROLES.ADMIN,
+    ROLES.MANAGER,
+  ]);
 }
 
-export function canManagerChangeOrderStatus(from, to) {
+export function canManagerChangeOrderStatus(
+  from,
+  to,
+) {
   const transitions = {
     PENDING: ["PROCESSING"],
     PROCESSING: ["READY_TO_SHIP"],
@@ -146,7 +216,9 @@ export function canManagerChangeOrderStatus(from, to) {
     CANCELLED: [],
   };
 
-  return transitions[from]?.includes(to) ?? false;
+  return (
+    transitions[from]?.includes(to) ?? false
+  );
 }
 
 export async function logAction({
@@ -161,12 +233,13 @@ export async function logAction({
   try {
     const headersList = await headers();
 
-    // اولویت با x-forwarded-for
-    // چون روی VPS / reverse proxy معمولاً IP واقعی کلاینت در این هدر قرار می‌گیرد.
-    const forwardedFor = headersList.get("x-forwarded-for");
+    const forwardedFor =
+      headersList.get("x-forwarded-for");
 
     const ipAddress =
-      forwardedFor?.split(",")[0]?.trim() ||
+      forwardedFor
+        ?.split(",")[0]
+        ?.trim() ||
       headersList.get("x-real-ip") ||
       null;
 
@@ -175,7 +248,9 @@ export async function logAction({
         userId,
         action,
         entityType,
-        entityId: entityId ? String(entityId) : "",
+        entityId: entityId
+          ? String(entityId)
+          : "",
         description,
         oldValue,
         newValue,
@@ -183,6 +258,9 @@ export async function logAction({
       },
     });
   } catch (e) {
-    console.error("Audit log error:", e);
+    console.error(
+      "Audit log error:",
+      e,
+    );
   }
 }

@@ -1,4 +1,5 @@
 // src/middleware.js
+
 import { NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 
@@ -24,110 +25,207 @@ const MANAGER_ALLOWED_PAGES = [
   "/admin/reviews",
 ];
 
-const VERIFIED_ONLY_PAGES = ["/checkout"];
+const VERIFIED_ONLY_PAGES = [
+  "/checkout",
+];
 
 async function getTokenPayload(req) {
   try {
-    const token =
-      req.cookies.get("token")?.value ||
-      req.cookies.get("accessToken")?.value ||
-      req.cookies.get("auth-token")?.value;
+    // فقط session اصلی
+    const token = req.cookies.get("token")?.value;
 
-    if (!token) return null;
+    if (!token) {
+      return null;
+    }
 
-    const { payload } = await jwtVerify(token, secret);
+    const { payload } = await jwtVerify(
+      token,
+      secret
+    );
+
+    // Session اصلی باید متعلق به کاربر تاییدشده باشد
+    if (
+      !payload?.id ||
+      payload?.isPhoneVerified !== true
+    ) {
+      return null;
+    }
 
     return payload;
   } catch (error) {
-    console.error("MIDDLEWARE JWT ERROR:", error);
+    console.error(
+      "PROXY JWT ERROR:",
+      error
+    );
+
     return null;
   }
 }
 
 export async function proxy(req) {
-  console.log("🔥 MIDDLEWARE RUNNING:", req.nextUrl.pathname);
   const { pathname } = req.nextUrl;
 
+  const isAdminPage =
+    pathname.startsWith("/admin");
 
+  const needsVerifiedCheck =
+    VERIFIED_ONLY_PAGES.some(
+      (page) =>
+        pathname === page ||
+        pathname.startsWith(`${page}/`)
+    );
 
-  const needsVerifiedCheck = VERIFIED_ONLY_PAGES.some(
-    (page) => pathname === page || pathname.startsWith(page + "/")
-  );
-
-  if (!pathname.startsWith("/admin") && !needsVerifiedCheck) {
+  // صفحات عمومی
+  if (
+    !isAdminPage &&
+    !needsVerifiedCheck
+  ) {
     return NextResponse.next();
   }
 
   const payload = await getTokenPayload(req);
-  const role = payload?.role || null;
 
-  console.log("=== MIDDLEWARE ===");
-  console.log("PATH:", pathname);
-  console.log("HAS TOKEN:", !!payload);
-  console.log("USER ID:", payload?.id);
-  console.log("ROLE:", role);
-  console.log("PHONE VERIFIED:", payload?.isPhoneVerified);
-
+  // ─────────────────────────────────────────────
   // Checkout
+  // ─────────────────────────────────────────────
+
   if (needsVerifiedCheck) {
     if (!payload) {
+      const loginUrl = new URL(
+        "/login",
+        req.url
+      );
+
+      loginUrl.searchParams.set(
+        "redirect",
+        pathname
+      );
+
+      return NextResponse.redirect(loginUrl);
+    }
+
+    if (
+      payload.isPhoneVerified !== true
+    ) {
+      const verifyUrl = new URL(
+        "/verify-phone",
+        req.url
+      );
+
+      verifyUrl.searchParams.set(
+        "redirect",
+        pathname
+      );
+
       return NextResponse.redirect(
-        new URL(`/login?redirect=${pathname}`, req.url)
+        verifyUrl
       );
     }
 
-    if (!payload.isPhoneVerified) {
-      const verifyUrl = new URL("/verify-phone", req.url);
-      verifyUrl.searchParams.set("redirect", pathname);
-
-      return NextResponse.redirect(verifyUrl);
-    }
-  }
-
-  // سایر صفحات غیر ادمین
-  if (!pathname.startsWith("/admin")) {
     return NextResponse.next();
   }
 
-  // لاگین نیست
-  if (!role) {
-    return NextResponse.redirect(
-      new URL(`/login?redirect=${pathname}`, req.url)
-    );
-  }
+  // ─────────────────────────────────────────────
+  // Admin
+  // ─────────────────────────────────────────────
 
-  // فقط ADMIN و MANAGER
-  if (!["ADMIN", "MANAGER"].includes(role)) {
-    return NextResponse.redirect(new URL("/403", req.url));
-  }
+  if (isAdminPage) {
+    // بدون session اصلی
+    if (!payload) {
+      const loginUrl = new URL(
+        "/login",
+        req.url
+      );
 
-  // فقط ADMIN
-  if (
-    ADMIN_ONLY_PAGES.some(
-      (page) =>
-        pathname === page || pathname.startsWith(page + "/")
-    )
-  ) {
-    if (role !== "ADMIN") {
-      return NextResponse.redirect(new URL("/403", req.url));
+      loginUrl.searchParams.set(
+        "redirect",
+        pathname
+      );
+
+      return NextResponse.redirect(
+        loginUrl
+      );
     }
-  }
 
-  // محدودیت MANAGER
-  if (role === "MANAGER") {
-    const allowed = MANAGER_ALLOWED_PAGES.some(
-      (page) =>
-        pathname === page || pathname.startsWith(page + "/")
-    );
+    // حتی اگر JWT معتبر باشد،
+    // باید حتماً verified باشد.
+    if (
+      payload.isPhoneVerified !== true
+    ) {
+      const verifyUrl = new URL(
+        "/verify-phone",
+        req.url
+      );
 
-    if (!allowed) {
-      return NextResponse.redirect(new URL("/403", req.url));
+      verifyUrl.searchParams.set(
+        "redirect",
+        pathname
+      );
+
+      return NextResponse.redirect(
+        verifyUrl
+      );
     }
+
+    const role = payload.role;
+
+    // فقط ADMIN و MANAGER
+    if (
+      !["ADMIN", "MANAGER"].includes(role)
+    ) {
+      return NextResponse.redirect(
+        new URL("/403", req.url)
+      );
+    }
+
+    // ───────────────────────────────────────────
+    // فقط ADMIN
+    // ───────────────────────────────────────────
+
+    const isAdminOnlyPage =
+      ADMIN_ONLY_PAGES.some(
+        (page) =>
+          pathname === page ||
+          pathname.startsWith(`${page}/`)
+      );
+
+    if (
+      isAdminOnlyPage &&
+      role !== "ADMIN"
+    ) {
+      return NextResponse.redirect(
+        new URL("/403", req.url)
+      );
+    }
+
+    // ───────────────────────────────────────────
+    // محدودیت MANAGER
+    // ───────────────────────────────────────────
+
+    if (role === "MANAGER") {
+      const isAllowed =
+        MANAGER_ALLOWED_PAGES.some(
+          (page) =>
+            pathname === page ||
+            pathname.startsWith(`${page}/`)
+        );
+
+      if (!isAllowed) {
+        return NextResponse.redirect(
+          new URL("/403", req.url)
+        );
+      }
+    }
+
+    return NextResponse.next();
   }
 
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/checkout/:path*"],
+  matcher: [
+    "/admin/:path*",
+    "/checkout/:path*",
+  ],
 };
