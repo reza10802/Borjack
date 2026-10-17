@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, use } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import BackButton from "@/components/BackButton";
 import { BookmarkIcon as BookmarkOutline } from "@heroicons/react/24/outline";
@@ -28,13 +28,11 @@ const Stars = ({ rating, interactive = false, onRate }) => (
     </div>
 );
 
-export default function ProductPage({ params }) {
-    const { slug } = use(params);
+export default function ProductPage({ product }) {
+    const slug = product?.slug;
+
     const { user } = useAuth();
     const { addToCart } = useCart();
-
-    const [product, setProduct] = useState(null);
-    const [loading, setLoading] = useState(true);
 
     const [selectedImage, setSelectedImage] = useState(0);
     const [quantity, setQuantity] = useState(1);
@@ -52,35 +50,6 @@ export default function ProductPage({ params }) {
     const [wishlistLoading, setWishlistLoading] = useState(false);
     const [imageLoaded, setImageLoaded] = useState(false);
     const [lightboxOpen, setLightboxOpen] = useState(false);
-
-    useEffect(() => {
-        if (!slug) return;
-
-        const controller = new AbortController();
-
-        const fetchProduct = async () => {
-            try {
-                const res = await fetch(`/api/products/${slug}`, {
-                    signal: controller.signal,
-                });
-
-                if (!res.ok) throw new Error("failed");
-
-                const data = await res.json();
-                setProduct(data);
-            } catch (error) {
-                if (error.name !== "AbortError") {
-                    console.error(error);
-                }
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchProduct();
-
-        return () => controller.abort();
-    }, [slug]);
 
     useEffect(() => {
         const handleKey = (e) => {
@@ -140,14 +109,6 @@ export default function ProductPage({ params }) {
     useEffect(() => {
         setImageLoaded(false);
     }, [selectedImage]);
-
-    if (loading) {
-        return (
-            <div className="mx-auto max-w-7xl px-4 py-20 text-center text-gray-400">
-                در حال بارگذاری...
-            </div>
-        );
-    }
 
     if (!product) return null;
 

@@ -230,7 +230,7 @@ export default async function Page({ params }) {
         }}
       />
 
-      <ProductClient params={params} />
+      <ProductClient product={product} />
     </>
   );
 }
