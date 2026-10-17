@@ -3,6 +3,12 @@ import CategorySection from "@/components/CategorySection";
 import SpecialOffers from "@/components/SpecialOffers";
 import ProductGrid from "@/components/ProductGrid";
 
+export const metadata = {
+  alternates: {
+    canonical: "/",
+  },
+};
+
 export default function Home() {
   return (
     <div className="container-page py-6">
