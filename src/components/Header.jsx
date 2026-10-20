@@ -42,6 +42,7 @@ export default function Header() {
                         alt="لوگو"
                         width={52}
                         height={52}
+                        loading="eager"
                         className="rounded-xl object-contain"
                     />
                 </Link>

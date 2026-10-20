@@ -15,7 +15,7 @@ const SITE_TITLE =
 const SITE_DESCRIPTION =
   "در فروشگاه اینترنتی برجک، محصولات دیجیتال و پوشاک را بررسی کنید، مشخصات و قیمت محصولات را ببینید و گزینه مناسب خود را انتخاب کنید.";
 
-const SHARE_IMAGE = "/images/adsLogo.png";
+const SHARE_IMAGE = "/images/og-image.png";
 
 const websiteJsonLd = {
   "@context": "https://schema.org",

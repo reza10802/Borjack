@@ -37,11 +37,11 @@ export default async function ProductGrid() {
       <div className="mb-8 flex items-end justify-between">
         <h2 className="section-title relative inline-block">
           جدیدترین محصولات
-          <span className="absolute -bottom-2 right-0 h-1 w-14 rounded-full bg-orange-500"></span>
+          <span className="absolute -bottom-2 right-0 h-1 w-14 rounded-full bg-[var(--color-accent)]"></span>
         </h2>
         <Link
           href="/search"
-          className=" text-sm font-medium text-orange-500 transition hover:text-orange-600 "
+          className="text-sm font-medium text-[var(--color-accent)] transition hover:opacity-75"
         >
           مشاهده همه ←
         </Link>

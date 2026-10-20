@@ -20,7 +20,7 @@ const Stars = ({ rating, interactive = false, onRate }) => (
                 key={i}
                 onClick={() => interactive && onRate?.(i)}
                 className={`text-lg ${interactive ? "cursor-pointer transition-transform hover:scale-110" : ""
-                    } ${i <= Math.round(rating) ? "text-yellow-400" : "text-gray-200"}`}
+                    } ${i <= Math.round(rating) ? "text-[var(--color-accent)]" : "text-[var(--color-border)]"}`}
             >
                 ★
             </span>
@@ -234,14 +234,24 @@ export default function ProductPage({ product }) {
                 <BackButton />
                 <Breadcrumb
                     items={[
-                        {
-                            label: product.category?.title,
-                            href: `/category/${product.category?.slug}`,
-                        },
-                        {
-                            label: product.brand?.title,
-                            href: `/brand/${product.brand?.slug}`,
-                        },
+                        ...(product.category?.title
+                            ? [{
+                                label: product.category.title,
+                                ...(product.category.slug
+                                    ? { href: `/category/${product.category.slug}` }
+                                    : {}),
+                            }]
+                            : []),
+
+                        ...(product.brand?.title
+                            ? [{
+                                label: product.brand.title,
+                                ...(product.brand.slug
+                                    ? { href: `/brand/${product.brand.slug}` }
+                                    : {}),
+                            }]
+                            : []),
+
                         {
                             label: product.title,
                         },
@@ -251,7 +261,7 @@ export default function ProductPage({ product }) {
                     <div className="flex flex-col gap-3">
                         <div className="card relative aspect-square overflow-hidden">
                             {!imageLoaded && (
-                                <div className="absolute inset-0 animate-pulse bg-gray-200" />
+                                <div className="absolute inset-0 animate-pulse bg-[var(--color-surface-2)]" />
                             )}
                             <div
                                 onClick={() => setLightboxOpen(true)}
@@ -262,7 +272,7 @@ export default function ProductPage({ product }) {
                                     alt={product.title}
                                     fill
                                     priority={selectedImage === 0}
-                                    sizes="(max-width:768px)100vw,(max-width:1200px)50vw,40vw"
+                                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 40vw"
                                     onLoad={(e) => {
                                         if (e.target.complete) {
                                             setImageLoaded(true);
@@ -277,23 +287,31 @@ export default function ProductPage({ product }) {
                             {gallery.length > 1 && (
                                 <>
                                     <button
+                                        type="button"
                                         onClick={(e) => {
                                             e.stopPropagation();
                                             prevImage();
                                         }}
-                                        className="absolute right-4 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-white/90 shadow-md hover:bg-[var(--color-surface)] transition flex items-center justify-center"
+                                        aria-label="تصویر قبلی"
+                                        className="absolute right-4 top-1/2 z-10 inline-flex h-10 w-10 -translate-y-1/2 shrink-0 items-center justify-center rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] p-0 text-[var(--color-text)] shadow-md transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
                                     >
-                                        ❯
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="block h-5 w-5" aria-hidden="true">
+                                            <path d="m9 18 6-6-6-6" />
+                                        </svg>
                                     </button>
 
                                     <button
+                                        type="button"
                                         onClick={(e) => {
                                             e.stopPropagation();
                                             nextImage();
                                         }}
-                                        className="absolute left-4 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-white/90 shadow-md hover:bg-[var(--color-surface)] transition flex items-center justify-center"
+                                        aria-label="تصویر بعدی"
+                                        className="absolute left-4 top-1/2 z-10 inline-flex h-10 w-10 -translate-y-1/2 shrink-0 items-center justify-center rounded-full border border-[var(--color-border)] bg-[var(--color-surface)] p-0 text-[var(--color-text)] shadow-md transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
                                     >
-                                        ❮
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="block h-5 w-5" aria-hidden="true">
+                                            <path d="m15 18-6-6 6-6" />
+                                        </svg>
                                     </button>
                                 </>
                             )}
@@ -305,9 +323,9 @@ export default function ProductPage({ product }) {
                                     <button
                                         key={index}
                                         onClick={() => setSelectedImage(index)}
-                                        className={`transition-all rounded-full ${selectedImage === index
-                                            ? "w-8 h-2 bg-orange-500"
-                                            : "w-2 h-2 bg-gray-300"
+                                        className={`rounded-full transition-all ${selectedImage === index
+                                            ? "h-2 w-8 bg-[var(--color-accent)]"
+                                            : "h-2 w-2 bg-[var(--color-border)] hover:bg-[var(--color-text-muted)]"
                                             }`}
                                     />
                                 ))}
@@ -322,8 +340,8 @@ export default function ProductPage({ product }) {
                                         onClick={() => setSelectedImage(i)}
                                         className={`relative h-20 w-20 overflow-hidden rounded-2xl transition
                     ${selectedImage === i
-                                                ? "ring-2 ring-orange-500"
-                                                : "border border-zinc-200 hover:border-orange-300"
+                                                ? "ring-2 ring-[var(--color-accent)]"
+                                                : "border border-[var(--color-border)] hover:border-[var(--color-accent)]"
                                             }`}
                                     >
                                         <Image
@@ -342,36 +360,40 @@ export default function ProductPage({ product }) {
 
                     <div className="flex flex-col gap-4">
                         <div>
-                            <span className="rounded-full bg-orange-100 text-orange-600 px-3 py-1 text-xs">
+                            <span className="rounded-full bg-[var(--color-surface-2)] px-3 py-1 text-xs text-[var(--color-accent)]">
                                 {product.category?.title}
                             </span>
                             <h1 className="mt-3 text-4xl font-bold leading-relaxed">
                                 {product.title}
                             </h1>
 
-                            <p className="mt-2 text-sm text-zinc-500">
-                                برند:
-                                <span className="font-medium">
-                                    {product.brand.title}
-                                </span>
-                            </p>
+                            {product.brand?.title && (
+                                <p className="mt-2 text-sm text-[var(--color-text-muted)]">
+                                    برند:
+                                    <span className="font-medium">
+                                        {product.brand.title}
+                                    </span>
+                                </p>
+                            )}
                         </div>
                         <div className="flex flex-wrap gap-2">
+                            {product.category?.title && product.category?.slug && (
+                                <Link
+                                    href={`/category/${product.category.slug}`}
+                                    className="rounded-full bg-[var(--color-surface-2)] px-3 py-1 text-xs text-[var(--color-accent)] transition hover:opacity-80"
+                                >
+                                    {product.category.title}
+                                </Link>
+                            )}
 
-                            <Link
-                                href={`/category/${product.category.slug}`}
-                                className="rounded-full bg-orange-100 px-3 py-1 text-xs text-orange-600 transition hover:bg-orange-200"
-                            >
-                                {product.category.title}
-                            </Link>
-
-                            <Link
-                                href={`/brand/${product.brand.slug}`}
-                                className="rounded-full bg-zinc-100 px-3 py-1 text-xs text-zinc-700 transition hover:bg-zinc-200"
-                            >
-                                {product.brand.title}
-                            </Link>
-
+                            {product.brand?.title && product.brand?.slug && (
+                                <Link
+                                    href={`/brand/${product.brand.slug}`}
+                                    className="rounded-full bg-[var(--color-surface-2)] px-3 py-1 text-xs text-[var(--color-text)] transition hover:opacity-80"
+                                >
+                                    {product.brand.title}
+                                </Link>
+                            )}
                         </div>
 
                         <div className="flex items-center gap-2">
@@ -386,10 +408,10 @@ export default function ProductPage({ product }) {
                                 <div>
                                     {product.discount > 0 && (
                                         <div className="mb-1 flex items-center gap-2">
-                                            <span className="rounded-lg bg-orange-500 px-2 py-0.5 text-xs text-white">
+                                            <span className="rounded-lg bg-[var(--color-accent)] px-2 py-0.5 text-xs text-white">
                                                 {toPersianPrice(product.discount)}% تخفیف
                                             </span>
-                                            <span className="text-lg text-zinc-400 line-through">
+                                            <span className="text-lg text-[var(--color-text-muted)] line-through">
                                                 {toPersianPrice(product.originalPrice)} تومان
                                             </span>
                                         </div>
@@ -407,7 +429,7 @@ export default function ProductPage({ product }) {
                                         isWishlisted ? "حذف از علاقه‌مندی‌ها" : "افزودن به علاقه‌مندی‌ها"
                                     }
                                     className={`flex h-11 w-11 items-center justify-center rounded-xl border transition ${isWishlisted
-                                        ? "border-orange-500 bg-orange-500 text-white"
+                                        ? "border-[var(--color-accent)] bg-[var(--color-accent)] text-white"
                                         : "border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-muted)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
                                         } ${wishlistLoading ? "cursor-not-allowed opacity-60" : ""}`}
                                 >
@@ -428,7 +450,7 @@ export default function ProductPage({ product }) {
                                     <Link
                                         key={item.tag.id}
                                         href={`/tag/${item.tag.slug}`}
-                                        className="rounded-lg border border-zinc-200 px-3 py-1 text-xs transition hover:border-orange-400 hover:text-orange-500"
+                                        className="rounded-lg border border-[var(--color-border)] px-3 py-1 text-xs transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
                                     >
                                         #{item.tag.title}
                                     </Link>
@@ -442,7 +464,9 @@ export default function ProductPage({ product }) {
                                 {product.specs.map((spec, i) => (
                                     <div
                                         key={i}
-                                        className={`flex justify-between px-4 py-3 text-sm ${i % 2 === 0 ? "bg-[var(--color-surface-2)]" : "bg-white"
+                                        className={`flex justify-between px-4 py-3 text-sm ${i % 2 === 0
+                                            ? "bg-[var(--color-surface-2)]"
+                                            : "bg-[var(--color-surface)]"
                                             }`}
                                     >
                                         <span className="text-[var(--color-text-muted)]">{spec.key}</span>
@@ -473,7 +497,7 @@ export default function ProductPage({ product }) {
                                 onClick={handleAddToCart}
                                 disabled={product.stock <= 0}
                                 className={`flex-1 rounded-xl py-3 text-sm font-medium transition ${product.stock <= 0
-                                    ? "cursor-not-allowed bg-gray-200 text-gray-400"
+                                    ? "cursor-not-allowed border border-[var(--color-border)] bg-[var(--color-surface-2)] text-[var(--color-text-muted)]"
                                     : added
                                         ? "bg-green-500 text-white"
                                         : "btn-primary text-white"
@@ -501,7 +525,7 @@ export default function ProductPage({ product }) {
                             </h3>
 
                             {reviewMessage ? (
-                                <div className="rounded-xl bg-green-50 px-4 py-3 text-sm text-green-700">
+                                <div className="rounded-xl bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-400">
                                     {reviewMessage}
                                 </div>
                             ) : (
@@ -558,7 +582,7 @@ export default function ProductPage({ product }) {
 
                                     <div className="flex items-center gap-2">
                                         <Stars rating={review.rating} />
-                                        <span className="text-xs text-gray-400">{review.date}</span>
+                                        <span className="text-xs text-[var(--color-text-muted)]">{review.date}</span>
                                     </div>
                                 </div>
 
@@ -567,7 +591,7 @@ export default function ProductPage({ product }) {
                         ))}
 
                         {approvedReviews.length === 0 && (
-                            <p className="py-8 text-center text-sm text-gray-400">
+                            <p className="muted py-8 text-center text-sm">
                                 هنوز نظری ثبت نشده
                             </p>
                         )}
@@ -576,7 +600,7 @@ export default function ProductPage({ product }) {
                     {approvedReviews.length > REVIEWS_LIMIT && (
                         <button
                             onClick={() => setShowAllReviews((s) => !s)}
-                            className="mt-6 w-full rounded-xl border border-orange-300 py-3 text-orange-500 hover:bg-orange-50 transition"
+                            className="mt-6 w-full rounded-xl border border-[var(--color-border)] py-3 text-[var(--color-accent)] transition hover:bg-[var(--color-surface-2)]"
                         >
                             {showAllReviews
                                 ? "نمایش کمتر ↑"
@@ -597,7 +621,7 @@ export default function ProductPage({ product }) {
 
                             <button
                                 onClick={() => setLightboxOpen(false)}
-                                className="absolute top-6 left-6 text-white text-3xl z-20"
+                                className="absolute left-6 top-6 z-20 text-3xl text-white transition hover:text-[var(--color-accent)]"
                             >
                                 ✕
                             </button>
@@ -605,17 +629,25 @@ export default function ProductPage({ product }) {
                             {gallery.length > 1 && (
                                 <>
                                     <button
+                                        type="button"
                                         onClick={prevImage}
-                                        className="absolute right-5 text-white text-4xl z-20"
+                                        aria-label="تصویر قبلی"
+                                        className="absolute right-4 top-1/2 z-20 inline-flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-black/50 p-0 text-white shadow-lg backdrop-blur-sm transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] sm:right-6"
                                     >
-                                        ❯
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="block h-6 w-6 shrink-0" aria-hidden="true">
+                                            <path d="m9 18 6-6-6-6" />
+                                        </svg>
                                     </button>
 
                                     <button
+                                        type="button"
                                         onClick={nextImage}
-                                        className="absolute left-5 text-white text-4xl z-20"
+                                        aria-label="تصویر بعدی"
+                                        className="absolute left-4 top-1/2 z-20 inline-flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border border-white/20 bg-black/50 p-0 text-white shadow-lg backdrop-blur-sm transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] sm:left-6"
                                     >
-                                        ❮
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="block h-6 w-6 shrink-0" aria-hidden="true">
+                                            <path d="m15 18-6-6 6-6" />
+                                        </svg>
                                     </button>
                                 </>
                             )}
@@ -635,7 +667,7 @@ export default function ProductPage({ product }) {
                                         onClick={() => setSelectedImage(index)}
                                         className={`relative h-20 w-20 overflow-hidden rounded-xl border-2 transition
                                             ${selectedImage === index
-                                                ? "border-orange-500"
+                                                ? "border-[var(--color-accent)]"
                                                 : "border-white/20"
                                             }`}
                                     >

@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from "next/link";
@@ -5,90 +6,125 @@ import Image from "next/image";
 import { toPersianPrice } from "@/lib/utils";
 
 export default function SpecialOfferMobileCard({ product }) {
+    const hasDiscount =
+        Number(product.discount) > 0 &&
+        Number(product.originalPrice) > Number(product.price);
+
+    const isAvailable = Number(product.stock) > 0;
+
     return (
         <Link
             href={`/products/${product.slug}`}
-            className="overflow-hidden rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-sm"
+            dir="rtl"
+            className="
+                group block min-w-0 overflow-hidden
+                rounded-2xl
+                border border-[var(--color-border)]
+                bg-[var(--color-surface)]
+                text-[var(--color-text)]
+                transition-shadow duration-200
+                hover:shadow-md
+            "
         >
-            {/* Image */}
+            {/* Product image */}
+            <div className="relative aspect-square overflow-hidden bg-[var(--color-surface-2)]">
+                {product.image && (
+                    <Image
+                        src={product.image}
+                        alt={product.title}
+                        fill
+                        sizes="(max-width: 768px) 85vw, 320px"
+                        className="object-cover object-center transition-transform duration-300 group-hover:scale-105"
+                    />
+                )}
 
-            <div className="relative h-52 overflow-hidden">
-
-                <Image
-                    src={product.image}
-                    fill
-                    alt={product.title}
-                    className="object-cover"
-                />
-
-                <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
-
-                {product.discount > 0 && (
-                    <span className="absolute right-3 top-3 rounded-full bg-[var(--color-accent)] px-3 py-1 text-xs font-bold text-white shadow-lg">
-                        %{toPersianPrice(product.discount)}
+                {hasDiscount && (
+                    <span
+                        className="
+                            absolute right-3 top-3
+                            rounded-md
+                            bg-[var(--color-accent)]
+                            px-2 py-1
+                            text-xs font-bold text-white
+                        "
+                    >
+                        {toPersianPrice(product.discount)}٪
                     </span>
                 )}
             </div>
 
-            {/* Body */}
+            {/* Product information */}
+            <div className="p-3 sm:p-4">
+                {/* Brand and rating */}
+                <div className="
+                    mb-2 flex items-center justify-between gap-2
+                    text-xs text-[var(--color-text-muted)]
+                ">
+                    <span className="min-w-0 truncate">
+                        {product.brand?.title || ""}
+                    </span>
 
-            <div className="p-5">
+                    {product.rating != null && (
+                        <span className="shrink-0">
+                            <span className="text-[var(--color-accent)]">
+                                ★
+                            </span>{" "}
+                            {toPersianPrice(product.rating)}
+                        </span>
+                    )}
+                </div>
 
-                <h3 className="line-clamp-2 text-base font-black leading-7 text-[var(--color-primary)] dark:text-white">
+                {/* Title */}
+                <h3
+                    className="
+                        line-clamp-2 min-h-12
+                        text-sm font-medium leading-6
+                        text-[var(--color-text)]
+                    "
+                >
                     {product.title}
                 </h3>
 
-                <div className="mt-3 flex items-center justify-between text-xs">
-
-                    <span className="text-zinc-500">
-                        {product.brand?.title}
-                    </span>
-
-                    <span className="flex items-center gap-1">
-                        ⭐ {product.rating}
-                    </span>
-
-                    <span
-                        className={
-                            product.stock > 0
-                                ? "text-green-600 font-semibold"
-                                : "text-red-500 font-semibold"
-                        }
-                    >
-                        {product.stock > 0 ? "موجود" : "ناموجود"}
-                    </span>
-
+                {/* Availability */}
+                <div className="
+                    mt-2 text-xs
+                    text-[var(--color-text-muted)]
+                ">
+                    {isAvailable ? "موجود در انبار" : "ناموجود"}
                 </div>
 
-                <div className="mt-5 flex items-end justify-between">
+                {/* Price */}
+                <div className="mt-4 border-t border-[var(--color-border)] pt-3">
+                    {hasDiscount && (
+                        <div className="mb-2 flex items-center gap-2 text-xs text-[var(--color-text-muted)]">
+                            <span className="line-through">
+                                {toPersianPrice(product.originalPrice)}
+                            </span>
+                            <span>تومان</span>
+                        </div>
+                    )}
 
-                    <div>
-
-                        {product.discount > 0 && (
-                            <div className="text-xs text-zinc-400 line-through">
-                                {toPersianPrice(product.originalPrice)} تومان
-                            </div>
-                        )}
-
-                        <div className="mt-1 text-2xl font-black text-[var(--color-primary)] dark:text-[var(--color-accent)]">
-                            {toPersianPrice(product.price)}
-                            <span className="mr-1 text-sm font-bold">
+                    <div className="flex items-center justify-between gap-2">
+                        <div className="flex min-w-0 items-baseline gap-1">
+                            <span className="text-lg font-bold tracking-tight text-[var(--color-text)]">
+                                {toPersianPrice(product.price)}
+                            </span>
+                            <span className="shrink-0 text-xs font-medium text-[var(--color-text-muted)]">
                                 تومان
                             </span>
                         </div>
 
+                        <span
+                            className={`shrink-0 rounded-lg px-3 py-2 text-xs font-medium ${isAvailable
+                                ? "btn-primary"
+                                : "border border-[var(--color-border)] text-[var(--color-text-muted)]"
+                                }`}
+                        >
+                            مشاهده
+                        </span>
                     </div>
-
-                    <button
-                        className="btn-primary h-11 rounded-xl px-5 text-sm shrink-0"
-                    >
-                        خرید
-                    </button>
-
                 </div>
-
             </div>
-
         </Link>
     );
 }

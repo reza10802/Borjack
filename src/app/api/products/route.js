@@ -44,18 +44,56 @@ export async function GET(req) {
         },
       };
     }
-    if (search) {
-      where.OR = [
+    if (search?.trim()) {
+      const normalizedSearch = search
+        .trim()
+        .replace(/ي/g, "ی")
+        .replace(/ك/g, "ک");
+
+      const compactSearch = normalizedSearch
+        .replace(/[\s\u200c]+/g, "")
+        .toLowerCase();
+
+      const searchTerms = new Set([normalizedSearch]);
+
+      // پشتیبانی از شکل‌های مختلف عبارت «لپ تاپ»
+      if (
+        ["لپتاپ", "laptop", "notebook"].includes(compactSearch)
+      ) {
+        [
+          "لپ تاپ",
+          "لپ‌تاپ",
+          "لپتاپ",
+          "laptop",
+          "notebook",
+        ].forEach((term) => searchTerms.add(term));
+      }
+
+      where.OR = [...searchTerms].flatMap((term) => [
         {
           title: {
-            contains: search,
+            contains: term,
+            mode: "insensitive",
+          },
+        },
+        {
+          description: {
+            contains: term,
             mode: "insensitive",
           },
         },
         {
           brand: {
             title: {
-              contains: search,
+              contains: term,
+              mode: "insensitive",
+            },
+          },
+        },
+        {
+          category: {
+            title: {
+              contains: term,
               mode: "insensitive",
             },
           },
@@ -65,14 +103,14 @@ export async function GET(req) {
             some: {
               tag: {
                 title: {
-                  contains: search,
+                  contains: term,
                   mode: "insensitive",
                 },
               },
             },
           },
         },
-      ];
+      ]);
     }
     if (onlyDiscount) where.discount = { gt: 0 };
     if (onlyInStock) {
@@ -114,11 +152,11 @@ export async function GET(req) {
         },
         ...(user
           ? {
-              wishlistItems: {
-                where: { userId: user.id },
-                select: { id: true },
-              },
-            }
+            wishlistItems: {
+              where: { userId: user.id },
+              select: { id: true },
+            },
+          }
           : {}),
       },
     });

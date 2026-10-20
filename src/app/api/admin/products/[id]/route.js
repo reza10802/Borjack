@@ -1,105 +1,162 @@
+
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireManagerOrAdmin, requireAdmin, logAction } from "@/lib/auth";
+import { requireManagerOrAdmin, logAction } from "@/lib/auth";
 
-const ADMIN_ALLOWED_FIELDS = [
-  "title",
-  "price",
-  "originalPrice",
-  "discount",
-  "categoryId",
-  "image",
-  "description",
-  "stock",
-];
-
-const MANAGER_ALLOWED_FIELDS = ["price", "originalPrice", "discount", "stock"];
-
-export async function PATCH(req, { params }) {
-  const auth = await requireManagerOrAdmin();
-  if (auth.error) return auth.error;
+// GET /api/admin/products — دریافت فهرست محصولات
+export async function GET(req) {
+  const check = await requireManagerOrAdmin(req);
+  if (check.error) return check.error;
 
   try {
-    const { id } = await params;
-    const productId = Number(id);
-    const body = await req.json();
-
-    const before = await prisma.product.findUnique({
-      where: { id: productId },
+    const products = await prisma.product.findMany({
+      orderBy: { createdAt: "desc" },
+      include: {
+        category: {
+          select: {
+            id: true,
+            title: true,
+          },
+        },
+        images: true,
+        specs: true,
+      },
     });
 
-    if (!before) {
-      return NextResponse.json({ error: "محصول پیدا نشد" }, { status: 404 });
-    }
+    return NextResponse.json({ products });
+  } catch (error) {
+    console.error("GET ADMIN PRODUCTS ERROR:", error);
 
-    const allowedFields =
-      auth.user.role === "ADMIN"
-        ? ADMIN_ALLOWED_FIELDS
-        : MANAGER_ALLOWED_FIELDS;
-    console.log(body);
-    console.log("PATCH BODY =>", JSON.stringify(body, null, 2));
-    console.log(Object.keys(body));
-    const data = {};
+    return NextResponse.json(
+      { error: "خطا در دریافت محصولات" },
+      { status: 500 },
+    );
+  }
+}
 
-    for (const field of allowedFields) {
-      // فقط فیلدهایی که واقعاً ارسال شدن
-      if (body[field] === undefined) continue;
+// POST /api/admin/products — ساخت محصول جدید
+export async function POST(req) {
+  const check = await requireManagerOrAdmin(req);
+  if (check.error) return check.error;
 
-      if (field === "categoryId") {
-        data.category = {
-          connect: {
-            id: Number(body.categoryId),
-          },
-        };
-      } else if (
-        field === "price" ||
-        field === "originalPrice" ||
-        field === "discount" ||
-        field === "stock"
-      ) {
-        data[field] = Number(body[field]);
-      } else if (field === "stock") {
-        data.stock = Number(body.stock);
-      } else {
-        data[field] = body[field];
-      }
-    }
+  try {
+    const body = await req.json();
 
-    if (Object.keys(data).length === 0) {
+    const {
+      title,
+      price,
+      originalPrice,
+      discount,
+      categoryId,
+      image,
+      gallery = [],
+      description,
+      stock,
+      specs = [],
+    } = body;
+
+    // اعتبارسنجی اطلاعات ضروری
+    if (
+      typeof title !== "string" ||
+      !title.trim() ||
+      price == null ||
+      !Number.isFinite(Number(price)) ||
+      Number(price) <= 0 ||
+      !categoryId ||
+      !Number.isFinite(Number(categoryId)) ||
+      typeof image !== "string" ||
+      !image.trim() ||
+      typeof description !== "string" ||
+      !description.trim()
+    ) {
       return NextResponse.json(
-        { error: "فیلد مجاز برای ویرایش ارسال نشده" },
+        { error: "اطلاعات ضروری محصول را به‌درستی وارد کنید" },
         { status: 400 },
       );
     }
 
-    await prisma.product.update({
-      where: { id: productId },
-      data,
-    });
+    // اعتبارسنجی قیمت اصلی
+    const finalPrice = Number(price);
 
-    // بروزرسانی گالری تصاویر
-    if (Array.isArray(body.gallery)) {
-      await prisma.productImage.deleteMany({
-        where: {
-          productId,
-        },
-      });
+    const finalOriginalPrice =
+      originalPrice != null && originalPrice !== ""
+        ? Number(originalPrice)
+        : finalPrice;
 
-      if (body.gallery.length > 0) {
-        await prisma.productImage.createMany({
-          data: body.gallery.filter(Boolean).map((url) => ({
-            productId,
-            url,
-          })),
-        });
-      }
+    if (
+      !Number.isFinite(finalOriginalPrice) ||
+      finalOriginalPrice < finalPrice
+    ) {
+      return NextResponse.json(
+        { error: "قیمت اصلی نمی‌تواند کمتر از قیمت فروش باشد" },
+        { status: 400 },
+      );
     }
 
-    // محصول نهایی را همراه روابط برگردان
-    const product = await prisma.product.findUnique({
-      where: {
-        id: productId,
+    // آماده‌سازی گالری تصاویر
+    if (
+      !Array.isArray(gallery) ||
+      gallery.some(
+        (url) => typeof url !== "string" || !url.trim(),
+      )
+    ) {
+      return NextResponse.json(
+        { error: "فهرست تصاویر معتبر نیست" },
+        { status: 400 },
+      );
+    }
+
+    // آماده‌سازی مشخصات فنی
+    if (!Array.isArray(specs)) {
+      return NextResponse.json(
+        { error: "فهرست مشخصات فنی معتبر نیست" },
+        { status: 400 },
+      );
+    }
+
+    const normalizedSpecs = specs
+      .filter(
+        (spec) =>
+          spec &&
+          typeof spec.key === "string" &&
+          typeof spec.value === "string" &&
+          spec.key.trim() &&
+          spec.value.trim(),
+      )
+      .map((spec) => ({
+        key: spec.key.trim(),
+        value: spec.value.trim(),
+      }));
+
+    // ساخت محصول، تصاویر و مشخصات فنی در یک عملیات
+    const product = await prisma.product.create({
+      data: {
+        title: title.trim(),
+        price: finalPrice,
+        originalPrice: finalOriginalPrice,
+        discount: Number(discount) || 0,
+
+        category: {
+          connect: {
+            id: Number(categoryId),
+          },
+        },
+
+        image: image.trim(),
+        description: description.trim(),
+        stock: Number(stock ?? 0),
+
+        images: {
+          create: gallery.map((url) => ({
+            url: url.trim(),
+          })),
+        },
+
+        specs: {
+          create: normalizedSpecs,
+        },
       },
+
       include: {
         category: true,
         images: true,
@@ -107,77 +164,23 @@ export async function PATCH(req, { params }) {
       },
     });
 
-    const isStockOnly = Object.keys(data).length === 1 && "stock" in data;
-
-    await logAction({
-      userId: auth.user.id,
-      action: isStockOnly ? "UPDATE_STOCK" : "UPDATE_PRODUCT",
+    // ثبت گزارش فعالیت
+    await logAction(req, {
+      userId: check.user.id,
+      action: "CREATE_PRODUCT",
       entityType: "Product",
-      entityId: productId,
-      description: `ویرایش محصول "${before.title}"`,
-      oldValue: before,
-      newValue: {
-        ...data,
-        gallery: body.gallery,
-      },
+      entityId: String(product.id),
+      description: `محصول «${product.title}» ایجاد شد`,
+      newValue: product,
     });
 
-    return NextResponse.json({ product });
+    return NextResponse.json({ product }, { status: 201 });
   } catch (error) {
-    console.error(error);
-    return NextResponse.json({ error: "خطا در ویرایش محصول" }, { status: 500 });
-  }
-}
+    console.error("CREATE ADMIN PRODUCT ERROR:", error);
 
-export async function DELETE(req, { params }) {
-  const auth = await requireAdmin();
-  if (auth.error) return auth.error;
-
-  try {
-    const { id } = await params;
-    const productId = Number(id);
-
-    const product = await prisma.product.findUnique({
-      where: { id: productId },
-    });
-
-    if (!product) {
-      return NextResponse.json({ error: "محصول پیدا نشد" }, { status: 404 });
-    }
-
-    const orderItemCount = await prisma.orderItem.count({
-      where: { productId },
-    });
-
-    if (orderItemCount > 0) {
-      return NextResponse.json(
-        {
-          error:
-            "این محصول در سفارشات قبلی استفاده شده و قابل حذف نیست. به‌جای حذف، موجودی آن را ناموجود کن.",
-        },
-        { status: 409 },
-      );
-    }
-
-    await prisma.review.deleteMany({ where: { productId } });
-    await prisma.productSpec.deleteMany({ where: { productId } });
-    await prisma.productImage.deleteMany({ where: { productId } });
-    await prisma.cartItem.deleteMany({ where: { productId } });
-
-    await prisma.product.delete({ where: { id: productId } });
-
-    await logAction({
-      userId: auth.user.id,
-      action: "DELETE_PRODUCT",
-      entityType: "Product",
-      entityId: productId,
-      description: `حذف محصول "${product.title}"`,
-      oldValue: product,
-    });
-
-    return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error(error);
-    return NextResponse.json({ error: "خطا در حذف محصول" }, { status: 500 });
+    return NextResponse.json(
+      { error: "خطا در ساخت محصول" },
+      { status: 500 },
+    );
   }
 }

@@ -40,43 +40,49 @@ export default function SpecialOffers() {
     return (
         <section className="card relative overflow-hidden px-6 py-8 lg:px-8">
             <div className="absolute inset-0 bg-linear-to-r from-orange-500/10 via-transparent to-orange-400/5 pointer-events-none" />
-            <div className="relative z-10">
-                <div className="mb-8 flex items-center justify-between">
-                    <div>
-                        <h2 className="text-3xl font-black text-[var(--color-primary)] dark:text-white">
-                            پیشنهاد ویژه
-                        </h2>
 
-                        <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
-                            محصولات دارای تخفیف ویژه
-                        </p>
-                    </div>
+            <div className="relative z-10 mb-6 flex items-center justify-between gap-3 sm:mb-8">
+                <div className="min-w-0">
+                    <h2 className="text-2xl font-black text-[var(--color-primary)] dark:text-white sm:text-3xl">
+                        پیشنهاد ویژه
+                    </h2>
 
-                    <div className="hidden lg:flex items-center gap-3">
-                        <button
-                            onClick={() => swiperInstance?.slidePrev()}
-                            className="flex h-11 w-11 items-center justify-center rounded-full border border-zinc-300 dark:border-zinc-700 hover:bg-[var(--color-primary)] hover:text-white transition"
-                        >
-                            <ChevronRightIcon className="w-5 h-5" />
-                        </button>
-
-                        <button
-                            onClick={() => swiperInstance?.slideNext()}
-                            className="flex h-11 w-11 items-center justify-center rounded-full border border-zinc-300 dark:border-zinc-700 hover:bg-[var(--color-primary)] hover:text-white transition"
-                        >
-                            <ChevronLeftIcon className="w-5 h-5" />
-                        </button>
-                    </div>
+                    <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400 sm:text-sm">
+                        محصولات دارای تخفیف ویژه
+                    </p>
                 </div>
-                <div className="mt-3 flex justify-end">
+
+                <div className="flex shrink-0 items-center gap-3">
                     <Link
                         href="/search?discount=true"
-                        className="text-sm font-semibold text-[var(--color-accent)] hover:underline underline-offset-4 transition"
+                        className="inline-flex items-center gap-1 whitespace-nowrap text-xs font-semibold text-[var(--color-accent)] transition hover:opacity-75 sm:text-sm"
                     >
                         مشاهده همه
+                        <ChevronLeftIcon className="h-4 w-4" />
                     </Link>
+
+                    <div className="hidden items-center gap-2 lg:flex">
+                        <button
+                            type="button"
+                            onClick={() => swiperInstance?.slidePrev()}
+                            aria-label="محصولات قبلی"
+                            className="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--color-border)] text-[var(--color-text)] transition hover:bg-[var(--color-surface-2)]"
+                        >
+                            <ChevronRightIcon className="h-5 w-5" />
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={() => swiperInstance?.slideNext()}
+                            aria-label="محصولات بعدی"
+                            className="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--color-border)] text-[var(--color-text)] transition hover:bg-[var(--color-surface-2)]"
+                        >
+                            <ChevronLeftIcon className="h-5 w-5" />
+                        </button>
+                    </div>
                 </div>
             </div>
+
 
             {products.length === 0 ? (
                 <div className="h-48 flex items-center justify-center text-gray-500 text-sm">

@@ -23,11 +23,23 @@ const priceOptions = [
     { value: "50000000-150000000", label: "بالای ۵۰ میلیون" },
 ];
 
+const initialPagination = {
+    total: 0,
+    currentPage: 1,
+    totalPages: 1,
+    limit: 20,
+};
+
 function SearchContent() {
     const searchParams = useSearchParams();
+
     const [query, setQuery] = useState(searchParams.get("q") || "");
-    const [selectedCategory, setSelectedCategory] = useState(searchParams.get("category") || "همه");
-    const [selectedBrand, setSelectedBrand] = useState(searchParams.get("brand") || "همه");
+    const [selectedCategory, setSelectedCategory] = useState(
+        searchParams.get("category") || "همه"
+    );
+    const [selectedBrand, setSelectedBrand] = useState(
+        searchParams.get("brand") || "همه"
+    );
     const [selectedTag, setSelectedTag] = useState(
         searchParams.get("tag") || "همه"
     );
@@ -43,91 +55,151 @@ function SearchContent() {
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [page, setPage] = useState(1);
-    const [pagination, setPagination] = useState({
-        total: 0,
-        currentPage: 1,
-        totalPages: 1,
-        limit: 20,
-    });
+    const [pagination, setPagination] = useState(initialPagination);
+
     const fromCategory = searchParams.get("category");
 
-    // خواندن دسته‌بندی‌ها از API
+    // Load filter options.
     useEffect(() => {
-        fetch("/api/categories")
-            .then((r) => (r.ok ? r.json() : []))
-            .then((d) => {
-                setCategories(["همه", ...d.map((c) => c.title)]);
+        let active = true;
+
+        Promise.all([
+            fetch("/api/categories").then((response) =>
+                response.ok ? response.json() : []
+            ),
+            fetch("/api/brands").then((response) =>
+                response.ok ? response.json() : { brands: [] }
+            ),
+            fetch("/api/tags").then((response) =>
+                response.ok ? response.json() : { tags: [] }
+            ),
+        ])
+            .then(([categoryData, brandData, tagData]) => {
+                if (!active) return;
+                setCategories([
+                    "همه",
+                    ...(Array.isArray(categoryData)
+                        ? categoryData.map((item) => item.title)
+                        : []),
+                ]);
+                setBrands([
+                    "همه",
+                    ...((brandData?.brands || []).map((item) => item.title)),
+                ]);
+                setTags([
+                    "همه",
+                    ...((tagData?.tags || []).map((item) => item.title)),
+                ]);
+            })
+            .catch((error) => {
+                console.error("Could not load search filters:", error);
+                if (!active) return;
+                setCategories(["همه"]);
+                setBrands(["همه"]);
+                setTags(["همه"]);
             });
 
-        fetch("/api/brands")
-            .then((r) => (r.ok ? r.json() : { brands: [] }))
-            .then((d) => {
-                setBrands(["همه", ...(d.brands || []).map((b) => b.title)]);
-            });
-
-        fetch("/api/tags")
-            .then((r) => (r.ok ? r.json() : { tags: [] }))
-            .then((d) => {
-                setTags(["همه", ...(d.tags || []).map((t) => t.title)]);
-            });
+        return () => {
+            active = false;
+        };
     }, []);
 
+    // Return to the first page whenever a filter changes.
     useEffect(() => {
         setPage(1);
     }, [
         query,
         selectedCategory,
         selectedBrand,
+        selectedTag,
         sort,
         priceFilter,
         onlyDiscount,
         onlyInStock,
     ]);
 
+    // Keep the controls in sync when the URL search parameters change.
     useEffect(() => {
         setQuery(searchParams.get("q") || "");
         setSelectedCategory(searchParams.get("category") || "همه");
         setSelectedBrand(searchParams.get("brand") || "همه");
+        setSelectedTag(searchParams.get("tag") || "همه");
     }, [searchParams]);
 
     const apiQuery = useMemo(() => {
         const params = new URLSearchParams();
+
         if (query.trim()) params.set("search", query.trim());
-        if (selectedCategory !== "همه") params.set("category", selectedCategory);
-        if (selectedBrand !== "همه") params.set("brand", selectedBrand);
-        if (selectedTag !== "همه")
-            params.set("tag", selectedTag);
+        if (selectedCategory !== "همه") {
+            params.set("category", selectedCategory);
+        }
+        if (selectedBrand !== "همه") {
+            params.set("brand", selectedBrand);
+        }
+        if (selectedTag !== "همه") params.set("tag", selectedTag);
         if (sort !== "default") params.set("sort", sort);
+
         if (priceFilter !== "all") {
             const [min, max] = priceFilter.split("-");
             params.set("minPrice", min);
             params.set("maxPrice", max);
         }
+
         if (onlyDiscount) params.set("discount", "true");
         if (onlyInStock) params.set("inStock", "true");
-        params.set("page", page);
-        params.set("limit", 20);
-        return params.toString();
-    }, [query, selectedCategory, selectedBrand, selectedTag, sort, priceFilter, onlyDiscount, page, onlyInStock,]);
 
+        params.set("page", String(page));
+        params.set("limit", "20");
+
+        return params.toString();
+    }, [
+        query,
+        selectedCategory,
+        selectedBrand,
+        selectedTag,
+        sort,
+        priceFilter,
+        onlyDiscount,
+        onlyInStock,
+        page,
+    ]);
+
+    // Fetch matching products.
     useEffect(() => {
         let active = true;
         setLoading(true);
-        const delay = query ? 350 : 0;
-        const timer = setTimeout(() => {
-            fetch(`/api/products${apiQuery ? `?${apiQuery}` : ""}`)
-                .then(res => res.ok ? res.json() : [])
-                .then((data) => {
-                    if (!active) return;
 
-                    setProducts(data.products || []);
-                    setPagination(data.pagination);
-                })
-                .catch(() => { if (active) setProducts([]); })
-                .finally(() => { if (active) setLoading(false); });
+        const delay = query.trim() ? 350 : 0;
+        const timer = setTimeout(async () => {
+            try {
+                const response = await fetch(
+                    `/api/products${apiQuery ? `?${apiQuery}` : ""}`
+                );
+
+                if (!response.ok) {
+                    throw new Error(`Product request failed: ${response.status}`);
+                }
+
+                const data = await response.json();
+                if (!active) return;
+
+                setProducts(Array.isArray(data.products) ? data.products : []);
+                setPagination(data.pagination || initialPagination);
+            } catch (error) {
+                if (!active) return;
+                console.error("Could not load products:", error);
+                setProducts([]);
+                setPagination(initialPagination);
+            } finally {
+                if (active) setLoading(false);
+            }
         }, delay);
-        return () => { active = false; clearTimeout(timer); };
-    }, [apiQuery]);
+
+        return () => {
+            active = false;
+            clearTimeout(timer);
+        };
+    }, [apiQuery, query]);
 
     const resetFilters = () => {
         setSelectedCategory("همه");
@@ -139,176 +211,318 @@ function SearchContent() {
         setSort("default");
     };
 
-    const FilterPanel = () => (
+    // Render as a helper instead of a nested React component so changing a
+    // filter does not remount the Select controls on every parent render.
+    const renderFilterPanel = (scope) => (
         <div className="flex flex-col gap-5">
             <div>
-                <label className="text-xs font-bold text-gray-500 mb-2 block">دسته‌بندی</label>
+                <label className="mb-2 block text-xs font-bold text-[var(--color-text-muted)]">
+                    دسته‌بندی
+                </label>
                 <Select
                     value={selectedCategory}
-                    instanceId="category-select"
+                    instanceId={`${scope}-category-select`}
                     onChange={setSelectedCategory}
-                    options={categories.map(c => ({ value: c, label: c }))}
+                    options={categories.map((category) => ({
+                        value: category,
+                        label: category,
+                    }))}
                 />
             </div>
+
             <div>
-                <label className="text-xs font-bold text-gray-500 mb-2 block">
+                <label className="mb-2 block text-xs font-bold text-[var(--color-text-muted)]">
                     برند
                 </label>
-
                 <Select
                     value={selectedBrand}
-                    instanceId="brand-select"
+                    instanceId={`${scope}-brand-select`}
                     onChange={setSelectedBrand}
-                    options={brands.map((b) => ({
-                        value: b,
-                        label: b,
+                    options={brands.map((brand) => ({
+                        value: brand,
+                        label: brand,
                     }))}
                 />
             </div>
+
             <div>
-                <label className="text-xs font-bold text-gray-500 mb-2 block">
+                <label className="mb-2 block text-xs font-bold text-[var(--color-text-muted)]">
                     تگ
                 </label>
-
                 <Select
                     value={selectedTag}
-                    instanceId="tag-select"
+                    instanceId={`${scope}-tag-select`}
                     onChange={setSelectedTag}
-                    options={tags.map((t) => ({
-                        value: t,
-                        label: t,
+                    options={tags.map((tag) => ({
+                        value: tag,
+                        label: tag,
                     }))}
                 />
             </div>
+
             <div>
-                <label className="text-xs font-bold text-gray-500 mb-2 block">محدوده قیمت</label>
-                <Select value={priceFilter} instanceId="price-select" onChange={setPriceFilter} options={priceOptions} />
+                <label className="mb-2 block text-xs font-bold text-[var(--color-text-muted)]">
+                    محدوده قیمت
+                </label>
+                <Select
+                    value={priceFilter}
+                    instanceId={`${scope}-price-select`}
+                    onChange={setPriceFilter}
+                    options={priceOptions}
+                />
             </div>
-            <div className="flex flex-col gap-2.5">
-                <label onClick={() => setOnlyDiscount(s => !s)} className="flex items-center gap-2.5 cursor-pointer group">
-                    <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition ${onlyDiscount ? "bg-orange-500 border-orange-500" : "border-gray-300 group-hover:border-gray-400"}`}
+
+            <div className="flex flex-col gap-3">
+                <button
+                    type="button"
+                    onClick={() => setOnlyDiscount((current) => !current)}
+                    aria-pressed={onlyDiscount}
+                    className="flex items-center gap-2.5 text-right text-sm text-[var(--color-text)]"
+                >
+                    <span
+                        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition ${
+                            onlyDiscount
+                                ? "border-[var(--color-accent)] bg-[var(--color-accent)]"
+                                : "border-[var(--color-border)] bg-[var(--color-surface)]"
+                        }`}
                     >
-                        {onlyDiscount && <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                        </svg>}
-                    </div>
-                    <span className="text-sm text-gray-600">فقط تخفیف‌دار</span>
-                </label>
-                <label onClick={() => setOnlyInStock(s => !s)} className="flex items-center gap-2.5 cursor-pointer group">
-                    <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition ${onlyInStock ? "bg-orange-500 border-orange-500" : "border-gray-300 group-hover:border-gray-400"}`}>
-                        {onlyInStock && <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                        </svg>}
-                    </div>
-                    <span className="text-sm text-gray-600">فقط موجود</span>
-                </label>
+                        {onlyDiscount && (
+                            <svg
+                                className="h-3 w-3 text-white"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                                aria-hidden="true"
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={3}
+                                    d="m5 13 4 4L19 7"
+                                />
+                            </svg>
+                        )}
+                    </span>
+                    فقط تخفیف‌دار
+                </button>
+
+                <button
+                    type="button"
+                    onClick={() => setOnlyInStock((current) => !current)}
+                    aria-pressed={onlyInStock}
+                    className="flex items-center gap-2.5 text-right text-sm text-[var(--color-text)]"
+                >
+                    <span
+                        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border transition ${
+                            onlyInStock
+                                ? "border-[var(--color-accent)] bg-[var(--color-accent)]"
+                                : "border-[var(--color-border)] bg-[var(--color-surface)]"
+                        }`}
+                    >
+                        {onlyInStock && (
+                            <svg
+                                className="h-3 w-3 text-white"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                                aria-hidden="true"
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={3}
+                                    d="m5 13 4 4L19 7"
+                                />
+                            </svg>
+                        )}
+                    </span>
+                    فقط موجود
+                </button>
             </div>
-            <button onClick={resetFilters}
-                className="w-full py-2 text-sm rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] hover:border-[var(--color-accent)] transition">
+
+            <button
+                type="button"
+                onClick={resetFilters}
+                className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] py-2 text-sm text-[var(--color-text)] transition hover:border-[var(--color-accent)]"
+            >
                 پاک کردن فیلترها
             </button>
         </div>
     );
 
+    const activeFilters = [
+        selectedCategory !== "همه" ? selectedCategory : null,
+        selectedBrand !== "همه" ? selectedBrand : null,
+        selectedTag !== "همه" ? selectedTag : null,
+        priceFilter !== "all"
+            ? priceOptions.find((option) => option.value === priceFilter)?.label
+            : null,
+        onlyDiscount ? "تخفیف‌دار" : null,
+        onlyInStock ? "موجود" : null,
+    ].filter(Boolean);
+
     return (
-        <div className="container-page py-10" dir="rtl">
+        <div className="container-page py-6 sm:py-10" dir="rtl">
             {fromCategory && <BackButton />}
-            <div className="mb-8">
+
+            <div className="mb-6 sm:mb-8">
                 <h1 className="section-title">جستجوی محصولات</h1>
                 <p className="muted mt-2 text-sm">
                     محصول مورد نظر خود را پیدا کنید
                 </p>
             </div>
+
+            {/* Search field */}
             <div className="relative mb-6">
-                <input type="text" value={query} onChange={e => setQuery(e.target.value)}
+                <label htmlFor="product-search" className="sr-only">
+                    جستجو در محصولات
+                </label>
+                <input
+                    id="product-search"
+                    type="search"
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
                     placeholder="جستجو در محصولات..."
-                    className="w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] py-4 pr-12 pl-10 text-[var(--color-text)] placeholder:text-[var(--color-text-muted)] outline-none focus:border-[var(--color-accent)] transition" />
-                <svg className="absolute top-4 right-4 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+                    className="w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] py-3.5 pr-12 pl-10 text-[var(--color-text)] outline-none transition placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-accent)] sm:py-4"
+                />
+                <svg
+                    className="absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[var(--color-text-muted)]"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                >
+                    <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M21 21l-4.35-4.35M17 11a6 6 0 1 1-12 0 6 6 0 0 1 12 0z"
+                    />
                 </svg>
-                {query && <button onClick={() => setQuery("")} className="absolute top-4 left-4 text-gray-400 hover:text-gray-600 transition">✕</button>}
+                {query && (
+                    <button
+                        type="button"
+                        onClick={() => setQuery("")}
+                        aria-label="پاک کردن عبارت جستجو"
+                        className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--color-text-muted)] transition hover:text-[var(--color-text)]"
+                    >
+                        ✕
+                    </button>
+                )}
             </div>
-            <div className="flex gap-6">
-                <aside className="hidden lg:block w-56 shrink-0">
-                    <div className="card sticky top-24 p-6">
-                        <FilterPanel />
+
+            <div className="flex min-w-0 flex-col gap-6 lg:flex-row">
+                {/* Desktop filter sidebar */}
+                <aside className="hidden w-56 shrink-0 lg:block">
+                    <div className="card sticky top-24 p-5 xl:p-6">
+                        {renderFilterPanel("desktop")}
                     </div>
                 </aside>
-                <div className="flex-1">
-                    <div className="flex items-center justify-between mb-4 gap-3">
-                        {(selectedCategory !== "همه" ||
-                            selectedBrand !== "همه" ||
-                            onlyDiscount ||
-                            onlyInStock ||
-                            priceFilter !== "all") && (
-                                <div className="mb-5 flex flex-wrap gap-2">
-                                    {selectedCategory !== "همه" && (
-                                        <span className="rounded-full bg-[var(--color-surface-2)] px-3 py-1 text-xs">
-                                            {selectedCategory}
-                                        </span>
-                                    )}
 
-                                    {selectedBrand !== "همه" && (
-                                        <span className="rounded-full bg-[var(--color-surface-2)] px-3 py-1 text-xs">
-                                            {selectedBrand}
-                                        </span>
-                                    )}
+                <div className="min-w-0 flex-1">
+                    {/* Results count and controls: stacked on mobile */}
+                    <div className="mb-5 space-y-3">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <span className="muted shrink-0 text-sm">
+                                {loading ? "در حال جستجو..." : `${products.length} محصول`}
+                            </span>
 
-                                    {onlyDiscount && (
-                                        <span className="rounded-full bg-orange-100 px-3 py-1 text-xs text-orange-600">
-                                            تخفیف‌دار
-                                        </span>
-                                    )}
+                            <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowFilters((current) => !current)}
+                                    aria-expanded={showFilters}
+                                    className="flex min-w-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2.5 text-sm text-[var(--color-text)] transition hover:border-[var(--color-accent)] lg:hidden"
+                                >
+                                    <svg
+                                        className="h-4 w-4 shrink-0"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                        aria-hidden="true"
+                                    >
+                                        <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            strokeWidth={2}
+                                            d="M3 4h18M7 8h10M11 12h4"
+                                        />
+                                    </svg>
+                                    {showFilters ? "بستن فیلتر" : "فیلتر"}
+                                </button>
 
-                                    {onlyInStock && (
-                                        <span className="rounded-full bg-green-100 px-3 py-1 text-xs text-green-600">
-                                            موجود
-                                        </span>
-                                    )}
+                                <div className="min-w-0 w-full sm:w-44">
+                                    <Select
+                                        value={sort}
+                                        instanceId="sort-select"
+                                        onChange={setSort}
+                                        options={sortOptions}
+                                    />
                                 </div>
-                            )}
-                        <span className="muted text-sm">{loading ? "..." : `${products.length} محصول`}</span>
-                        <div className="flex items-center gap-2">
-                            <button onClick={() => setShowFilters(s => !s)}
-                                className="lg:hidden flex items-center gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2 text-sm text-[var(--color-text)] hover:border-[var(--color-accent)] transition">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h18M7 8h10M11 12h4" />
-                                </svg>
-                                فیلتر
-                            </button>
-                            <Select value={sort} instanceId="sort-select" onChange={setSort} options={sortOptions} />
+                            </div>
                         </div>
+
+                        {/* Mobile filter panel */}
+                        {showFilters && (
+                            <div className="card p-4 sm:p-6 lg:hidden">
+                                {renderFilterPanel("mobile")}
+                            </div>
+                        )}
+
+                        {/* Active filter chips */}
+                        {activeFilters.length > 0 && (
+                            <div className="flex flex-wrap items-center gap-2">
+                                {activeFilters.map((filter, index) => (
+                                    <span
+                                        key={`${filter}-${index}`}
+                                        className="rounded-full bg-[var(--color-surface-2)] px-3 py-1.5 text-xs text-[var(--color-text)]"
+                                    >
+                                        {filter}
+                                    </span>
+                                ))}
+                                <button
+                                    type="button"
+                                    onClick={resetFilters}
+                                    className="px-1 py-1.5 text-xs text-[var(--color-text-muted)] underline underline-offset-2 transition hover:text-[var(--color-accent)]"
+                                >
+                                    پاک کردن فیلترها
+                                </button>
+                            </div>
+                        )}
                     </div>
-                    {showFilters && (
-                        <div className="card lg:hidden mb-5 p-6">
-                            <FilterPanel />
-                        </div>
-                    )}
 
-                    {selectedTag !== "همه" && (
-                        <span className="rounded-full bg-[var(--color-surface-2)]px-3 py-1 text-xs">
-                            {selectedTag}
-                        </span>
-                    )}
-
+                    {/* Product results */}
                     {loading ? (
-                        <div className="text-center py-20 text-gray-400 text-sm">در حال بارگذاری...</div>
+                        <div className="py-20 text-center text-sm text-[var(--color-text-muted)]">
+                            در حال بارگذاری...
+                        </div>
                     ) : products.length === 0 ? (
-                        <div className="card py-20 text-center">
-                            <p className="text-4xl mb-3">🔍</p>
-                            <p className="muted text-sm">محصولی با این مشخصات پیدا نشد</p>
-                            <button onClick={resetFilters} className="mt-5 text-sm font-medium text-orange-500 hover:text-orange-600 transition">پاک کردن فیلترها</button>
+                        <div className="card px-4 py-16 text-center sm:py-20">
+                            <p className="mb-3 text-4xl" aria-hidden="true">
+                                🔍
+                            </p>
+                            <p className="muted text-sm">
+                                محصولی با این مشخصات پیدا نشد
+                            </p>
+                            <button
+                                type="button"
+                                onClick={resetFilters}
+                                className="mt-5 text-sm font-medium text-[var(--color-accent)] transition hover:opacity-80"
+                            >
+                                پاک کردن فیلترها
+                            </button>
                         </div>
                     ) : (
-                        <div className="grid gap-7 grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-                            {products.map(product => (
-                                <ProductCard key={product.id} product={product} />
+                        <div className="grid grid-cols-2 gap-3 sm:gap-5 md:grid-cols-3 lg:gap-6 xl:grid-cols-4 2xl:grid-cols-5">
+                            {products.map((product) => (
+                                <ProductCard key={product.id} product={product} variant="search" />
                             ))}
                         </div>
                     )}
+
                     <Pagination
-                        currentPage={pagination.currentPage}
-                        totalPages={pagination.totalPages}
+                        currentPage={pagination.currentPage || page}
+                        totalPages={pagination.totalPages || 1}
                         onPageChange={setPage}
                     />
                 </div>
