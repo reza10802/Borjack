@@ -20,6 +20,7 @@
     "@serwist/window": "^9.5.12",
     "bcryptjs": "^3.0.3",
     "dotenv": "^16.6.1",
+    "esbuild-wasm": "^0.25.12",
     "iran-cities-json": "^2.0.0",
     "jose": "^6.2.8",
     "jsonwebtoken": "^9.0.3",
