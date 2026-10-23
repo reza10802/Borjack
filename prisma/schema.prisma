@@ -367,3 +367,14 @@ model Task {
   from User @relation("TaskFrom", fields: [fromId], references: [id], onDelete: Cascade)
   to   User @relation("TaskTo", fields: [toId], references: [id], onDelete: Cascade)
 }
+
+model LoginAttempt {
+  phoneKey       String   @id
+  failedAttempts Int      @default(0)
+  windowStartedAt DateTime @default(now())
+  blockedUntil   DateTime?
+  updatedAt      DateTime @updatedAt
+
+  @@index([blockedUntil])
+  @@index([updatedAt])
+}
