@@ -102,6 +102,7 @@ model OtpCode {
   expiresAt DateTime
   createdAt DateTime   @default(now())
   used      Boolean    @default(false)
+  failedAttempts Int   @default(0)
 
   @@index([phone, purpose])
 }
