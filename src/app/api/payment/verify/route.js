@@ -67,7 +67,7 @@ export async function GET(req) {
       transaction.authority === authority &&
       Number(transaction.amount) === Number(order.total) &&
       transaction.gateway === ZARINPAL_GATEWAY_NAME &&
-      transaction.status === "PENDING";
+      ["PENDING", "FAILED"].includes(transaction.status);
 
     if (!validTransaction) {
       console.error("ZARINPAL_TRANSACTION_MISMATCH", {
@@ -181,7 +181,9 @@ export async function GET(req) {
             authority,
             amount: order.total,
             gateway: ZARINPAL_GATEWAY_NAME,
-            status: "PENDING",
+            status: {
+              in: ["PENDING", "FAILED"],
+            },
           },
           data: {
             status: "SUCCESS",
