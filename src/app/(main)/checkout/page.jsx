@@ -149,19 +149,32 @@ export default function CheckoutPage() {
         throw new Error(data.error || "خطا در ثبت سفارش");
       }
 
-      // اگر بک‌اند لینک پرداخت برگرداند، مستقیم برو درگاه
-      if (data?.paymentUrl) {
-        window.location.href = data.paymentUrl;
-        return;
+      if (!data?.orderId) {
+        throw new Error("شناسه سفارش دریافت نشد.");
       }
 
-      // اگر فعلاً لینک پرداخت برنگشت، حداقل برو صفحه سفارشات
-      if (data?.orderId) {
-        router.push("/profile?tab=orders");
-        return;
+      // درخواست جداگانه برای شروع پرداخت
+      const paymentRes = await fetch("/api/payment/request", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          orderId: data.orderId,
+        }),
+      });
+
+      const paymentData = await paymentRes.json();
+
+      if (!paymentRes.ok || !paymentData?.paymentUrl) {
+        throw new Error(
+          paymentData.error || "شروع پرداخت ناموفق بود."
+        );
       }
 
-      throw new Error("لینک پرداخت دریافت نشد");
+      // انتقال به درگاه
+      window.location.assign(paymentData.paymentUrl);
+      return;
     } catch (err) {
       setError(err.message || "خطا در ثبت سفارش");
     } finally {
