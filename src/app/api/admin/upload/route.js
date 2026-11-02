@@ -6,22 +6,27 @@ import path from "path";
 import crypto from "crypto";
 import { requireManagerOrAdmin } from "@/lib/auth";
 
+const UPLOAD_DIR = path.resolve(
+    process.env.UPLOAD_DIR || path.join(process.cwd(), "storage", "uploads")
+);
+
 let sharp;
 
 async function optimizeImage(buffer, outputPath) {
-  if (!sharp) {
-    ({ default: sharp } = await import("sharp"));
-  }
+    if (!sharp) {
+        ({ default: sharp } = await import("sharp"));
+    }
 
-  return sharp(buffer)
-    .resize({
-      width: 1600,
-      withoutEnlargement: true,
-    })
-    .webp({
-      quality: 82,
-    })
-    .toFile(outputPath);
+    return sharp(buffer)
+        .rotate()
+        .resize({
+            width: 1600,
+            withoutEnlargement: true,
+        })
+        .webp({
+            quality: 82,
+        })
+        .toFile(outputPath);
 }
 
 const MAX_SIZE = 8 * 1024 * 1024; // 8 مگابایت
@@ -36,8 +41,11 @@ export async function POST(req) {
         const formData = await req.formData();
         const file = formData.get("image");
 
-        if (!file || typeof file === "string") {
-            return NextResponse.json({ error: "فایلی انتخاب نشده" }, { status: 400 });
+        if (!file || typeof file === "string" || file.size === 0) {
+            return NextResponse.json(
+                { error: "فایل معتبر انتخاب نشده" },
+                { status: 400 }
+            );
         }
 
         if (!ALLOWED_TYPES.includes(file.type)) {
@@ -54,8 +62,8 @@ export async function POST(req) {
         const year = String(now.getFullYear());
         const month = String(now.getMonth() + 1).padStart(2, "0");
 
-        const relativeDir = path.join("images", "products", year, month);
-        const absoluteDir = path.join(process.cwd(), "public", relativeDir);
+        const relativeDir = path.join("products", year, month);
+        const absoluteDir = path.join(UPLOAD_DIR, relativeDir);
         await mkdir(absoluteDir, { recursive: true });
 
         const filename = `${Date.now()}-${crypto.randomBytes(4).toString("hex")}.webp`;
@@ -63,7 +71,7 @@ export async function POST(req) {
 
         await optimizeImage(buffer, absolutePath);
 
-        const publicUrl = `/${relativeDir.split(path.sep).join("/")}/${filename}`;
+        const publicUrl = `/uploads/${relativeDir.split(path.sep).join("/")}/${filename}`;
 
         return NextResponse.json({ url: publicUrl }, { status: 201 });
     } catch (error) {
