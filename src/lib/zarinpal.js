@@ -1,5 +1,5 @@
 const IS_SANDBOX =
-  process.env.ZARINPAL_SANDBOX?.trim().toLowerCase() !== "false";
+  process.env.ZARINPAL_SANDBOX?.trim().toLowerCase() === "true";
 
 const API_BASE_URL = IS_SANDBOX
   ? "https://sandbox.zarinpal.com"
