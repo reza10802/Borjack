@@ -219,6 +219,12 @@ a:hover {
   text-align: center !important;
 }
 
+.search-input-custom-clear::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+  display: none;
+}
+
 @keyframes fadeIn {
   from {
     opacity: 0;

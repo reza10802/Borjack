@@ -1,0 +1,23 @@
+# Dependencies
+node_modules
+
+# Next.js build output
+.next
+out
+build
+coverage
+
+# Git metadata
+.git
+
+# Environment files and secrets
+.env*
+!.env.example
+
+# Locally generated Prisma Client
+src/generated/prisma
+
+# Logs and local certificates
+*.log
+*.pem
+*.keystore

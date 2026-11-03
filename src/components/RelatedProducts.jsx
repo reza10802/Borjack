@@ -49,6 +49,19 @@ export default function RelatedProducts({ products }) {
                 {product.title}
               </h3>
 
+              <div className="mt-2 text-xs">
+                {Number.isSafeInteger(Number(product.availableStock)) &&
+                  Number(product.availableStock) > 0 ? (
+                  <span className="text-emerald-600 dark:text-emerald-400">
+                    موجود در انبار
+                  </span>
+                ) : (
+                  <span className="text-red-500">
+                    ناموجود
+                  </span>
+                )}
+              </div>
+
               <div className="mt-auto flex min-w-0 flex-wrap items-center justify-between gap-2 pt-4">
                 <div className="flex min-w-0 flex-wrap items-baseline gap-x-1">
                   <span className="text-sm font-bold text-[var(--color-text)] sm:text-base">

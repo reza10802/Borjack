@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import Select from "react-select";
 import {
@@ -133,6 +133,7 @@ const selectStyles = {
 };
 
 
+
 export default function AdminProductsPage() {
   const { user } = useAuth();
   const isAdmin = user?.role === "ADMIN";
@@ -147,47 +148,69 @@ export default function AdminProductsPage() {
   const [formError, setFormError] = useState("");
   const [galleryUploading, setGalleryUploading] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
+  const [view, setView] = useState("active");
+  const [restoring, setRestoring] = useState(null);
 
-  useEffect(() => {
-    fetchProducts();
+  // دریافت دسته‌بندی‌ها
+  const fetchCategories = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/categories", {
+        cache: "no-store",
+      });
+
+      if (!res.ok) {
+        throw new Error("خطا در دریافت دسته‌بندی‌ها");
+      }
+
+      const data = await res.json();
+      setCategories(data.categories || []);
+    } catch (error) {
+      console.error("FETCH CATEGORIES ERROR:", error);
+    }
   }, []);
 
-  useEffect(() => {
-    if (showForm && isAdmin) fetchCategories();
-  }, [showForm, isAdmin]);
-
-  const fetchCategories = async () => {
+  // دریافت محصولات فعال یا آرشیوشده
+  const fetchProducts = useCallback(async (targetView) => {
     try {
-      const res = await fetch("/api/admin/categories");
-      if (res.ok) {
-        const data = await res.json();
-        const cats = data.categories || [];
-        setCategories(cats);
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  };
+      setLoading(true);
+      setListError("");
 
-  const fetchProducts = async () => {
-    setListError("");
-    setLoading(true);
-    try {
-      const res = await fetch("/api/admin/products");
+      const query =
+        targetView === "archived" ? "?archived=true" : "";
+
+      const res = await fetch(`/api/admin/products${query}`, {
+        cache: "no-store",
+      });
+
       const data = await res.json();
+
       if (!res.ok) {
-        setListError(data.error || "خطا در دریافت محصولات");
-        setProducts([]);
-        return;
+        throw new Error(data.error || "خطا در دریافت محصولات");
       }
+
       setProducts(data.products || []);
-    } catch {
-      setListError("خطا در ارتباط با سرور");
+    } catch (error) {
+      console.error("FETCH PRODUCTS ERROR:", error);
+      setListError(error.message || "خطا در ارتباط با سرور");
       setProducts([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  // با تغییر تب، فهرست محصولات دوباره دریافت می‌شود.
+  useEffect(() => {
+    fetchProducts(view);
+  }, [fetchProducts, view]);
+
+  // دریافت دسته‌بندی‌ها هنگام بازشدن فرم
+  useEffect(() => {
+    if (showForm && isAdmin) {
+      fetchCategories();
+    }
+  }, [showForm, isAdmin, fetchCategories]);
+
+
 
   const toggleStock = async (product) => {
     try {
@@ -207,19 +230,68 @@ export default function AdminProductsPage() {
     }
   };
 
-  const deleteProduct = async (id) => {
+  const archiveProduct = async (id) => {
     if (!isAdmin) return;
-    if (!confirm("مطمئنی می‌خوای این محصول رو حذف کنی؟")) return;
+
+    if (
+      !confirm(
+        "این محصول از فروشگاه مخفی و به بخش محصولات آرشیوشده منتقل شود؟"
+      )
+    ) {
+      return;
+    }
+
     try {
-      const res = await fetch(`/api/admin/products/${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/admin/products/${id}`, {
+        method: "DELETE",
+      });
+
       const data = await res.json();
+
       if (!res.ok) {
-        alert(data.error || "حذف نشد");
+        alert(data.error || "آرشیو محصول ناموفق بود");
         return;
       }
+
       setProducts((prev) => prev.filter((p) => p.id !== id));
+
+      alert(data.message || "محصول با موفقیت آرشیو شد");
     } catch {
       alert("خطا در ارتباط با سرور");
+    }
+  };
+
+  const restoreProduct = async (id) => {
+    if (!isAdmin || restoring !== null) return;
+
+    if (!confirm("این محصول از آرشیو خارج شود؟")) {
+      return;
+    }
+
+    setRestoring(id);
+
+    try {
+      const res = await fetch(
+        `/api/admin/products/${id}/restore`,
+        {
+          method: "POST",
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        alert(data.error || "بازگردانی محصول ناموفق بود");
+        return;
+      }
+
+      setProducts((prev) => prev.filter((p) => p.id !== id));
+
+      alert("محصول با موفقیت بازگردانی شد");
+    } catch {
+      alert("خطا در ارتباط با سرور");
+    } finally {
+      setRestoring(null);
     }
   };
 
@@ -411,17 +483,69 @@ export default function AdminProductsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-lg font-bold">محصولات ({products.length})</h2>
-        {isAdmin && (
+
+      <div className="flex flex-col gap-4">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-lg font-bold">
+            {view === "active"
+              ? `محصولات فعال (${products.length})`
+              : `محصولات آرشیوشده (${products.length})`}
+          </h2>
+
+          {isAdmin && view === "active" && (
+            <button
+              type="button"
+              onClick={() => {
+                if (showForm) {
+                  cancelEdit();
+                } else {
+                  setEditingProduct(null);
+                  setForm({
+                    ...emptyForm,
+                    categoryId: categories[0]?.id ?? "",
+                  });
+                  setFormError("");
+                  setShowForm(true);
+                }
+              }}
+              className="btn-primary px-5 py-2.5 text-sm"
+            >
+              {showForm ? "بستن فرم" : "+ محصول جدید"}
+            </button>
+          )}
+        </div>
+
+        <div className="flex gap-2 border-b border-[var(--color-border)] pb-3">
           <button
             type="button"
-            onClick={() => showForm ? cancelEdit() : (setEditingProduct(null), setForm({ ...emptyForm, categoryId: categories[0]?.id ?? "" }), setFormError(""), setShowForm(true))}
-            className="btn-primary px-5 py-2.5 text-sm"
+            onClick={() => {
+              setShowForm(false);
+              setView("active");
+            }}
+            className={`rounded-xl px-4 py-2 text-sm font-medium transition ${view === "active"
+              ? "bg-[var(--color-accent)] text-white"
+              : "bg-[var(--color-surface-2)] text-[var(--color-text-muted)]"
+              }`}
           >
-            {showForm ? "بستن فرم" : "+ محصول جدید"}
+            محصولات فعال
           </button>
-        )}
+
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => {
+                setShowForm(false);
+                setView("archived");
+              }}
+              className={`rounded-xl px-4 py-2 text-sm font-medium transition ${view === "archived"
+                ? "bg-[var(--color-accent)] text-white"
+                : "bg-[var(--color-surface-2)] text-[var(--color-text-muted)]"
+                }`}
+            >
+              آرشیوشده
+            </button>
+          )}
+        </div>
       </div>
 
       {isAdmin && showForm && (
@@ -607,7 +731,11 @@ export default function AdminProductsPage() {
       ) : listError ? (
         <p className="text-sm text-red-500">{listError}</p>
       ) : products.length === 0 ? (
-        <p className="text-sm text-[var(--color-text-muted)]">هنوز محصولی ثبت نشده.</p>
+        <p className="text-sm text-[var(--color-text-muted)]">
+          {view === "active"
+            ? "هنوز محصولی ثبت نشده."
+            : "محصول آرشیوشده‌ای وجود ندارد."}
+        </p>
       ) : (
         <div className="flex flex-col gap-3">
           {products.map((product) => (
@@ -622,19 +750,62 @@ export default function AdminProductsPage() {
                 {product.specs?.length > 0 && <p className="mt-1 text-xs text-[var(--color-text-muted)]">{product.specs.length} مشخصه فنی</p>}
               </div>
 
-              <button type="button" onClick={() => toggleStock(product)} className={`shrink-0 rounded-xl px-3 py-2 text-xs font-medium transition ${product.stock > 0 ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"}`}>
-                {product.stock > 0 ? "موجود" : "ناموجود"}
-              </button>
 
-              <button type="button" onClick={() => startEditing(product)} aria-label="ویرایش محصول" className="shrink-0 text-[var(--color-accent)] transition hover:opacity-75">
-                <PencilSquareIcon className="h-5 w-5" />
-              </button>
+              {view === "active" ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => toggleStock(product)}
+                    className={`shrink-0 rounded-xl px-3 py-2 text-xs font-medium transition ${product.stock > 0
+                      ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                      : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                      }`}
+                  >
+                    {product.stock > 0 ? "موجود" : "ناموجود"}
+                  </button>
 
-              {isAdmin && (
-                <button type="button" onClick={() => deleteProduct(product.id)} aria-label="حذف محصول" className="shrink-0 text-[var(--color-text-muted)] transition hover:text-red-500">
-                  <XMarkIcon className="h-5 w-5" />
-                </button>
+                  {isAdmin && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => startEditing(product)}
+                        aria-label="ویرایش محصول"
+                        className="shrink-0 text-[var(--color-accent)] transition hover:opacity-75"
+                      >
+                        <PencilSquareIcon className="h-5 w-5" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => archiveProduct(product.id)}
+                        aria-label="آرشیو محصول"
+                        title="انتقال به آرشیو"
+                        className="shrink-0 text-[var(--color-text-muted)] transition hover:text-red-500"
+                      >
+                        <XMarkIcon className="h-5 w-5" />
+                      </button>
+                    </>
+                  )}
+                </>
+              ) : (
+                isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => restoreProduct(product.id)}
+                    disabled={restoring === product.id}
+                    aria-label="بازگردانی محصول"
+                    title="بازگردانی محصول"
+                    className="shrink-0 rounded-xl bg-green-100 px-3 py-2 text-xs font-medium text-green-700 transition hover:bg-green-200 disabled:opacity-50 dark:bg-green-900/30 dark:text-green-400"
+                  >
+                    {restoring === product.id ? (
+                      <ArrowPathIcon className="h-4 w-4 animate-spin" />
+                    ) : (
+                      "بازگردانی"
+                    )}
+                  </button>
+                )
               )}
+
             </div>
           ))}
         </div>

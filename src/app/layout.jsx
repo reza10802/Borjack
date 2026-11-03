@@ -4,6 +4,7 @@ import { CartProvider } from "@/context/CartContext";
 import ThemeProvider from "@/context/ThemeProvider";
 import SWRegister from "./sw-register";
 import InstallPrompt from "@/components/pwa/InstallPrompt";
+import CustomerAssistant from "@/components/assistant/CustomerAssistant";
 
 const BASE_URL = (
   process.env.NEXT_PUBLIC_SITE_URL || "https://borjak.site"
@@ -110,6 +111,7 @@ export default function RootLayout({ children }) {
             <CartProvider>
               {children}
               <InstallPrompt />
+              <CustomerAssistant />
             </CartProvider>
           </AuthProvider>
         </ThemeProvider>

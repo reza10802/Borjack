@@ -27,7 +27,6 @@ export async function generateMetadata({ params }) {
     }
 
     const product = await res.json();
-
     const productUrl = absoluteUrl(`/products/${product.slug}`);
 
     return {
@@ -94,6 +93,14 @@ export default async function Page({ params }) {
   }
 
   const product = await res.json();
+
+  // موجودی قابل خرید از API دریافت می‌شود؛
+  // موجودی خام و رزروشده نباید در این صفحه محاسبه شوند.
+  const availableStock = Number.isSafeInteger(
+    Number(product.availableStock)
+  )
+    ? Math.max(0, Number(product.availableStock))
+    : 0;
 
   const productUrl = absoluteUrl(`/products/${product.slug}`);
 
@@ -162,7 +169,7 @@ export default async function Page({ params }) {
             priceCurrency: "IRR",
             price: Number(product.price),
             availability:
-              product.stock > 0
+              availableStock > 0
                 ? "https://schema.org/InStock"
                 : "https://schema.org/OutOfStock",
           },
@@ -184,9 +191,7 @@ export default async function Page({ params }) {
       "@type": "ListItem",
       position: breadcrumbItems.length + 1,
       name: product.category.title,
-      item: absoluteUrl(
-        `/category/${product.category.slug}`
-      ),
+      item: absoluteUrl(`/category/${product.category.slug}`),
     });
   }
 
@@ -195,9 +200,7 @@ export default async function Page({ params }) {
       "@type": "ListItem",
       position: breadcrumbItems.length + 1,
       name: product.brand.title,
-      item: absoluteUrl(
-        `/brand/${product.brand.slug}`
-      ),
+      item: absoluteUrl(`/brand/${product.brand.slug}`),
     });
   }
 

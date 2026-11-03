@@ -383,7 +383,7 @@ function SearchContent() {
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
                     placeholder="جستجو در محصولات..."
-                    className="w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] py-3.5 pr-12 pl-10 text-[var(--color-text)] outline-none transition placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-accent)] sm:py-4"
+                    className="search-input-custom-clear w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] py-3.5 pr-12 pl-10 text-[var(--color-text)] outline-none transition placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-accent)] sm:py-4"
                 />
                 <svg
                     className="absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[var(--color-text-muted)]"

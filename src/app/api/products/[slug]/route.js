@@ -2,14 +2,31 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
 
+function getAvailableStock(product) {
+  const stock = Number(product?.stock ?? 0);
+  const reservedStock = Number(product?.reservedStock ?? 0);
+
+  if (
+    !Number.isSafeInteger(stock) ||
+    !Number.isSafeInteger(reservedStock)
+  ) {
+    return 0;
+  }
+
+  return Math.max(0, stock - reservedStock);
+}
+
 export async function GET(req, { params }) {
   try {
     const user = await getSessionUser(req);
     const { slug } = await params;
 
-    const product = await prisma.product.findUnique({
+    // دریافت محصول؛ محصولات آرشیوشده قابل مشاهده نیستند.
+    const product = await prisma.product.findFirst({
       where: {
         slug,
+        deletedAt: null,
+        isPublished: true,
       },
       include: {
         category: {
@@ -19,7 +36,6 @@ export async function GET(req, { params }) {
             slug: true,
           },
         },
-
         brand: {
           select: {
             id: true,
@@ -39,8 +55,16 @@ export async function GET(req, { params }) {
           },
         },
         reviews: {
+          where: {
+            approved: true,
+          },
           include: {
-            author: true,
+            author: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
           },
         },
         ...(user
@@ -59,17 +83,21 @@ export async function GET(req, { params }) {
     });
 
     if (!product) {
-      return NextResponse.json({ error: "محصول پیدا نشد" }, { status: 404 });
+      return NextResponse.json(
+        { error: "محصول پیدا نشد" },
+        { status: 404 },
+      );
     }
 
     const tagIds = product.tags.map((t) => t.tagId);
 
+    // محصولات مرتبط نباید آرشیوشده یا منتشرنشده باشند.
     const relatedProducts = await prisma.product.findMany({
       where: {
         id: {
           not: product.id,
         },
-
+        deletedAt: null,
         isPublished: true,
 
         OR: [
@@ -100,12 +128,10 @@ export async function GET(req, { params }) {
             : []),
         ],
       },
-
       include: {
         images: true,
         tags: true,
       },
-
       take: 8,
     });
 
@@ -116,7 +142,11 @@ export async function GET(req, { params }) {
         score += 10;
       }
 
-      if (product.brandId && item.brandId && item.brandId === product.brandId) {
+      if (
+        product.brandId &&
+        item.brandId &&
+        item.brandId === product.brandId
+      ) {
         score += 6;
       }
 
@@ -125,12 +155,13 @@ export async function GET(req, { params }) {
       ).length;
 
       score += commonTags * 3;
-
       score += item.rating * 2;
-
       score += item.reviewCount / 20;
 
-      if (item.stock > 0) {
+      // اولویت بیشتر برای محصولاتی که واقعاً قابل خرید هستند.
+      const availableStock = getAvailableStock(item);
+
+      if (availableStock > 0) {
         score += 5;
       }
 
@@ -140,36 +171,49 @@ export async function GET(req, { params }) {
 
       return {
         ...item,
+        availableStock,
         score,
       };
     });
+
     scoredProducts.sort((a, b) => b.score - a.score);
-    const finalRelated = scoredProducts.slice(0, 4).map((item) => ({
-      id: item.id,
-      title: item.title,
-      price: item.price,
-      discount: item.discount,
-      rating: item.rating,
-      reviewCount: item.reviewCount,
-      image: item.images?.[0]?.url || item.image,
-      slug: item.slug,
-    }));
+
+    const finalRelated = scoredProducts
+      .slice(0, 4)
+      .map((item) => ({
+        id: item.id,
+        title: item.title,
+        price: item.price,
+        discount: item.discount,
+        rating: item.rating,
+        reviewCount: item.reviewCount,
+        availableStock: item.availableStock,
+        image: item.images?.[0]?.url || item.image,
+        slug: item.slug,
+      }));
+
+    // مقدار reservedStock را در API عمومی افشا نمی‌کنیم.
+    const publicProduct = { ...product };
+    delete publicProduct.reservedStock;
 
     const normalized = {
-      ...product,
-
+      ...publicProduct,
       image: product.images?.[0]?.url || product.image,
-
-      isWishlisted: user ? product.wishlistItems.length > 0 : false,
-
+      availableStock: getAvailableStock(product),
+      isWishlisted: user
+        ? product.wishlistItems.length > 0
+        : false,
       relatedProducts: finalRelated,
-
       hasReviews: product.reviewCount > 0,
     };
 
     return NextResponse.json(normalized);
   } catch (error) {
-    console.error(error);
-    return NextResponse.json({ error: "خطا در دریافت محصول" }, { status: 500 });
+    console.error("GET PRODUCT BY SLUG ERROR:", error);
+
+    return NextResponse.json(
+      { error: "خطا در دریافت محصول" },
+      { status: 500 },
+    );
   }
 }

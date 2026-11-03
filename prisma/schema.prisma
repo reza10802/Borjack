@@ -35,6 +35,14 @@ enum PaymentStatus {
   EXPIRED
 }
 
+enum StockReservationStatus {
+  NONE
+  RESERVED
+  CONSUMED
+  RELEASED
+  ISSUE
+}
+
 model Transaction {
   id String @id @default(cuid())
 
@@ -95,28 +103,28 @@ enum OtpPurpose {
 }
 
 model OtpCode {
-  id        String     @id @default(cuid())
-  phone     String
-  code      String
-  purpose   OtpPurpose
-  expiresAt DateTime
-  createdAt DateTime   @default(now())
-  used      Boolean    @default(false)
-  failedAttempts Int   @default(0)
+  id             String     @id @default(cuid())
+  phone          String
+  code           String
+  purpose        OtpPurpose
+  expiresAt      DateTime
+  createdAt      DateTime   @default(now())
+  used           Boolean    @default(false)
+  failedAttempts Int        @default(0)
 
   @@index([phone, purpose])
 }
 
 model User {
-  id              String  @id @default(cuid())
+  id              String    @id @default(cuid())
   name            String
-  phone           String  @unique
+  phone           String    @unique
   email           String?
   password        String
-  role            Role    @default(CUSTOMER)
-  isPhoneVerified Boolean @default(false)
+  role            Role      @default(CUSTOMER)
+  isPhoneVerified Boolean   @default(false)
   phoneVerifiedAt DateTime?
-  isActive        Boolean @default(true)
+  isActive        Boolean   @default(true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -227,6 +235,10 @@ model Product {
   tags          ProductTag[]
   isPublished   Boolean      @default(true)
   slug          String?      @unique
+  reservedStock Int          @default(0)
+
+  // Soft delete / Archive
+  deletedAt DateTime?
 
   wishlistItems WishlistItem[]
   images        ProductImage[]
@@ -234,6 +246,9 @@ model Product {
   reviews       Review[]
   cartItems     CartItem[]
   orderItems    OrderItem[]
+
+  @@index([deletedAt])
+  @@index([isPublished, deletedAt])
 }
 
 model ProductImage {
@@ -284,7 +299,7 @@ model Order {
   id Int @id @default(autoincrement())
 
   userId String
-  user User @relation(fields: [userId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
 
   total Int
 
@@ -292,31 +307,34 @@ model Order {
 
   paymentStatus PaymentStatus @default(PENDING)
 
-  authority String? @unique
+  stockReservationStatus StockReservationStatus @default(NONE)
+  stockIssueAt           DateTime?
+
+  authority        String?   @unique
   paymentExpiresAt DateTime?
-  refId String?
-  paidAt DateTime?
+  refId            String?
+  paidAt           DateTime?
 
   // اطلاعات گیرنده
-  receiverName String
+  receiverName  String
   receiverPhone String
 
-  provinceId Int
+  provinceId   Int
   provinceName String
 
-  cityId Int
+  cityId   Int
   cityName String
 
-  address String
+  address    String
   postalCode String
 
   // اطلاعات ارسال
   shippingMethod ShippingMethod?
-  shippingCost Int @default(0)
+  shippingCost   Int             @default(0)
 
   trackingCode String?
-  shippedAt DateTime?
-  deliveredAt DateTime?
+  shippedAt    DateTime?
+  deliveredAt  DateTime?
 
   items OrderItem[]
 
@@ -324,6 +342,8 @@ model Order {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([stockReservationStatus, paymentExpiresAt])
 }
 
 model OrderItem {
@@ -369,11 +389,11 @@ model Task {
 }
 
 model LoginAttempt {
-  phoneKey       String   @id
-  failedAttempts Int      @default(0)
-  windowStartedAt DateTime @default(now())
-  blockedUntil   DateTime?
-  updatedAt      DateTime @updatedAt
+  phoneKey        String    @id
+  failedAttempts  Int       @default(0)
+  windowStartedAt DateTime  @default(now())
+  blockedUntil    DateTime?
+  updatedAt       DateTime  @updatedAt
 
   @@index([blockedUntil])
   @@index([updatedAt])

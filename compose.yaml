@@ -1,0 +1,43 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: borjak_test
+      POSTGRES_USER: borjak_test
+      POSTGRES_PASSWORD: local_only_change_me
+    volumes:
+      - borjak_local_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U borjak_test -d borjak_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  migrate:
+    image: borjak-migrate-local:dev
+    build:
+      context: .
+      target: builder
+    env_file:
+      - .env.docker
+    command: ["npx", "prisma", "migrate", "deploy"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles:
+      - tools
+
+  app:
+    image: borjak-local:dev
+    env_file:
+      - .env.docker
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  borjak_local_pgdata:

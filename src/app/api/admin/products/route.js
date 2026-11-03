@@ -1,7 +1,11 @@
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireManagerOrAdmin, logAction } from "@/lib/auth";
+import {
+  requireManagerOrAdmin,
+  requireAdmin,
+  logAction,
+} from "@/lib/auth";
 
 // ساخت slug از عنوان فارسی یا انگلیسی
 function slugify(value) {
@@ -37,13 +41,33 @@ async function generateUniqueSlug(title) {
 }
 
 // GET /api/admin/products — دریافت فهرست محصولات
+
+// GET /api/admin/products — دریافت محصولات فعال یا آرشیوشده
 export async function GET(req) {
-  const check = await requireManagerOrAdmin(req);
+  const { searchParams } = new URL(req.url);
+  const archived = searchParams.get("archived") === "true";
+
+  // فقط Admin اجازه مشاهده محصولات آرشیوشده را دارد.
+  const check = archived
+    ? await requireAdmin()
+    : await requireManagerOrAdmin(req);
+
   if (check.error) return check.error;
 
   try {
     const products = await prisma.product.findMany({
-      orderBy: { createdAt: "desc" },
+      where: archived
+        ? {
+          deletedAt: {
+            not: null,
+          },
+        }
+        : {
+          deletedAt: null,
+        },
+      orderBy: {
+        createdAt: "desc",
+      },
       include: {
         category: {
           select: {
@@ -66,6 +90,7 @@ export async function GET(req) {
     );
   }
 }
+
 
 // POST /api/admin/products — ساخت محصول جدید
 export async function POST(req) {

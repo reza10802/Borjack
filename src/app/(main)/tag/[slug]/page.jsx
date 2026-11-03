@@ -15,6 +15,7 @@ async function getProducts(tagId) {
     const products = await prisma.product.findMany({
         where: {
             isPublished: true,
+            deletedAt: null,
 
             tags: {
                 some: {
@@ -22,7 +23,6 @@ async function getProducts(tagId) {
                 },
             },
         },
-
         include: {
             brand: true,
             images: true,

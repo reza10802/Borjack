@@ -1,3 +1,6 @@
+import Link from "next/link";
+import { ArrowRight } from "lucide-react";
+
 export const metadata = {
   title: "ارتباط با ما | برجک",
   description: "تماس با فروشگاه اینترنتی برجک",
@@ -12,6 +15,18 @@ export default function ContactPage() {
       {/* Hero */}
       <section className="bg-[var(--color-primary)] text-white">
         <div className="max-w-6xl mx-auto px-6 py-20 text-center">
+
+          {/* Back to site */}
+          <div className="flex justify-start mb-10">
+            <Link
+              href="/"
+              className="inline-flex items-center gap-2 rounded-xl bg-white/10 px-4 py-2.5 text-sm font-bold text-white border border-white/20 backdrop-blur-sm transition-all hover:bg-white/20"
+            >
+              <ArrowRight size={18} />
+              برگشت به سایت
+            </Link>
+          </div>
+
           <h1 className="text-4xl font-black mb-5">
             ارتباط با ما
           </h1>

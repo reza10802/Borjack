@@ -12,6 +12,7 @@ import { toPersianPrice } from "@/lib/utils";
 import { useCart } from "@/context/CartContext";
 
 const REVIEWS_LIMIT = 20;
+const MAX_QUANTITY_PER_ITEM = 20;
 
 const Stars = ({ rating, interactive = false, onRate }) => (
     <div className="flex">
@@ -50,6 +51,8 @@ export default function ProductPage({ product }) {
     const [wishlistLoading, setWishlistLoading] = useState(false);
     const [imageLoaded, setImageLoaded] = useState(false);
     const [lightboxOpen, setLightboxOpen] = useState(false);
+
+    const [cartError, setCartError] = useState("");
 
     useEffect(() => {
         const handleKey = (e) => {
@@ -112,18 +115,56 @@ export default function ProductPage({ product }) {
 
     if (!product) return null;
 
+    const availableStock = Number.isSafeInteger(
+        Number(product.availableStock)
+    )
+        ? Math.max(0, Number(product.availableStock))
+        : 0;
+
+    const maxPurchasableQuantity = Math.min(
+        availableStock,
+        MAX_QUANTITY_PER_ITEM
+    );
+
     const approvedReviews = product.reviews?.filter((r) => r.approved) || [];
     const visibleReviews = showAllReviews
         ? approvedReviews
         : approvedReviews.slice(0, REVIEWS_LIMIT);
 
     const handleAddToCart = async () => {
+        setCartError("");
+
+        if (availableStock <= 0) {
+            setCartError("این محصول در حال حاضر موجودی قابل خرید ندارد.");
+            return;
+        }
+
+        if (quantity > availableStock) {
+            setCartError(
+                `فقط ${toPersianPrice(availableStock)} عدد از این محصول قابل خرید است. تعداد را کاهش دهید.`
+            );
+            return;
+        }
+
+        if (quantity > MAX_QUANTITY_PER_ITEM) {
+            setCartError(
+                `حداکثر ${MAX_QUANTITY_PER_ITEM} عدد از هر کالا مجاز است.`
+            );
+            return;
+        }
+
         try {
             await addToCart(product, quantity);
+            setCartError("");
             setAdded(true);
+
             setTimeout(() => setAdded(false), 2000);
         } catch (err) {
             console.error(err);
+
+            setCartError(
+                err?.message || "افزودن محصول به سبد خرید ناموفق بود."
+            );
         }
     };
 
@@ -476,39 +517,86 @@ export default function ProductPage({ product }) {
                             </div>
                         )}
 
-                        <div className="mt-2 flex items-center gap-3">
-                            <div className="overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]">
+                        <div className="mt-2 flex flex-col gap-3">
+                            <div className="flex items-center gap-3">
+                                <div className="overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setQuantity((q) => Math.max(1, q - 1));
+                                            setCartError("");
+                                        }}
+                                        disabled={quantity <= 1}
+                                        aria-label="کاهش تعداد"
+                                        className="px-3 py-2 text-lg transition hover:bg-[var(--color-surface-2)] disabled:cursor-not-allowed disabled:opacity-40"
+                                    >
+                                        −
+                                    </button>
+
+                                    <span className="px-4 py-2 text-sm font-medium text-[var(--color-text)]">
+                                        {toPersianPrice(quantity)}
+                                    </span>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setQuantity((q) =>
+                                                Math.min(maxPurchasableQuantity, q + 1)
+                                            );
+                                            setCartError("");
+                                        }}
+                                        disabled={quantity >= maxPurchasableQuantity}
+                                        aria-label="افزایش تعداد"
+                                        className="px-3 py-2 text-lg transition hover:bg-[var(--color-surface-2)] disabled:cursor-not-allowed disabled:opacity-40"
+                                    >
+                                        +
+                                    </button>
+                                </div>
+
                                 <button
-                                    onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                                    className="px-3 py-2 text-lg transition hover:bg-[var(--color-surface-2)]"
+                                    type="button"
+                                    onClick={handleAddToCart}
+                                    disabled={
+                                        availableStock <= 0 ||
+                                        quantity > availableStock ||
+                                        quantity > MAX_QUANTITY_PER_ITEM
+                                    }
+                                    className={`flex-1 rounded-xl py-3 text-sm font-medium transition ${availableStock <= 0 ||
+                                            quantity > availableStock ||
+                                            quantity > MAX_QUANTITY_PER_ITEM
+                                            ? "cursor-not-allowed border border-[var(--color-border)] bg-[var(--color-surface-2)] text-[var(--color-text-muted)]"
+                                            : added
+                                                ? "bg-green-500 text-white"
+                                                : "btn-primary text-white"
+                                        }`}
                                 >
-                                    −
-                                </button>
-                                <span className="px-4 py-2 text-sm font-medium text-[var(--color-text)]">{quantity}</span>
-                                <button
-                                    onClick={() => setQuantity((q) => q + 1)}
-                                    className="px-3 py-2 text-lg transition hover:bg-[var(--color-surface-2)]"
-                                >
-                                    +
+                                    {availableStock <= 0
+                                        ? "ناموجود"
+                                        : quantity > availableStock
+                                            ? "تعداد بیشتر از موجودی"
+                                            : added
+                                                ? "✓ افزوده شد"
+                                                : "افزودن به سبد خرید"}
                                 </button>
                             </div>
 
-                            <button
-                                onClick={handleAddToCart}
-                                disabled={product.stock <= 0}
-                                className={`flex-1 rounded-xl py-3 text-sm font-medium transition ${product.stock <= 0
-                                    ? "cursor-not-allowed border border-[var(--color-border)] bg-[var(--color-surface-2)] text-[var(--color-text-muted)]"
-                                    : added
-                                        ? "bg-green-500 text-white"
-                                        : "btn-primary text-white"
-                                    }`}
-                            >
-                                {product.stock <= 0
-                                    ? "ناموجود"
-                                    : added
-                                        ? "✓ افزوده شد"
-                                        : "افزودن به سبد خرید"}
-                            </button>
+                            <p className="text-xs text-[var(--color-text-muted)]">
+                                {availableStock > 0
+                                    ? `موجودی قابل خرید: ${toPersianPrice(availableStock)} عدد`
+                                    : "در حال حاضر موجودی قابل خرید ندارد."}
+                            </p>
+
+                            {quantity > availableStock && availableStock > 0 && (
+                                <p className="text-sm text-amber-600">
+                                    تعداد انتخاب‌شده بیشتر از موجودی قابل خرید است. لطفاً تعداد را کاهش دهید.
+                                </p>
+                            )}
+
+                            {cartError && (
+                                <p className="text-sm text-red-500">
+                                    {cartError}
+                                </p>
+                            )}
                         </div>
                     </div>
                 </div>

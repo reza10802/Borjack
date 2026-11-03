@@ -10,7 +10,9 @@ export default function SpecialOfferMobileCard({ product }) {
         Number(product.discount) > 0 &&
         Number(product.originalPrice) > Number(product.price);
 
-    const isAvailable = Number(product.stock) > 0;
+    const isAvailable =
+        Number.isSafeInteger(Number(product.availableStock)) &&
+        Number(product.availableStock) > 0;
 
     return (
         <Link

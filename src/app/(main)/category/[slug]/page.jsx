@@ -26,6 +26,7 @@ async function getProducts(categoryId) {
     const products = await prisma.product.findMany({
         where: {
             isPublished: true,
+            deletedAt: null,
             categoryId,
         },
         include: {

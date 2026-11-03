@@ -10,7 +10,11 @@ export async function GET() {
   today.setHours(0, 0, 0, 0);
 
   const [products, users, todayOrders, outOfStock] = await Promise.all([
-    prisma.product.count(),
+    prisma.product.count({
+      where: {
+        deletedAt: null,
+      },
+    }), ,
     prisma.user.count(),
     prisma.order.count({
       where: {
@@ -21,6 +25,7 @@ export async function GET() {
     }),
     prisma.product.count({
       where: {
+        deletedAt: null,
         stock: {
           lte: 0,
         },
