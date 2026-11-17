@@ -1,54 +1,112 @@
+
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireAdmin } from "@/lib/auth";
+import {
+    requireAdmin,
+    requireRoles,
+    ROLES,
+} from "@/lib/auth";
 
-export async function GET(req) {
-  const check = await requireAdmin(req);
-  if (check.error) return check.error;
+// GET: مشاهده دسته‌بندی‌ها برای ادمین و تأمین‌کننده
+export async function GET() {
+    const check = await requireRoles([
+        ROLES.ADMIN,
+        ROLES.SUPPLIER,
+    ]);
 
-  const categories = await prisma.category.findMany({
-    orderBy: { title: "asc" },
-  });
-  return NextResponse.json({ categories });
+    if (check.error) return check.error;
+
+    try {
+        const categories = await prisma.category.findMany({
+            orderBy: { title: "asc" },
+        });
+
+        return NextResponse.json({ categories });
+    } catch (error) {
+        console.error("GET CATEGORIES ERROR:", error);
+
+        return NextResponse.json(
+            { error: "خطا در دریافت دسته‌بندی‌ها" },
+            { status: 500 }
+        );
+    }
 }
 
+// POST: ایجاد دسته‌بندی فقط توسط ادمین
 export async function POST(req) {
-  const check = await requireAdmin(req);
-  if (check.error) return check.error;
+    const check = await requireAdmin(req);
+    if (check.error) return check.error;
 
-  const { title } = await req.json();
-  if (!title?.trim()) {
-    return NextResponse.json(
-      { error: "عنوان دسته‌بندی الزامی است" },
-      { status: 400 },
-    );
-  }
+    try {
+        const body = await req.json();
+        const title =
+            typeof body?.title === "string"
+                ? body.title.trim()
+                : "";
 
-  const existing = await prisma.category.findUnique({
-    where: { title: title.trim() },
-  });
-  if (existing) {
-    return NextResponse.json(
-      { error: "این دسته‌بندی قبلاً ثبت شده" },
-      { status: 409 },
-    );
-  }
+        if (!title) {
+            return NextResponse.json(
+                { error: "عنوان دسته‌بندی الزامی است" },
+                { status: 400 }
+            );
+        }
 
-  const category = await prisma.category.create({
-    data: { title: title.trim() },
-  });
-  return NextResponse.json({ category }, { status: 201 });
+        const existing = await prisma.category.findUnique({
+            where: { title },
+        });
+
+        if (existing) {
+            return NextResponse.json(
+                { error: "این دسته‌بندی قبلاً ثبت شده" },
+                { status: 409 }
+            );
+        }
+
+        const category = await prisma.category.create({
+            data: { title },
+        });
+
+        return NextResponse.json(
+            { category },
+            { status: 201 }
+        );
+    } catch (error) {
+        console.error("CREATE CATEGORY ERROR:", error);
+
+        return NextResponse.json(
+            { error: "خطا در ایجاد دسته‌بندی" },
+            { status: 500 }
+        );
+    }
 }
 
+// DELETE: حذف دسته‌بندی فقط توسط ادمین
 export async function DELETE(req) {
-  const check = await requireAdmin(req);
-  if (check.error) return check.error;
+    const check = await requireAdmin(req);
+    if (check.error) return check.error;
 
-  const { searchParams } = new URL(req.url);
-  const id = Number(searchParams.get("id"));
-  if (!id)
-    return NextResponse.json({ error: "شناسه الزامی است" }, { status: 400 });
+    try {
+        const { searchParams } = new URL(req.url);
+        const id = Number(searchParams.get("id"));
 
-  await prisma.category.delete({ where: { id } });
-  return NextResponse.json({ success: true });
+        if (!Number.isSafeInteger(id) || id <= 0) {
+            return NextResponse.json(
+                { error: "شناسه دسته‌بندی معتبر نیست" },
+                { status: 400 }
+            );
+        }
+
+        await prisma.category.delete({
+            where: { id },
+        });
+
+        return NextResponse.json({ success: true });
+    } catch (error) {
+        console.error("DELETE CATEGORY ERROR:", error);
+
+        return NextResponse.json(
+            { error: "حذف دسته‌بندی انجام نشد" },
+            { status: 500 }
+        );
+    }
 }

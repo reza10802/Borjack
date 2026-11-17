@@ -5,6 +5,7 @@ import {
   ZARINPAL_GATEWAY_NAME,
   ZARINPAL_IS_SANDBOX,
   ZARINPAL_REQUEST_URL,
+  assertGatewayConfig,
   getZarinpalStartPayUrl,
   toZarinpalAmount,
 } from "@/lib/zarinpal";
@@ -12,7 +13,9 @@ import {
   reserveOrderStock,
   releaseOrderStock,
   StockUnavailableError,
+  findPriceMismatches,
 } from "@/lib/stock-reservation";
+import { reconcileExpiredOrders } from "@/lib/payment-recon";
 
 const RESERVATION_DURATION_MS = 15 * 60 * 1000;
 
@@ -93,6 +96,16 @@ export async function POST(req) {
     const check = await requireAuth();
 
     if (check.error) return check.error;
+
+    try {
+      assertGatewayConfig();
+    } catch (e) {
+      console.error("ZARINPAL_CONFIG_ERROR", e?.code);
+      return NextResponse.json({ error: "تنظیمات درگاه پرداخت معتبر نیست" }, { status: 503 });
+    }
+    // Free this user's own expired reservations (only after gateway confirmation) so a customer who
+    // abandoned a payment is never locked out of checkout.
+    await reconcileExpiredOrders({ limit: 3, userId: check.user.id }).catch(() => {});
 
     const body = await req.json().catch(() => ({}));
     const orderId = Number(body?.orderId);
@@ -414,6 +427,15 @@ export async function POST(req) {
             },
           });
         }
+        // Price snapshot policy: the order price is only honoured while it still matches the catalogue.
+        const priceMismatches = await findPriceMismatches(tx, order);
+        if (priceMismatches.length > 0) {
+          return errorResult(
+            "قیمت برخی کالاهای این سفارش تغییر کرده است. لطفاً سبد خرید را بررسی و سفارش را دوباره ثبت کنید.",
+            409,
+          );
+        }
+
 
         const expiresAt = new Date(
           Date.now() + RESERVATION_DURATION_MS,
@@ -662,6 +684,11 @@ export async function POST(req) {
             status: "PENDING",
             gateway: ZARINPAL_GATEWAY_NAME,
           },
+        });
+        await tx.paymentAttempt.upsert({
+          where: { authority },
+          create: { orderId: reservedOrderId, userId: check.user.id, authority, amount, gateway: ZARINPAL_GATEWAY_NAME, status: "PENDING" },
+          update: {},
         });
 
         return true;

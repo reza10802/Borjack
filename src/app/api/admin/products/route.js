@@ -2,7 +2,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import {
-  requireManagerOrAdmin,
   requireAdmin,
   logAction,
 } from "@/lib/auth";
@@ -40,31 +39,44 @@ async function generateUniqueSlug(title) {
   return slug;
 }
 
-// GET /api/admin/products — دریافت فهرست محصولات
-
-// GET /api/admin/products — دریافت محصولات فعال یا آرشیوشده
+// GET /api/admin/products
+// دریافت محصولات فعال یا آرشیوشده همراه با اطلاعات تأمین‌کننده و وضعیت بررسی
 export async function GET(req) {
-  const { searchParams } = new URL(req.url);
-  const archived = searchParams.get("archived") === "true";
-
-  // فقط Admin اجازه مشاهده محصولات آرشیوشده را دارد.
-  const check = archived
-    ? await requireAdmin()
-    : await requireManagerOrAdmin(req);
-
+  const check = await requireAdmin();
   if (check.error) return check.error;
 
   try {
+    const { searchParams } = new URL(req.url);
+
+    const archived =
+      searchParams.get("archived") === "true";
+
+    const reviewStatus =
+      searchParams.get("reviewStatus");
+
+    const allowedStatuses = [
+      "PENDING",
+      "APPROVED",
+      "REJECTED",
+    ];
+
+    if (
+      reviewStatus &&
+      !allowedStatuses.includes(reviewStatus)
+    ) {
+      return NextResponse.json(
+        { error: "وضعیت بررسی محصول معتبر نیست" },
+        { status: 400 },
+      );
+    }
+
+    const where = {
+      deletedAt: archived ? { not: null } : null,
+      ...(reviewStatus ? { reviewStatus } : {}),
+    };
+
     const products = await prisma.product.findMany({
-      where: archived
-        ? {
-          deletedAt: {
-            not: null,
-          },
-        }
-        : {
-          deletedAt: null,
-        },
+      where,
       orderBy: {
         createdAt: "desc",
       },
@@ -77,12 +89,25 @@ export async function GET(req) {
         },
         images: true,
         specs: true,
+        supplier: {
+          select: {
+            id: true,
+            name: true,
+            isActive: true,
+          },
+        },
       },
     });
 
-    return NextResponse.json({ products });
+    return NextResponse.json({
+      success: true,
+      products,
+    });
   } catch (error) {
-    console.error("GET ADMIN PRODUCTS ERROR:", error);
+    console.error("GET ADMIN PRODUCTS ERROR:", {
+      message: error?.message,
+      code: error?.code,
+    });
 
     return NextResponse.json(
       { error: "خطا در دریافت محصولات" },
@@ -91,14 +116,25 @@ export async function GET(req) {
   }
 }
 
-
-// POST /api/admin/products — ساخت محصول جدید
+// POST /api/admin/products
+// ایجاد محصول برای برجک یا یک تأمین‌کننده مشخص
 export async function POST(req) {
-  const check = await requireManagerOrAdmin(req);
+  const check = await requireAdmin();
   if (check.error) return check.error;
 
   try {
     const body = await req.json();
+
+    if (
+      !body ||
+      typeof body !== "object" ||
+      Array.isArray(body)
+    ) {
+      return NextResponse.json(
+        { error: "اطلاعات ارسالی معتبر نیست" },
+        { status: 400 },
+      );
+    }
 
     const {
       title,
@@ -113,26 +149,49 @@ export async function POST(req) {
       specs = [],
     } = body;
 
-    // اعتبارسنجی فیلدهای ضروری
+    // مالکیت محصول فقط توسط ADMIN تعیین می‌شود.
+    // مقدار null یا ارسال‌نشدن supplierId یعنی مالکیت برجک.
+    let supplierId = null;
+    let supplier = null;
+
     if (
-      typeof title !== "string" ||
-      !title.trim() ||
-      price == null ||
-      !Number.isFinite(Number(price)) ||
-      Number(price) <= 0 ||
-      !Number.isFinite(Number(categoryId)) ||
-      Number(categoryId) <= 0 ||
-      typeof image !== "string" ||
-      !image.trim() ||
-      typeof description !== "string" ||
-      !description.trim()
+      Object.hasOwn(body, "supplierId") &&
+      body.supplierId !== null
     ) {
-      return NextResponse.json(
-        { error: "اطلاعات ضروری محصول را به‌درستی وارد کنید" },
-        { status: 400 },
-      );
+      if (
+        typeof body.supplierId !== "string" ||
+        !body.supplierId.trim() ||
+        body.supplierId.length > 128
+      ) {
+        return NextResponse.json(
+          { error: "شناسه تأمین‌کننده معتبر نیست" },
+          { status: 400 },
+        );
+      }
+
+      supplierId = body.supplierId.trim();
+
+      supplier = await prisma.user.findFirst({
+        where: {
+          id: supplierId,
+          role: "SUPPLIER",
+        },
+        select: {
+          id: true,
+          name: true,
+          isActive: true,
+        },
+      });
+
+      if (!supplier) {
+        return NextResponse.json(
+          { error: "تأمین‌کننده موردنظر پیدا نشد" },
+          { status: 404 },
+        );
+      }
     }
 
+    // اعتبارسنجی اطلاعات محصول
     const finalPrice = Number(price);
 
     const finalOriginalPrice =
@@ -140,24 +199,44 @@ export async function POST(req) {
         ? Number(originalPrice)
         : finalPrice;
 
+    const finalDiscount = Number(discount ?? 0);
+    const finalCategoryId = Number(categoryId);
+    const finalStock = Number(stock);
+
     if (
-      !Number.isFinite(finalOriginalPrice) ||
-      finalOriginalPrice < finalPrice
+      typeof title !== "string" ||
+      !title.trim() ||
+      typeof description !== "string" ||
+      !description.trim() ||
+      typeof image !== "string" ||
+      !image.trim() ||
+      !Number.isSafeInteger(finalPrice) ||
+      finalPrice <= 0 ||
+      !Number.isSafeInteger(finalOriginalPrice) ||
+      finalOriginalPrice < finalPrice ||
+      !Number.isSafeInteger(finalDiscount) ||
+      finalDiscount < 0 ||
+      finalDiscount > 100 ||
+      !Number.isSafeInteger(finalCategoryId) ||
+      finalCategoryId <= 0 ||
+      !Number.isSafeInteger(finalStock) ||
+      finalStock < 0
     ) {
       return NextResponse.json(
-        { error: "قیمت اصلی نمی‌تواند کمتر از قیمت فروش باشد" },
+        {
+          error: "اطلاعات ضروری محصول را به‌درستی وارد کنید",
+        },
         { status: 400 },
       );
     }
 
-    // اعتبارسنجی گالری تصاویر
-
-    // اعتبارسنجی گالری تصاویر: حداکثر ۴ عکس گالری + ۱ عکس اصلی
+    // تصویر اصلی جداست؛ حداکثر ۴ تصویر اضافی در گالری
     if (
       !Array.isArray(gallery) ||
       gallery.length > 4 ||
       gallery.some(
-        (url) => typeof url !== "string" || !url.trim(),
+        (url) =>
+          typeof url !== "string" || !url.trim(),
       )
     ) {
       return NextResponse.json(
@@ -168,7 +247,6 @@ export async function POST(req) {
         { status: 400 },
       );
     }
-
 
     // اعتبارسنجی مشخصات فنی
     if (!Array.isArray(specs)) {
@@ -194,24 +272,29 @@ export async function POST(req) {
 
     const slug = await generateUniqueSlug(title);
 
-    // ایجاد محصول به همراه تصاویر و مشخصات فنی
     const product = await prisma.product.create({
       data: {
         title: title.trim(),
         slug,
         price: finalPrice,
         originalPrice: finalOriginalPrice,
-        discount: Number(discount) || 0,
-
-        category: {
-          connect: {
-            id: Number(categoryId),
-          },
-        },
-
+        discount: finalDiscount,
+        categoryId: finalCategoryId,
         image: image.trim(),
         description: description.trim(),
-        stock: Number(stock) || 0,
+        stock: finalStock,
+
+        // مالکیت تأییدشده توسط ADMIN
+        supplierId,
+
+        // محصولات ایجادشده توسط ADMIN تأییدشده هستند.
+        reviewStatus: "APPROVED",
+        reviewNote: null,
+
+        // تأمین‌کننده غیرفعال نمی‌تواند محصول منتشرشده داشته باشد.
+        isPublished: supplier
+          ? supplier.isActive
+          : true,
 
         images: {
           create: gallery.map((url) => ({
@@ -224,30 +307,78 @@ export async function POST(req) {
         },
       },
       include: {
-        category: true,
+        category: {
+          select: {
+            id: true,
+            title: true,
+          },
+        },
         images: true,
         specs: true,
+        supplier: {
+          select: {
+            id: true,
+            name: true,
+            isActive: true,
+          },
+        },
       },
     });
 
-    // ثبت گزارش فعالیت
     await logAction({
       userId: check.user.id,
       action: "CREATE_PRODUCT",
       entityType: "Product",
       entityId: String(product.id),
-      description: `محصول «${product.title}» ایجاد شد`,
-      newValue: product,
+      description: supplier
+        ? `محصول «${product.title}» برای تأمین‌کننده «${supplier.name}» ایجاد شد`
+        : `محصول «${product.title}» برای برجک ایجاد شد`,
+      newValue: {
+        title: product.title,
+        price: product.price,
+        stock: product.stock,
+        supplierId: product.supplierId,
+        supplierName: supplier?.name ?? null,
+        reviewStatus: product.reviewStatus,
+        isPublished: product.isPublished,
+      },
     });
 
-    return NextResponse.json({ product }, { status: 201 });
+    return NextResponse.json(
+      {
+        success: true,
+        product,
+      },
+      { status: 201 },
+    );
   } catch (error) {
-    console.error("CREATE ADMIN PRODUCT ERROR:", error);
+    console.error("CREATE ADMIN PRODUCT ERROR:", {
+      message: error?.message,
+      code: error?.code,
+    });
 
-    if (error.message === "INVALID_PRODUCT_SLUG") {
+    if (error?.message === "INVALID_PRODUCT_SLUG") {
       return NextResponse.json(
-        { error: "عنوان محصول برای ساخت آدرس معتبر نیست" },
+        {
+          error: "عنوان محصول برای ساخت آدرس معتبر نیست",
+        },
         { status: 400 },
+      );
+    }
+
+    if (error?.code === "P2002") {
+      return NextResponse.json(
+        {
+          error: "آدرس محصول تکراری است؛ دوباره تلاش کنید.",
+        },
+        { status: 409 },
+      );
+    }
+
+    if (error?.code === "P2025") {
+      return NextResponse.json(
+        { error: "دسته‌بندی موردنظر پیدا نشد" },
+        { status: 404 },
       );
     }
 

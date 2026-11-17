@@ -5,6 +5,7 @@ import ThemeProvider from "@/context/ThemeProvider";
 import SWRegister from "./sw-register";
 import InstallPrompt from "@/components/pwa/InstallPrompt";
 import CustomerAssistant from "@/components/assistant/CustomerAssistant";
+import { safeJsonLd } from "@/lib/json-ld";
 
 const BASE_URL = (
   process.env.NEXT_PUBLIC_SITE_URL || "https://borjak.site"
@@ -95,14 +96,14 @@ export default function RootLayout({ children }) {
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
-            __html: JSON.stringify(organizationJsonLd),
+            __html: safeJsonLd(organizationJsonLd),
           }}
         />
 
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
-            __html: JSON.stringify(websiteJsonLd),
+            __html: safeJsonLd(websiteJsonLd),
           }}
         />
 

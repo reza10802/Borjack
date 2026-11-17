@@ -48,3 +48,15 @@ android-twa/android.keystore
 
 #images
 /storage/
+
+# Keep local environment secrets out of Git
+.env*
+!.env.example
+
+# Runtime product uploads
+/public/images/products/
+
+# Android generated build files
+/android-twa/**/build/
+/android-twa/.gradle/
+/android-twa/local.properties

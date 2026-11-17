@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireManagerOrAdmin } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth";
 
 // آپدیت میانگین امتیاز و تعداد نظرات تاییدشده‌ی محصول
 async function updateProductRating(productId) {
@@ -26,7 +26,7 @@ async function updateProductRating(productId) {
 
 // GET /api/admin/reviews — لیست نظرات
 export async function GET(req) {
-  const check = await requireManagerOrAdmin();
+  const check = await requireAdmin();
   if (check.error) return check.error;
 
   try {
@@ -71,7 +71,7 @@ export async function GET(req) {
 
 // PATCH /api/admin/reviews — تایید / عدم تایید نظر
 export async function PATCH(req) {
-  const check = await requireManagerOrAdmin();
+  const check = await requireAdmin();
   if (check.error) return check.error;
 
   try {
@@ -110,9 +110,9 @@ export async function PATCH(req) {
   }
 }
 
-// DELETE /api/admin/reviews?id=... — حذف نظر (ADMIN + MANAGER)
+// DELETE /api/admin/reviews?id=... — حذف نظر (ADMIN)
 export async function DELETE(req) {
-  const check = await requireManagerOrAdmin();
+  const check = await requireAdmin();
   if (check.error) return check.error;
 
   try {

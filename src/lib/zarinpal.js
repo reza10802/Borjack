@@ -19,6 +19,9 @@ export const ZARINPAL_REQUEST_URL =
 export const ZARINPAL_VERIFY_URL =
   `${API_BASE_URL}/pg/v4/payment/verify.json`;
 
+export const ZARINPAL_INQUIRY_URL =
+  `${API_BASE_URL}/pg/v4/payment/inquiry.json`;
+
 export function getZarinpalStartPayUrl(authority) {
   if (typeof authority !== "string" || !authority.trim()) {
     throw new Error("ZarinPal authority is required");
@@ -45,3 +48,12 @@ export function toZarinpalAmount(amountInToman) {
 }
 
 export { IS_SANDBOX as ZARINPAL_IS_SANDBOX };
+
+// Call at request time (not at import time, so `next build` never fails on build-env values).
+export function assertGatewayConfig() {
+  if (IS_SANDBOX && process.env.NODE_ENV === "production" && process.env.ALLOW_ZARINPAL_SANDBOX_IN_PRODUCTION !== "true") {
+    const e = new Error("ZARINPAL_SANDBOX is enabled in production");
+    e.code = "SANDBOX_IN_PRODUCTION";
+    throw e;
+  }
+}

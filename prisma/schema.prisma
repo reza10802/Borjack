@@ -10,7 +10,7 @@ datasource db {
 enum Role {
   CUSTOMER
   ADMIN
-  MANAGER
+  SUPPLIER
 }
 
 enum OrderStatus {
@@ -20,6 +20,21 @@ enum OrderStatus {
   SHIPPED
   DELIVERED
   CANCELLED
+}
+
+enum FulfillmentStatus {
+  PREPARING
+  READY_FOR_HANDOVER
+  HANDED_TO_CARRIER
+  SHIPPED
+  DELIVERED
+  ISSUE
+}
+
+enum ProductReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 enum TransactionStatus {
@@ -47,7 +62,7 @@ model Transaction {
   id String @id @default(cuid())
 
   orderId Int   @unique
-  order   Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order   Order @relation(fields: [orderId], references: [id], onDelete: Restrict)
 
   authority String  @unique
   refId     String?
@@ -100,6 +115,13 @@ enum ShippingMethod {
 enum OtpPurpose {
   VERIFY_PHONE
   RESET_PASSWORD
+  LOGIN
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  COMPLETED
 }
 
 model OtpCode {
@@ -113,30 +135,38 @@ model OtpCode {
   failedAttempts Int        @default(0)
 
   @@index([phone, purpose])
+  @@index([expiresAt])
 }
 
 model User {
-  id              String    @id @default(cuid())
-  name            String
-  phone           String    @unique
-  email           String?
-  password        String
-  role            Role      @default(CUSTOMER)
-  isPhoneVerified Boolean   @default(false)
-  phoneVerifiedAt DateTime?
-  isActive        Boolean   @default(true)
+  id                String    @id @default(cuid())
+  name              String
+  phone             String    @unique
+  email             String?
+  password          String
+  role              Role      @default(CUSTOMER)
+  isPhoneVerified   Boolean   @default(false)
+  phoneVerifiedAt   DateTime?
+  isActive          Boolean   @default(true)
+  tokenVersion      Int       @default(0)
+  passwordChangedAt DateTime?
+  address           String?
+  postalCode        String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  wishlist      WishlistItem[]
-  orders        Order[]
-  cart          CartItem[]
-  auditLogs     AuditLog[]
-  reviews       Review[]
-  sentTasks     Task[]         @relation("TaskFrom")
-  receivedTasks Task[]         @relation("TaskTo")
-  addresses     Address[]
+  wishlist           WishlistItem[]
+  orders             Order[]
+  cart               CartItem[]
+  auditLogs          AuditLog[]
+  reviews            Review[]
+  sentTasks          Task[]             @relation("TaskFrom")
+  receivedTasks      Task[]             @relation("TaskTo")
+  addresses          Address[]
+  suppliedProducts   Product[]          @relation("ProductSupplier")
+  sellerOrderItems   OrderItem[]        @relation("OrderItemSupplier")
+  sellerFulfillments OrderFulfillment[] @relation("SupplierFulfillments")
 }
 
 model Address {
@@ -161,6 +191,8 @@ model Address {
   updatedAt DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model WishlistItem {
@@ -216,26 +248,32 @@ model ProductTag {
 }
 
 model Product {
-  id            Int          @id @default(autoincrement())
+  id            Int                 @id @default(autoincrement())
   title         String
   categoryId    Int
   price         Int
   originalPrice Int
-  discount      Int          @default(0)
-  category      Category     @relation(fields: [categoryId], references: [id])
+  discount      Int                 @default(0)
+  category      Category            @relation(fields: [categoryId], references: [id])
   image         String
   description   String
-  stock         Int          @default(0)
-  rating        Float        @default(0)
-  reviewCount   Int          @default(0)
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  stock         Int                 @default(0)
+  rating        Float               @default(0)
+  reviewCount   Int                 @default(0)
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
   brandId       Int?
-  brand         Brand?       @relation(fields: [brandId], references: [id])
+  brand         Brand?              @relation(fields: [brandId], references: [id])
   tags          ProductTag[]
-  isPublished   Boolean      @default(true)
-  slug          String?      @unique
-  reservedStock Int          @default(0)
+  isPublished   Boolean             @default(true)
+  reviewStatus  ProductReviewStatus @default(APPROVED)
+  reviewNote    String?
+  slug          String?             @unique
+  reservedStock Int                 @default(0)
+
+  // Internal owner. NULL = Borjak-owned (admin-created / legacy). Never exposed publicly.
+  supplierId String?
+  supplier   User?   @relation("ProductSupplier", fields: [supplierId], references: [id], onDelete: Restrict)
 
   // Soft delete / Archive
   deletedAt DateTime?
@@ -249,6 +287,7 @@ model Product {
 
   @@index([deletedAt])
   @@index([isPublished, deletedAt])
+  @@index([supplierId, deletedAt])
 }
 
 model ProductImage {
@@ -281,6 +320,8 @@ model Review {
 
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
   author  User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([productId, approved])
 }
 
 model CartItem {
@@ -306,6 +347,7 @@ model Order {
   status OrderStatus @default(PENDING)
 
   paymentStatus PaymentStatus @default(PENDING)
+  requiresPrintedInvoice Boolean @default(false)
 
   stockReservationStatus StockReservationStatus @default(NONE)
   stockIssueAt           DateTime?
@@ -328,22 +370,27 @@ model Order {
   address    String
   postalCode String
 
-  // اطلاعات ارسال
+  // Legacy order-level shipping fields retained for backwards compatibility.
+  // New multi-seller shipment data is stored in OrderFulfillment.
   shippingMethod ShippingMethod?
   shippingCost   Int             @default(0)
+  trackingCode   String?
+  shippedAt      DateTime?
+  deliveredAt    DateTime?
 
-  trackingCode String?
-  shippedAt    DateTime?
-  deliveredAt  DateTime?
-
-  items OrderItem[]
+  items        OrderItem[]
+  fulfillments OrderFulfillment[]
 
   transaction Transaction?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  stockRestockedAt DateTime?
+
   @@index([stockReservationStatus, paymentExpiresAt])
+  @@index([userId, paymentStatus, status])
+  @@index([paymentStatus, status])
 }
 
 model OrderItem {
@@ -353,8 +400,64 @@ model OrderItem {
   quantity  Int
   price     Int
 
-  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product Product @relation(fields: [productId], references: [id])
+  // Snapshot of the seller who owned the product when this order item was created.
+  // NULL + supplierSnapshotCaptured=true means Borjak-owned.
+  // Existing rows remain false until their historical ownership is explicitly resolved.
+  supplierId               String?
+  supplierSnapshotCaptured Boolean @default(false)
+
+  order    Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product  Product @relation(fields: [productId], references: [id])
+  supplier User?   @relation("OrderItemSupplier", fields: [supplierId], references: [id], onDelete: Restrict)
+
+  fulfillmentItems FulfillmentItem[]
+
+  @@index([orderId])
+  @@index([productId])
+  @@index([supplierId])
+  @@index([supplierSnapshotCaptured])
+}
+
+// One fulfillment per seller (including Borjak itself) within a customer order.
+// sellerKey is "SUPPLIER:<userId>" or "BORJAK" for Borjak-owned items.
+model OrderFulfillment {
+  id                  String            @id @default(cuid())
+  orderId             Int
+  supplierId          String?
+  sellerKey           String
+  status              FulfillmentStatus @default(PREPARING)
+  shippingMethod      ShippingMethod?
+  shippingCost        Int               @default(0)
+  handedOverAt        DateTime?
+  trackingCode        String?
+  trackingCodeAddedAt DateTime?
+  shippedAt           DateTime?
+  deliveredAt         DateTime?
+  issueNote           String?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  order    Order             @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  supplier User?             @relation("SupplierFulfillments", fields: [supplierId], references: [id], onDelete: Restrict)
+  items    FulfillmentItem[]
+
+  @@unique([orderId, sellerKey])
+  @@index([supplierId, status, createdAt])
+  @@index([orderId, status])
+  @@index([trackingCode])
+}
+
+// Connects the original order lines to the seller-specific parcel.
+model FulfillmentItem {
+  id            Int    @id @default(autoincrement())
+  fulfillmentId String
+  orderItemId   Int    @unique
+  quantity      Int
+
+  fulfillment OrderFulfillment @relation(fields: [fulfillmentId], references: [id], onDelete: Cascade)
+  orderItem   OrderItem        @relation(fields: [orderItemId], references: [id], onDelete: Restrict)
+
+  @@index([fulfillmentId])
 }
 
 model AuditLog {
@@ -368,24 +471,42 @@ model AuditLog {
   ipAddress   String?
   userAgent   String?
   createdAt   DateTime  @default(now())
-  userId      String
+  userId      String?
+  userLabel   String?
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([userId])
 }
 
 model Task {
-  id          String   @id @default(cuid())
+  id          String  @id @default(cuid())
   title       String
   description String?
-  priority    Priority @default(MEDIUM)
-  done        Boolean  @default(false)
-  createdAt   DateTime @default(now())
+
+  priority Priority   @default(MEDIUM)
+  status   TaskStatus @default(TODO)
+
+  // برای سازگاری با کدهای قدیمی حفظ شده است.
+  // در APIها با status هماهنگ نگه داشته می‌شود.
+  done Boolean @default(false)
+
+  dueAt            DateTime?
+  supplierResponse String?
+  completedAt      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
 
   fromId String
   toId   String
 
   from User @relation("TaskFrom", fields: [fromId], references: [id], onDelete: Cascade)
   to   User @relation("TaskTo", fields: [toId], references: [id], onDelete: Cascade)
+
+  @@index([toId, status, dueAt])
+  @@index([fromId, createdAt])
 }
 
 model LoginAttempt {
@@ -397,4 +518,31 @@ model LoginAttempt {
 
   @@index([blockedUntil])
   @@index([updatedAt])
+}
+
+model RateLimitBucket {
+  key         String   @id
+  count       Int      @default(0)
+  windowStart DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([windowStart])
+}
+
+// History of every payment authority issued (survives order/transaction changes).
+model PaymentAttempt {
+  id        String   @id @default(cuid())
+  orderId   Int
+  userId    String?
+  authority String   @unique
+  amount    Int
+  gateway   String   @default("ZARINPAL")
+  status    String   @default("PENDING") // PENDING | PAID | FAILED | EXPIRED | REVIEW
+  refId     String?
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([status])
 }

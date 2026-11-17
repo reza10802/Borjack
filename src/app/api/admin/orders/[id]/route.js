@@ -1,23 +1,40 @@
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireManagerOrAdmin, logAction } from "@/lib/auth";
+import { requireAdmin, logAction } from "@/lib/auth";
 import { OrderStatus, PaymentStatus } from "@/generated/prisma";
-import { consumeOrderStock } from "@/lib/stock-reservation";
+import {
+  consumeOrderStock,
+  restoreOrderStockForCancellation,
+} from "@/lib/stock-reservation";
 
-// منیجر فقط این انتقال‌ها را مجاز است انجام دهد.
-const MANAGER_ALLOWED_TRANSITIONS = {
-  [OrderStatus.PROCESSING]: [OrderStatus.READY_TO_SHIP],
-  [OrderStatus.READY_TO_SHIP]: [OrderStatus.SHIPPED],
-  [OrderStatus.SHIPPED]: [OrderStatus.DELIVERED],
+// تغییر وضعیت سفارش‌های قدیمی که هنوز سیستم مرسوله ندارند.
+const ADMIN_ALLOWED_TRANSITIONS = {
+  [OrderStatus.PROCESSING]: [
+    OrderStatus.READY_TO_SHIP,
+    OrderStatus.CANCELLED,
+  ],
+  [OrderStatus.READY_TO_SHIP]: [
+    OrderStatus.SHIPPED,
+    OrderStatus.CANCELLED,
+    OrderStatus.PROCESSING,
+  ],
+  [OrderStatus.SHIPPED]: [
+    OrderStatus.DELIVERED,
+  ],
   [OrderStatus.DELIVERED]: [],
   [OrderStatus.CANCELLED]: [],
+  [OrderStatus.PENDING]: [],
 };
 
-// PATCH /api/admin/orders/[id] — تغییر وضعیت سفارش
+// PATCH /api/admin/orders/[id]
+// سفارش‌های دارای مرسوله باید از طریق API مدیریت مرسوله‌ها کنترل شوند.
 export async function PATCH(req, { params }) {
-  const check = await requireManagerOrAdmin(req);
-  if (check.error) return check.error;
+  const check = await requireAdmin();
+
+  if (check.error) {
+    return check.error;
+  }
 
   try {
     const orderId = Number((await params).id);
@@ -29,7 +46,8 @@ export async function PATCH(req, { params }) {
       );
     }
 
-    const { status } = await req.json();
+    const body = await req.json().catch(() => null);
+    const status = body?.status;
 
     if (!Object.values(OrderStatus).includes(status)) {
       return NextResponse.json(
@@ -56,7 +74,9 @@ export async function PATCH(req, { params }) {
       `;
 
       const before = await tx.order.findUnique({
-        where: { id: orderId },
+        where: {
+          id: orderId,
+        },
         include: {
           user: {
             select: {
@@ -76,6 +96,11 @@ export async function PATCH(req, { params }) {
               },
             },
           },
+          fulfillments: {
+            select: {
+              id: true,
+            },
+          },
         },
       });
 
@@ -83,6 +108,16 @@ export async function PATCH(req, { params }) {
         return {
           error: "سفارش پیدا نشد",
           statusCode: 404,
+        };
+      }
+
+      // سفارش‌های جدید دارای مرسوله هستند.
+      // وضعیت آن‌ها باید از طریق وضعیت مرسوله‌ها مدیریت شود.
+      if (before.fulfillments.length > 0) {
+        return {
+          error:
+            "وضعیت این سفارش از طریق مرسوله‌های آن مدیریت می‌شود.",
+          statusCode: 409,
         };
       }
 
@@ -100,7 +135,7 @@ export async function PATCH(req, { params }) {
         };
       }
 
-      // سفارش دارای مشکل موجودی نباید وارد مراحل ارسال شود.
+      // سفارش دارای مشکل فنی موجودی نباید وارد مراحل ارسال شود.
       if (
         before.stockReservationStatus === "ISSUE" ||
         before.stockIssueAt
@@ -112,29 +147,40 @@ export async function PATCH(req, { params }) {
         };
       }
 
-      // محدودیت منیجر
-      if (check.user.role === "MANAGER") {
-        const allowedNextStatuses =
-          MANAGER_ALLOWED_TRANSITIONS[before.status] || [];
-
-        if (!allowedNextStatuses.includes(status)) {
-          return {
-            error:
-              "شما اجازه این تغییر وضعیت را ندارید. منیجر فقط می‌تواند سفارش را مرحله‌به‌مرحله جلو ببرد.",
-            statusCode: 403,
-          };
-        }
+      // بررسی ترتیب مجاز تغییر وضعیت سفارش‌های قدیمی
+      if (
+        !(ADMIN_ALLOWED_TRANSITIONS[before.status] || []).includes(status)
+      ) {
+        return {
+          error:
+            "این تغییر وضعیت مجاز نیست. سفارش ارسال‌شده، تحویل‌شده یا لغوشده قابل بازگشت نیست.",
+          statusCode: 409,
+        };
       }
 
-      // اگر سفارش پرداخت‌شده به هر دلیل هنوز رزرو فعال داشته باشد،
-      // رزرو را مصرف می‌کنیم؛ هرگز با لغو سفارش آن را آزاد نمی‌کنیم.
-      if (before.stockReservationStatus === "RESERVED") {
+      // مدیریت موجودی سفارش‌های قدیمی
+      let restocked = false;
+      let reservationReleased = false;
+
+      if (status === OrderStatus.CANCELLED) {
+        const inventoryResult =
+          await restoreOrderStockForCancellation(tx, before);
+
+        restocked = inventoryResult.restocked;
+        reservationReleased = inventoryResult.reservationReleased;
+      } else if (
+        before.stockReservationStatus === "RESERVED"
+      ) {
         await consumeOrderStock(tx, before);
       }
 
       const order = await tx.order.update({
-        where: { id: orderId },
-        data: { status },
+        where: {
+          id: orderId,
+        },
+        data: {
+          status,
+        },
         include: {
           user: {
             select: {
@@ -154,12 +200,19 @@ export async function PATCH(req, { params }) {
               },
             },
           },
+          fulfillments: {
+            select: {
+              id: true,
+            },
+          },
         },
       });
 
       return {
         order,
         oldStatus: before.status,
+        restocked,
+        reservationReleased,
       };
     });
 
@@ -170,14 +223,27 @@ export async function PATCH(req, { params }) {
       );
     }
 
+    // ثبت تاریخچه تغییر وضعیت
     await logAction({
       userId: check.user.id,
       action: "UPDATE_ORDER_STATUS",
       entityType: "Order",
       entityId: String(orderId),
-      description: `وضعیت سفارش #${orderId} از ${result.oldStatus} به ${status} تغییر کرد`,
-      oldValue: { status: result.oldStatus },
-      newValue: { status },
+      description:
+        `وضعیت سفارش #${orderId} از ${result.oldStatus} به ${status} تغییر کرد`,
+      oldValue: {
+        status: result.oldStatus,
+      },
+      newValue: {
+        status,
+        restocked: result.restocked,
+        reservationReleased: result.reservationReleased,
+        ...(status === OrderStatus.CANCELLED
+          ? {
+              note: "cancelled paid order: manual refund required",
+            }
+          : {}),
+      },
     });
 
     return NextResponse.json({

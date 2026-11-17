@@ -1,4 +1,3 @@
-
 "use client";
 
 import Link from "next/link";
@@ -12,7 +11,7 @@ import {
   BookmarkIcon as BookmarkSolid,
 } from "@heroicons/react/24/solid";
 import Image from "next/image";
-import { toPersianPrice } from "@/lib/utils";
+import { toPersianPrice, safeImageSrc } from "@/lib/utils";
 import { useCart } from "@/context/CartContext";
 
 export default function ProductCard({
@@ -30,11 +29,13 @@ export default function ProductCard({
     price,
     originalPrice,
     discount,
-    image,
+    image: rawImage,
     rating,
     reviewCount,
     isWishlisted = false,
   } = product;
+
+  const image = safeImageSrc(rawImage);
 
   const { user } = useAuth();
   const router = useRouter();

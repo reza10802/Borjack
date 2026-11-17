@@ -1,3 +1,4 @@
+
 import { z } from "zod";
 
 const iranPhoneRegex = /^09\d{9}$/;
@@ -24,7 +25,7 @@ export const checkoutSchema = z.object({
 
   cityId: z.coerce
     .number({
-      invalid_type_error: "شهر را انتخاب کنید",
+      invalid_type_error: "شهر نامعتبر است",
     })
     .int("شهر نامعتبر است")
     .positive("شهر نامعتبر است"),
@@ -39,4 +40,7 @@ export const checkoutSchema = z.object({
     .string()
     .trim()
     .regex(iranPostalCodeRegex, "کد پستی باید ۱۰ رقم باشد"),
+
+  // درخواست اختیاری فاکتور چاپی
+  requiresPrintedInvoice: z.boolean().default(false),
 });

@@ -11,20 +11,6 @@ if (!JWT_SECRET) {
 
 const secret = new TextEncoder().encode(JWT_SECRET);
 
-const ADMIN_ONLY_PAGES = [
-  "/admin/users",
-  "/admin/staff",
-  "/admin/logs",
-  "/admin/categories",
-];
-
-const MANAGER_ALLOWED_PAGES = [
-  "/admin",
-  "/admin/orders",
-  "/admin/products",
-  "/admin/reviews",
-];
-
 const VERIFIED_ONLY_PAGES = [
   "/checkout",
 ];
@@ -40,7 +26,8 @@ async function getTokenPayload(req) {
 
     const { payload } = await jwtVerify(
       token,
-      secret
+      secret,
+      { algorithms: ["HS256"] }
     );
 
     // Session اصلی باید متعلق به کاربر تاییدشده باشد
@@ -68,6 +55,10 @@ export async function proxy(req) {
   const isAdminPage =
     pathname.startsWith("/admin");
 
+  const isSupplierPage =
+    pathname === "/supplier" ||
+    pathname.startsWith("/supplier/");
+
   const needsVerifiedCheck =
     VERIFIED_ONLY_PAGES.some(
       (page) =>
@@ -78,6 +69,7 @@ export async function proxy(req) {
   // صفحات عمومی
   if (
     !isAdminPage &&
+    !isSupplierPage &&
     !needsVerifiedCheck
   ) {
     return NextResponse.next();
@@ -126,10 +118,10 @@ export async function proxy(req) {
   }
 
   // ─────────────────────────────────────────────
-  // Admin
+  // Admin + Supplier panels
   // ─────────────────────────────────────────────
 
-  if (isAdminPage) {
+  if (isAdminPage || isSupplierPage) {
     // بدون session اصلی
     if (!payload) {
       const loginUrl = new URL(
@@ -169,52 +161,14 @@ export async function proxy(req) {
 
     const role = payload.role;
 
-    // فقط ADMIN و MANAGER
-    if (
-      !["ADMIN", "MANAGER"].includes(role)
-    ) {
+    // /admin is ADMIN-only and /supplier is SUPPLIER-only. The JWT role is just a page-shell
+    // gate (it can be up to 8h stale); every API re-reads role/isActive/tokenVersion from the DB.
+    const requiredRole = isSupplierPage ? "SUPPLIER" : "ADMIN";
+
+    if (role !== requiredRole) {
       return NextResponse.redirect(
         new URL("/403", req.url)
       );
-    }
-
-    // ───────────────────────────────────────────
-    // فقط ADMIN
-    // ───────────────────────────────────────────
-
-    const isAdminOnlyPage =
-      ADMIN_ONLY_PAGES.some(
-        (page) =>
-          pathname === page ||
-          pathname.startsWith(`${page}/`)
-      );
-
-    if (
-      isAdminOnlyPage &&
-      role !== "ADMIN"
-    ) {
-      return NextResponse.redirect(
-        new URL("/403", req.url)
-      );
-    }
-
-    // ───────────────────────────────────────────
-    // محدودیت MANAGER
-    // ───────────────────────────────────────────
-
-    if (role === "MANAGER") {
-      const isAllowed =
-        MANAGER_ALLOWED_PAGES.some(
-          (page) =>
-            pathname === page ||
-            pathname.startsWith(`${page}/`)
-        );
-
-      if (!isAllowed) {
-        return NextResponse.redirect(
-          new URL("/403", req.url)
-        );
-      }
     }
 
     return NextResponse.next();
@@ -226,6 +180,7 @@ export async function proxy(req) {
 export const config = {
   matcher: [
     "/admin/:path*",
+    "/supplier/:path*",
     "/checkout/:path*",
   ],
 };

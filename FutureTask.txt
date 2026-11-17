@@ -1,0 +1,2 @@
+1. consider a user may buy 2 things from two differ locations.
+2.reistering supplier through webShop 

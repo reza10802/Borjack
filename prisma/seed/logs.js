@@ -1,121 +1,108 @@
-function randomItem(arr) {
-  return arr[Math.floor(Math.random() * arr.length)];
-}
+import { MS, addMs } from "./_lib.js";
 
-function randomDate(days = 90) {
-  const date = new Date();
-  date.setDate(date.getDate() - Math.floor(Math.random() * days));
-  return date;
-}
+// Audit logs are derived from the data that was actually seeded (products, orders,
+// tasks) instead of random entity ids, so every log points to something that exists
+// and its author/time make sense. Only fields that exist on AuditLog are written;
+// passwords/tokens are never included.
 
-const actions = [
-  {
-    action: "LOGIN",
-    entityType: "Auth",
-    description: "ورود به سیستم",
-  },
-  {
-    action: "CREATE_PRODUCT",
-    entityType: "Product",
-    description: "ایجاد محصول",
-  },
-  {
-    action: "UPDATE_PRODUCT",
-    entityType: "Product",
-    description: "ویرایش محصول",
-  },
-  {
-    action: "DELETE_PRODUCT",
-    entityType: "Product",
-    description: "حذف محصول",
-  },
-  {
-    action: "CREATE_ORDER",
-    entityType: "Order",
-    description: "ثبت سفارش",
-  },
-  {
-    action: "UPDATE_ORDER_STATUS",
-    entityType: "Order",
-    description: "تغییر وضعیت سفارش",
-  },
-  {
-    action: "UPDATE_USER",
-    entityType: "User",
-    description: "ویرایش کاربر",
-  },
-  {
-    action: "DELETE_USER",
-    entityType: "User",
-    description: "حذف کاربر",
-  },
-  {
-    action: "CREATE_TASK",
-    entityType: "Task",
-    description: "ایجاد تسک",
-  },
-  {
-    action: "DELETE_TASK",
-    entityType: "Task",
-    description: "حذف تسک",
-  },
-];
+const STATUS_LABEL = {
+  PROCESSING: "در حال پردازش",
+  READY_TO_SHIP: "آماده ارسال",
+  SHIPPED: "ارسال‌شده",
+  DELIVERED: "تحویل‌شده",
+  CANCELLED: "لغو‌شده",
+};
 
-export async function seedLogs(prisma) {
+const FLOW = ["PROCESSING", "READY_TO_SHIP", "SHIPPED", "DELIVERED"];
+
+export async function seedLogs({ prisma, rng, now }, { users, products, orders, tasks }) {
   console.log("📋 Seeding logs...");
 
-  const staff = await prisma.user.findMany({
-    where: {
-      role: {
-        in: ["ADMIN", "MANAGER"],
-      },
-    },
-  });
+  const staff = [...users.admins]; // only ADMIN performs panel actions in P1
+  const admin = users.admins[0];
+  const byId = new Map(users.all.map((u) => [u.id, u]));
+  const logs = [];
 
-  const products = await prisma.product.findMany();
-  const orders = await prisma.order.findMany();
-  const tasks = await prisma.task.findMany();
-  const users = await prisma.user.findMany();
+  const add = (actorId, action, entityType, entityId, description, createdAt, extra = {}) => {
+    const actor = byId.get(actorId);
+    logs.push({
+      userId: actorId,
+      userLabel: actor?.name ?? null,
+      action,
+      entityType,
+      entityId: String(entityId),
+      description,
+      ipAddress: `192.0.2.${rng.int(1, 250)}`, // TEST-NET-1 documentation range
+      createdAt,
+      ...extra,
+    });
+  };
 
-  for (let i = 0; i < 150; i++) {
-    const actor = randomItem(staff);
-    const action = randomItem(actions);
+  // Products: in P1 only ADMIN creates/edits products (supplier editing arrives in P2).
+  for (const product of products) {
+    const author = admin.id;
+    add(author, "CREATE_PRODUCT", "Product", product.id, `محصول «${product.title}» ایجاد شد`, product.createdAt, {
+      newValue: { title: product.title, price: product.price, stock: product.stock },
+    });
 
-    let entityId = "SYSTEM";
-
-    switch (action.entityType) {
-      case "Product":
-        entityId = String(randomItem(products).id);
-        break;
-
-      case "Order":
-        entityId = String(randomItem(orders).id);
-        break;
-
-      case "Task":
-        entityId = randomItem(tasks).id;
-        break;
-
-      case "User":
-        entityId = randomItem(users).id;
-        break;
-
-      case "Auth":
-        entityId = actor.id;
-        break;
+    if (rng.chance(0.3)) {
+      add(author, "UPDATE_PRODUCT", "Product", product.id, `ویرایش قیمت «${product.title}»`, addMs(product.createdAt, rng.int(2, 20) * MS.day), {
+        oldValue: { price: product.originalPrice },
+        newValue: { price: product.price },
+      });
     }
 
-    await prisma.auditLog.create({
-      data: {
-        userId: actor.id,
-        action: action.action,
-        entityType: action.entityType,
-        entityId,
-        description: action.description,
-        createdAt: randomDate(),
-      },
-    });
+    if (product.deletedAt) {
+      add(author, "DELETE_PRODUCT", "Product", product.id, `محصول «${product.title}» آرشیو شد`, product.deletedAt);
+    }
   }
 
-  console.log("✅ Logs seeded");
+  // Orders: created by the customer, then moved through the fulfilment flow by staff.
+  for (const order of orders) {
+    add(order.userId, "CREATE_ORDER", "Order", order.id, `ثبت سفارش #${order.id}`, order.createdAt, {
+      newValue: { total: order.total },
+    });
+
+    const reached = FLOW.indexOf(order.status);
+    if (reached >= 0) {
+      let at = order.paidAt ?? order.createdAt;
+      for (let i = 0; i <= reached; i++) {
+        at = addMs(at, rng.int(1, 18) * MS.hour);
+        if (at > now) at = now;
+        const status = FLOW[i];
+        add(order.staffActorId, "UPDATE_ORDER_STATUS", "Order", order.id, `تغییر وضعیت سفارش به ${STATUS_LABEL[status]}`, at, {
+          oldValue: { status: i === 0 ? "PENDING" : FLOW[i - 1] },
+          newValue: { status },
+        });
+      }
+    } else if (order.status === "CANCELLED" && order.paymentStatus === "PAID") {
+      add(admin.id, "UPDATE_ORDER_STATUS", "Order", order.id, `لغو سفارش پرداخت‌شده #${order.id}`, order.updatedAt, {
+        newValue: { status: "CANCELLED" },
+      });
+    }
+  }
+
+  for (const task of tasks) {
+    add(task.fromId, "CREATE_TASK", "Task", task.id, "ایجاد تسک", task.createdAt);
+    if (task.done) {
+      add(task.toId, "UPDATE_TASK", "Task", task.id, "انجام‌شده علامت خورد", addMs(task.createdAt, rng.int(1, 5) * MS.day));
+    }
+  }
+
+  for (const user of users.all.filter((u) => !u.isActive)) {
+    add(admin.id, "BLOCK_USER", "User", user.id, `کاربر ${user.name} مسدود شد`, new Date(now.getTime() - 10 * MS.day));
+  }
+
+  // Logins over the last 30 days.
+  for (let i = 0; i < 60; i++) {
+    const actor = rng.chance(0.6) ? rng.pick(staff) : rng.pick(users.customers.filter((u) => u.isActive));
+    add(actor.id, "LOGIN", "Auth", actor.id, "ورود به سیستم", new Date(now.getTime() - rng.int(0, 30 * 24 * 60) * MS.minute));
+  }
+
+  // Never in the future.
+  for (const log of logs) if (log.createdAt > now) log.createdAt = now;
+
+  await prisma.auditLog.createMany({ data: logs });
+
+  console.log(`✅ ${logs.length} logs seeded`);
 }

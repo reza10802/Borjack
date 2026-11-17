@@ -1,86 +1,45 @@
-const SMS_IR_API_KEY = process.env.SMS_IR_API_KEY;
+import { maskPhone } from "@/lib/security";
 
-const SMS_IR_VERIFY_TEMPLATE_ID =
-  process.env.SMS_IR_VERIFY_TEMPLATE_ID;
-
-const SMS_IR_RESET_PASSWORD_TEMPLATE_ID =
-  process.env.SMS_IR_RESET_PASSWORD_TEMPLATE_ID;
+export class SmsError extends Error {
+  constructor(code, detail) {
+    super(code); // never put provider text/keys in message
+    this.name = "SmsError";
+    this.code = code;
+    this.detail = detail; // internal only; never returned to clients
+  }
+}
 
 export async function sendOtpSms(phone, code, purpose) {
-  if (!SMS_IR_API_KEY) {
-    throw new Error("SMS_IR_API_KEY تنظیم نشده است");
-  }
+  const apiKey = process.env.SMS_IR_API_KEY;
+  if (!apiKey) throw new SmsError("SMS_NOT_CONFIGURED");
 
-  let templateId;
+  const templateId =
+    purpose === "VERIFY_PHONE" ? process.env.SMS_IR_VERIFY_TEMPLATE_ID
+    : purpose === "RESET_PASSWORD" ? process.env.SMS_IR_RESET_PASSWORD_TEMPLATE_ID
+    : purpose === "LOGIN" ? (process.env.SMS_IR_LOGIN_TEMPLATE_ID || process.env.SMS_IR_VERIFY_TEMPLATE_ID)
+    : null;
+  if (!templateId) throw new SmsError("SMS_TEMPLATE_MISSING");
 
-  switch (purpose) {
-    case "VERIFY_PHONE":
-      templateId = SMS_IR_VERIFY_TEMPLATE_ID;
-      break;
-
-    case "RESET_PASSWORD":
-      templateId = SMS_IR_RESET_PASSWORD_TEMPLATE_ID;
-      break;
-
-    default:
-      throw new Error("نوع OTP نامعتبر است");
-  }
-
-  if (!templateId) {
-    throw new Error(`Template ID برای ${purpose} تنظیم نشده است`);
-  }
-
-  const payload = {
-    mobile: phone,
-    templateId: Number(templateId),
-    parameters: [
-      {
-        name: "Code",
-        value: code,
-      },
-    ],
-  };
-
-  console.log("SMS.IR REQUEST:", {
-    mobile: phone,
-    templateId: Number(templateId),
-    purpose,
-  });
-
-  const res = await fetch("https://api.sms.ir/v1/send/verify", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      "x-api-key": SMS_IR_API_KEY,
-    },
-    body: JSON.stringify(payload),
-  });
-
-  const raw = await res.text();
-
-  let data;
-
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 10000);
   try {
-    data = JSON.parse(raw);
-  } catch {
-    data = { raw };
+    const res = await fetch("https://api.sms.ir/v1/send/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json", "x-api-key": apiKey },
+      body: JSON.stringify({ mobile: phone, templateId: Number(templateId), parameters: [{ name: "Code", value: code }] }),
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      // log only status + masked phone (no body, no code, no key)
+      console.error("SMS_IR_FAILED", { status: res.status, purpose, phone: maskPhone(phone) });
+      throw new SmsError("SMS_PROVIDER_ERROR", `status ${res.status}`);
+    }
+    return true;
+  } catch (e) {
+    if (e instanceof SmsError) throw e;
+    console.error("SMS_IR_NETWORK_ERROR", { purpose, phone: maskPhone(phone), name: e?.name });
+    throw new SmsError("SMS_NETWORK_ERROR");
+  } finally {
+    clearTimeout(timer);
   }
-
-  console.log("SMS.IR RESPONSE:", {
-    status: res.status,
-    ok: res.ok,
-    data,
-  });
-
-  if (!res.ok) {
-    throw new Error(
-      data?.message ||
-        data?.errors?.[0]?.message ||
-        data?.raw ||
-        `خطا در ارسال پیامک (${res.status})`
-    );
-  }
-
-  return data;
 }

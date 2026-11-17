@@ -1,63 +1,117 @@
+
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireManagerOrAdmin } from "@/lib/auth";
-import { PaymentStatus , OrderStatus  } from "@/generated/prisma";
+import { requireAdmin } from "@/lib/auth";
+import {
+  PaymentStatus,
+  OrderStatus,
+} from "@/generated/prisma";
 
 // GET /api/admin/orders
 export async function GET(req) {
-  const { searchParams } = new URL(req.url);
-  const page = Math.max(1, Number(searchParams.get("page")) || 1);
-  const limit = Math.min(
-    100,
-    Math.max(1, Number(searchParams.get("limit")) || 20),
-  );
-  const status = searchParams.get("status");
-  const paymentStatus = searchParams.get("paymentStatus");
-  const search = searchParams.get("search")?.trim();
+  const check = await requireAdmin();
 
-  const where = {
-    paymentStatus: {
-      in: [PaymentStatus.PAID, PaymentStatus.PENDING],
-    },
-  };
-
-  if (status && Object.values(OrderStatus).includes(status)) {
-    where.status = status;
+  if (check.error) {
+    return check.error;
   }
-
-  if (paymentStatus && Object.values(PaymentStatus).includes(paymentStatus)) {
-    where.paymentStatus = paymentStatus;
-  }
-
-  if (search) {
-    where.OR = [
-      {
-        user: {
-          name: {
-            contains: search,
-            mode: "insensitive",
-          },
-        },
-      },
-      {
-        user: {
-          phone: {
-            contains: search,
-          },
-        },
-      },
-    ];
-  }
-
-  const skip = (page - 1) * limit;
-
-  const check = await requireManagerOrAdmin(req);
-  if (check.error) return check.error;
 
   try {
+    const { searchParams } = new URL(req.url);
+
+    const requestedPage = Number(searchParams.get("page"));
+    const requestedLimit = Number(searchParams.get("limit"));
+
+    const page =
+      Number.isSafeInteger(requestedPage) && requestedPage > 0
+        ? requestedPage
+        : 1;
+
+    const limit =
+      Number.isSafeInteger(requestedLimit) && requestedLimit > 0
+        ? Math.min(100, requestedLimit)
+        : 20;
+
+    const status = searchParams.get("status");
+    const paymentStatus = searchParams.get("paymentStatus");
+    const search = searchParams.get("search")?.trim().slice(0, 100);
+
+    const where = {
+      paymentStatus: {
+        in: [
+          PaymentStatus.PAID,
+          PaymentStatus.PENDING,
+        ],
+      },
+    };
+
+    if (
+      status &&
+      Object.values(OrderStatus).includes(status)
+    ) {
+      where.status = status;
+    }
+
+    if (
+      paymentStatus &&
+      Object.values(PaymentStatus).includes(paymentStatus)
+    ) {
+      where.paymentStatus = paymentStatus;
+    }
+
+    // جست‌وجو بر اساس مشتری، شماره تماس،
+    // نام محصول یا نام تأمین‌کننده
+    if (search) {
+      where.OR = [
+        {
+          user: {
+            name: {
+              contains: search,
+              mode: "insensitive",
+            },
+          },
+        },
+        {
+          user: {
+            phone: {
+              contains: search,
+            },
+          },
+        },
+        {
+          items: {
+            some: {
+              product: {
+                title: {
+                  contains: search,
+                  mode: "insensitive",
+                },
+              },
+            },
+          },
+        },
+        {
+          items: {
+            some: {
+              supplier: {
+                is: {
+                  name: {
+                    contains: search,
+                    mode: "insensitive",
+                  },
+                },
+              },
+            },
+          },
+        },
+      ];
+    }
+
+    const skip = (page - 1) * limit;
+
     const [orders, total] = await Promise.all([
       prisma.order.findMany({
         where,
+
         include: {
           user: {
             select: {
@@ -66,8 +120,16 @@ export async function GET(req) {
               phone: true,
             },
           },
+
           items: {
-            include: {
+            select: {
+              id: true,
+              productId: true,
+              quantity: true,
+              price: true,
+              supplierId: true,
+              supplierSnapshotCaptured: true,
+
               product: {
                 select: {
                   id: true,
@@ -75,15 +137,83 @@ export async function GET(req) {
                   image: true,
                 },
               },
+
+              // مالک کالا در زمان ثبت سفارش
+              supplier: {
+                select: {
+                  id: true,
+                  name: true,
+                  phone: true,
+                  isActive: true,
+                },
+              },
+            },
+          },
+
+          // مرسوله‌های مستقل هر تأمین‌کننده
+          fulfillments: {
+            select: {
+              id: true,
+              orderId: true,
+              supplierId: true,
+              sellerKey: true,
+              status: true,
+              shippingMethod: true,
+              shippingCost: true,
+              handedOverAt: true,
+              trackingCode: true,
+              trackingCodeAddedAt: true,
+              shippedAt: true,
+              deliveredAt: true,
+              issueNote: true,
+              createdAt: true,
+              updatedAt: true,
+
+              supplier: {
+                select: {
+                  id: true,
+                  name: true,
+                  phone: true,
+                  isActive: true,
+                },
+              },
+
+              items: {
+                select: {
+                  id: true,
+                  orderItemId: true,
+                  quantity: true,
+
+                  orderItem: {
+                    select: {
+                      id: true,
+                      productId: true,
+                      quantity: true,
+                      price: true,
+
+                      product: {
+                        select: {
+                          id: true,
+                          title: true,
+                          image: true,
+                        },
+                      },
+                    },
+                  },
+                },
+              },
             },
           },
         },
+
         orderBy: {
           createdAt: "desc",
         },
+
         skip,
         take: limit,
       }),
+
       prisma.order.count({
         where,
       }),
@@ -91,6 +221,7 @@ export async function GET(req) {
 
     return NextResponse.json({
       orders,
+
       pagination: {
         page,
         limit,
@@ -101,7 +232,10 @@ export async function GET(req) {
       },
     });
   } catch (error) {
-    console.error(error);
+    console.error("ADMIN_ORDERS_GET_ERROR", {
+      message: error?.message,
+      code: error?.code,
+    });
 
     return NextResponse.json(
       {

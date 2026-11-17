@@ -2,15 +2,20 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import {
-  requireManagerOrAdmin,
   requireAdmin,
   logAction,
 } from "@/lib/auth";
+import {
+  setProductPublished,
+  setProductReviewStatus,
+  PublishRefusal,
+  ReviewRefusal,
+} from "@/lib/supplier-lifecycle";
 
 // PATCH /api/admin/products/[id]
-// ویرایش محصول یا تغییر موجودی
+// ویرایش محصول، تغییر موجودی، انتقال مالکیت، بررسی و انتشار
 export async function PATCH(req, { params }) {
-  const check = await requireManagerOrAdmin(req);
+  const check = await requireAdmin();
   if (check.error) return check.error;
 
   try {
@@ -36,6 +41,315 @@ export async function PATCH(req, { params }) {
     const has = (key) =>
       Object.prototype.hasOwnProperty.call(body, key);
 
+    // ---------------------------------------------------------
+    // 1. تغییر مالکیت محصول
+    // این عملیات باید مستقل ارسال شود.
+    // ---------------------------------------------------------
+    if (has("supplierId")) {
+      if (Object.keys(body).some((key) => key !== "supplierId")) {
+        return NextResponse.json(
+          { error: "تغییر مالکیت باید به‌صورت مستقل ارسال شود" },
+          { status: 400 },
+        );
+      }
+
+      let nextSupplierId = null;
+
+      if (body.supplierId !== null) {
+        if (
+          typeof body.supplierId !== "string" ||
+          !body.supplierId.trim() ||
+          body.supplierId.length > 128
+        ) {
+          return NextResponse.json(
+            { error: "شناسه تأمین‌کننده معتبر نیست" },
+            { status: 400 },
+          );
+        }
+
+        nextSupplierId = body.supplierId.trim();
+      }
+
+      const transfer = await prisma.$transaction(async (tx) => {
+        let targetSupplier = null;
+
+        if (nextSupplierId) {
+          await tx.$queryRaw`
+            SELECT "id"
+            FROM "User"
+            WHERE "id" = ${nextSupplierId}
+            FOR UPDATE
+          `;
+
+          targetSupplier = await tx.user.findFirst({
+            where: {
+              id: nextSupplierId,
+              role: "SUPPLIER",
+            },
+            select: {
+              id: true,
+              name: true,
+              isActive: true,
+            },
+          });
+
+          if (!targetSupplier) {
+            return { type: "INVALID_SUPPLIER" };
+          }
+        }
+
+        await tx.$queryRaw`
+          SELECT "id"
+          FROM "Product"
+          WHERE "id" = ${productId}
+          FOR UPDATE
+        `;
+
+        const current = await tx.product.findUnique({
+          where: { id: productId },
+          select: {
+            id: true,
+            title: true,
+            supplierId: true,
+            isPublished: true,
+            deletedAt: true,
+          },
+        });
+
+        if (!current) {
+          return { type: "NOT_FOUND" };
+        }
+
+        if (current.supplierId === nextSupplierId) {
+          return { type: "UNCHANGED" };
+        }
+
+        const shouldUnpublish =
+          targetSupplier !== null && !targetSupplier.isActive;
+
+        const product = await tx.product.update({
+          where: { id: productId },
+          data: {
+            supplierId: nextSupplierId,
+            ...(shouldUnpublish ? { isPublished: false } : {}),
+          },
+          select: {
+            id: true,
+            title: true,
+            supplierId: true,
+            isPublished: true,
+            deletedAt: true,
+          },
+        });
+
+        return {
+          type: "TRANSFERRED",
+          current,
+          product,
+          targetSupplier,
+        };
+      });
+
+      if (transfer.type === "NOT_FOUND") {
+        return NextResponse.json(
+          { error: "محصول پیدا نشد" },
+          { status: 404 },
+        );
+      }
+
+      if (transfer.type === "INVALID_SUPPLIER") {
+        return NextResponse.json(
+          { error: "حساب تأمین‌کننده موردنظر معتبر نیست" },
+          { status: 404 },
+        );
+      }
+
+      if (transfer.type === "UNCHANGED") {
+        return NextResponse.json({
+          success: true,
+          message: "مالکیت محصول تغییری نکرده است",
+        });
+      }
+
+      await logAction({
+        userId: check.user.id,
+        action: "UPDATE_PRODUCT",
+        entityType: "Product",
+        entityId: String(productId),
+        description: `مالکیت محصول «${transfer.product.title}» تغییر کرد`,
+        oldValue: {
+          supplierId: transfer.current.supplierId,
+        },
+        newValue: {
+          supplierId: transfer.product.supplierId,
+          supplierName: transfer.targetSupplier?.name ?? null,
+          isPublished: transfer.product.isPublished,
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        product: transfer.product,
+        message: "مالکیت محصول با موفقیت تغییر کرد",
+      });
+    }
+
+    // ---------------------------------------------------------
+    // 2. تأیید یا رد محصول
+    // reviewStatus و reviewNote فقط در همین عملیات پذیرفته می‌شوند.
+    // ---------------------------------------------------------
+    if (has("reviewStatus")) {
+      const allowedKeys = ["reviewStatus", "reviewNote"];
+
+      if (
+        Object.keys(body).some(
+          (key) => !allowedKeys.includes(key),
+        )
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              "عملیات بررسی محصول باید مستقل از سایر تغییرات ارسال شود",
+          },
+          { status: 400 },
+        );
+      }
+
+      try {
+        const result = await prisma.$transaction((tx) =>
+          setProductReviewStatus(
+            tx,
+            productId,
+            body.reviewStatus,
+            body.reviewNote ?? null,
+          ),
+        );
+
+        if (result.changed) {
+          const isApproved = result.reviewStatus === "APPROVED";
+
+          await logAction({
+            userId: check.user.id,
+            action: "UPDATE_PRODUCT",
+            entityType: "Product",
+            entityId: String(productId),
+            description: isApproved
+              ? `محصول «${result.title}» تأیید شد`
+              : `محصول «${result.title}» رد شد: ${result.reviewNote}`,
+            oldValue: result.oldValue,
+            newValue: result.newValue,
+          });
+        }
+
+        const {
+          changed,
+          oldValue,
+          newValue,
+          ...product
+        } = result;
+
+        return NextResponse.json({
+          success: true,
+          changed,
+          product,
+          message:
+            product.reviewStatus === "APPROVED"
+              ? "محصول با موفقیت تأیید شد"
+              : "محصول رد شد و دلیل آن ثبت شد",
+        });
+      } catch (error) {
+        if (error instanceof ReviewRefusal) {
+          return NextResponse.json(
+            { error: error.message },
+            { status: error.status },
+          );
+        }
+
+        throw error;
+      }
+    }
+
+    // ---------------------------------------------------------
+    // 3. انتشار یا خارج‌کردن محصول از انتشار
+    // خارج‌کردن از انتشار به پیام اجباری نیاز دارد.
+    // ---------------------------------------------------------
+    if (has("isPublished")) {
+      const allowedKeys = ["isPublished", "reviewNote"];
+
+      if (
+        typeof body.isPublished !== "boolean" ||
+        Object.keys(body).some(
+          (key) => !allowedKeys.includes(key),
+        )
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              "وضعیت انتشار باید به‌صورت مستقل و با مقدار معتبر ارسال شود",
+          },
+          { status: 400 },
+        );
+      }
+
+      if (
+        body.isPublished &&
+        has("reviewNote") &&
+        body.reviewNote != null
+      ) {
+        return NextResponse.json(
+          {
+            error: "هنگام انتشار محصول نیازی به ارسال پیام نیست",
+          },
+          { status: 400 },
+        );
+      }
+
+      try {
+        const result = await prisma.$transaction((tx) =>
+          setProductPublished(
+            tx,
+            productId,
+            body.isPublished,
+            body.reviewNote ?? null,
+          ),
+        );
+
+        if (result.changed) {
+          await logAction({
+            userId: check.user.id,
+            action: "UPDATE_PRODUCT",
+            entityType: "Product",
+            entityId: String(productId),
+            description: body.isPublished
+              ? "محصول منتشر شد"
+              : `انتشار محصول لغو شد: ${result.reviewNote}`,
+            oldValue: result.oldValue,
+            newValue: result.newValue,
+          });
+        }
+
+        return NextResponse.json({
+          success: true,
+          ...result,
+          message: body.isPublished
+            ? "محصول با موفقیت منتشر شد"
+            : "محصول از انتشار خارج شد و پیام ثبت شد",
+        });
+      } catch (error) {
+        if (error instanceof PublishRefusal) {
+          return NextResponse.json(
+            { error: error.message },
+            { status: error.status },
+          );
+        }
+
+        throw error;
+      }
+    }
+
+    // ---------------------------------------------------------
+    // 4. ویرایش اطلاعات محصول یا تغییر موجودی
+    // ---------------------------------------------------------
     const fullEditKeys = [
       "title",
       "price",
@@ -195,7 +509,7 @@ export async function PATCH(req, { params }) {
     }
 
     const result = await prisma.$transaction(async (tx) => {
-      // از تداخل تغییر موجودی با رزرو هم‌زمان جلوگیری می‌کند.
+      // جلوگیری از تداخل تغییر موجودی با رزرو هم‌زمان
       await tx.$queryRaw`
         SELECT "id"
         FROM "Product"
@@ -226,7 +540,7 @@ export async function PATCH(req, { params }) {
         return { type: "ARCHIVED" };
       }
 
-      // موجودی واقعی نباید از مجموع رزروهای فعال کمتر شود.
+      // موجودی واقعی نباید کمتر از مجموع رزروهای فعال باشد.
       if (
         hasStock &&
         updateData.stock < oldProduct.reservedStock
@@ -396,6 +710,7 @@ export async function DELETE(_req, { params }) {
         where: { id: productId },
         data: {
           deletedAt: new Date(),
+          isPublished: false,
         },
       });
 
@@ -448,6 +763,7 @@ export async function DELETE(_req, { params }) {
       },
       newValue: {
         deletedAt: result.archivedProduct.deletedAt,
+        isPublished: false,
       },
     });
 

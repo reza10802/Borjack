@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
+import { PUBLIC_PRODUCT_SCALARS } from "@/lib/public-product";
 
 // دریافت علاقه‌مندی‌های کاربر
 export async function GET(req) {
@@ -23,7 +24,8 @@ export async function GET(req) {
       },
       include: {
         product: {
-          include: {
+          select: {
+            ...PUBLIC_PRODUCT_SCALARS,
             images: true,
           },
         },

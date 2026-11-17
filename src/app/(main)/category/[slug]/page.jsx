@@ -2,6 +2,8 @@ import Breadcrumb from "@/components/Breadcrumb";
 import ProductCard from "@/components/ProductCard";
 import { prisma } from "@/lib/db";
 import { notFound } from "next/navigation";
+import { safeJsonLd } from "@/lib/json-ld";
+import { PUBLIC_CARD_SELECT, toPublicCardProduct } from "@/lib/public-product";
 
 const BASE_URL =
     process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
@@ -29,21 +31,13 @@ async function getProducts(categoryId) {
             deletedAt: null,
             categoryId,
         },
-        include: {
-            brand: true,
-            images: true,
-            specs: true,
-        },
+        select: PUBLIC_CARD_SELECT,
         orderBy: {
             createdAt: "desc",
         },
     });
 
-    return products.map((product) => ({
-        ...product,
-        image: product.images?.[0]?.url || product.image,
-        isWishlisted: false,
-    }));
+    return products.map(toPublicCardProduct);
 }
 
 export async function generateMetadata({ params }) {
@@ -124,7 +118,7 @@ export default async function CategoryPage({ params }) {
             <script
                 type="application/ld+json"
                 dangerouslySetInnerHTML={{
-                    __html: JSON.stringify(breadcrumbJsonLd),
+                    __html: safeJsonLd(breadcrumbJsonLd),
                 }}
             />
 

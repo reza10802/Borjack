@@ -2,6 +2,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAdmin, logAction } from "@/lib/auth";
+import { isEligibleOwner } from "@/lib/supplier-lifecycle";
 
 // POST /api/admin/products/[id]/restore
 // بازیابی محصول آرشیوشده
@@ -27,6 +28,8 @@ export async function POST(_req, { params }) {
           id: true,
           title: true,
           deletedAt: true,
+          isPublished: true,
+          supplierId: true, // explicit opt-in: hidden by the global omit
         },
       });
 
@@ -41,10 +44,17 @@ export async function POST(_req, { params }) {
         };
       }
 
+      // Restore never publishes anything by itself, and never re-lists a product whose
+      // owner is no longer an active SUPPLIER.
+      const owner = product.supplierId
+        ? await tx.user.findUnique({ where: { id: product.supplierId }, select: { role: true, isActive: true } })
+        : null;
+
       const restoredProduct = await tx.product.update({
         where: { id: productId },
         data: {
           deletedAt: null,
+          ...(product.isPublished && !isEligibleOwner(owner) ? { isPublished: false } : {}),
         },
         include: {
           category: {

@@ -1,8 +1,7 @@
-
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
+import SafeImage from "@/components/SafeImage";
 import { toPersianPrice } from "@/lib/utils";
 
 export default function SpecialOfferMobileCard({ product }) {
@@ -31,7 +30,7 @@ export default function SpecialOfferMobileCard({ product }) {
             {/* Product image */}
             <div className="relative aspect-square overflow-hidden bg-[var(--color-surface-2)]">
                 {product.image && (
-                    <Image
+                    <SafeImage
                         src={product.image}
                         alt={product.title}
                         fill

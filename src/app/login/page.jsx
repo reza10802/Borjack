@@ -5,6 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import ThemeToggle from "@/components/ThemeToggle";
+import TurnstileCaptcha from "@/components/TurnstileCaptcha";
 
 function getSafeRedirect(value) {
   if (!value || !value.startsWith("/") || value.startsWith("//")) {
@@ -59,22 +60,29 @@ function normalizeIranPhone(value) {
 }
 
 function LoginContent() {
-  const { login } = useAuth();
+  const { login, refreshUser } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
 
   const redirect = getSafeRedirect(searchParams.get("redirect"));
 
-  const [phone, setPhone] = useState("");
+  const [phone, setPhone] = useState(() => searchParams.get("phone") || "");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [requiresLoginVerification, setRequiresLoginVerification] = useState(false);
+  const [otpCode, setOtpCode] = useState("");
+  const [requiresCaptcha, setRequiresCaptcha] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState("");
+  const [captchaWidgetKey, setCaptchaWidgetKey] = useState(0);
 
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+    setNotice("");
 
     const normalizedPhone = normalizeIranPhone(phone);
 
@@ -83,15 +91,51 @@ function LoginContent() {
       return;
     }
 
-    if (!password) {
+    if (!requiresLoginVerification && !password) {
       setError("رمز عبور را وارد کنید");
+      return;
+    }
+    if (!requiresLoginVerification && requiresCaptcha && !captchaToken) {
+      setError("ابتدا تأیید امنیتی را کامل کنید.");
+      return;
+    }
+    if (requiresLoginVerification && !/^\d{6}$/.test(normalizeDigits(otpCode))) {
+      setError("کد تأیید باید ۶ رقم باشد");
       return;
     }
 
     setLoading(true);
 
     try {
-      const data = await login(normalizedPhone, password);
+      if (requiresLoginVerification) {
+        const res = await fetch("/api/auth/verify-otp", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          cache: "no-store",
+          body: JSON.stringify({ phone: normalizedPhone, code: normalizeDigits(otpCode), purpose: "LOGIN" }),
+        });
+        const verified = await res.json();
+        if (!res.ok) throw new Error(verified?.error || "کد تأیید نامعتبر است");
+        const refreshedUser = await refreshUser();
+        if (!refreshedUser) throw new Error("ورود تأیید شد اما دریافت نشست کامل نشد. دوباره وارد شوید.");
+        router.replace(redirect);
+        return;
+      }
+
+      const data = await login(normalizedPhone, password, captchaToken);
+
+      if (data?.requiresLoginVerification) {
+        setRequiresLoginVerification(true);
+        setRequiresCaptcha(false);
+        setCaptchaToken("");
+        setOtpCode("");
+        setNotice(data.message || "کد تأیید ورود برای شما ارسال شد.");
+        return;
+      }
+
+      setRequiresCaptcha(false);
+      setCaptchaToken("");
 
       // کاربر وارد شده ولی شماره موبایل هنوز تأیید نشده
       if (!data?.isPhoneVerified) {
@@ -106,9 +150,36 @@ function LoginContent() {
       // کاربر تأیید شده
       router.replace(redirect);
     } catch (err) {
-      setError(
-        err?.message || "شماره موبایل یا رمز عبور اشتباه است"
-      );
+      if (err?.requiresCaptcha) {
+        setRequiresCaptcha(true);
+        setCaptchaToken("");
+        setCaptchaWidgetKey((value) => value + 1);
+      }
+      setError(err?.message || "شماره موبایل یا رمز عبور اشتباه است");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendLoginCode = async () => {
+    const normalizedPhone = normalizeIranPhone(phone);
+    if (!normalizedPhone) return;
+    setLoading(true);
+    setError("");
+    setNotice("");
+    try {
+      const res = await fetch("/api/auth/send-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        cache: "no-store",
+        body: JSON.stringify({ phone: normalizedPhone, purpose: "LOGIN" }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "ارسال کد انجام نشد");
+      setNotice(data.message || "کد تأیید دوباره ارسال شد.");
+    } catch (err) {
+      setError(err?.message || "ارسال کد انجام نشد");
     } finally {
       setLoading(false);
     }
@@ -143,12 +214,17 @@ function LoginContent() {
             inputMode="tel"
             placeholder="شماره موبایل"
             value={phone}
+            disabled={requiresLoginVerification}
             onChange={(e) => {
               const value = normalizeDigits(e.target.value)
                 .replace(/[^\d+]/g, "")
                 .slice(0, 13);
 
               setPhone(value);
+              if (requiresCaptcha) {
+                setCaptchaToken("");
+                setCaptchaWidgetKey((current) => current + 1);
+              }
             }}
             autoComplete="tel"
             dir="ltr"
@@ -156,7 +232,7 @@ function LoginContent() {
           />
 
           {/* Password */}
-          <div className="relative w-full">
+          {!requiresLoginVerification && <div className="relative w-full">
             <input
               type={showPassword ? "text" : "password"}
               placeholder="رمز عبور"
@@ -209,8 +285,60 @@ function LoginContent() {
                 </svg>
               )}
             </button>
-          </div>
+          </div>}
 
+          {requiresLoginVerification && (
+            <>
+              <p className="text-center text-sm text-[var(--color-text-muted)]">
+                برای تکمیل ورود، کد پیامکی ارسال‌شده به شماره ثبت‌شده را وارد کنید.
+              </p>
+              <input
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                placeholder="کد تأیید شش‌رقمی"
+                value={otpCode}
+                onChange={(e) => setOtpCode(normalizeDigits(e.target.value).replace(/\D/g, "").slice(0, 6))}
+                dir="ltr"
+                className="h-12 w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] px-4 text-center text-lg tracking-[0.35em] text-[var(--color-text)] focus:border-[var(--color-accent)] focus:outline-none"
+              />
+              <div className="flex items-center justify-between text-sm">
+                <button type="button" onClick={handleResendLoginCode} disabled={loading} className="font-bold text-[var(--color-accent)] disabled:opacity-50">
+                  ارسال مجدد کد
+                </button>
+                <button type="button" onClick={() => { setRequiresLoginVerification(false); setOtpCode(""); setError(""); }} className="text-[var(--color-text-muted)]">
+                  بازگشت
+                </button>
+              </div>
+            </>
+          )}
+
+          {requiresCaptcha && !requiresLoginVerification && (
+            <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-3">
+              <p className="mb-3 text-center text-sm text-[var(--color-text-muted)]">
+                برای ادامه ورود، لطفاً بررسی امنیتی را تکمیل کنید.
+              </p>
+              {process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ? (
+                <TurnstileCaptcha
+                  key={captchaWidgetKey}
+                  siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY}
+                  onToken={setCaptchaToken}
+                  onError={() => setError("بارگذاری تأیید امنیتی ناموفق بود. اتصال اینترنت را بررسی و صفحه را تازه‌سازی کنید.")}
+                />
+              ) : (
+                <p className="text-center text-sm text-red-500">
+                  سرویس تأیید امنیتی روی سایت تنظیم نشده است. لطفاً با پشتیبانی تماس بگیرید.
+                </p>
+              )}
+            </div>
+          )}
+
+          {notice && (
+            <p className="text-center text-sm text-[var(--color-accent)]">
+              {notice}
+            </p>
+          )}
           {error && (
             <p className="text-center text-sm text-red-500">
               {error}
@@ -219,10 +347,10 @@ function LoginContent() {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || (requiresCaptcha && !requiresLoginVerification && !captchaToken)}
             className="btn-primary h-12 w-full rounded-2xl text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {loading ? "در حال ورود..." : "ورود"}
+            {loading ? "لطفاً صبر کنید..." : requiresLoginVerification ? "تأیید کد و ورود" : "ورود"}
           </button>
         </form>
 

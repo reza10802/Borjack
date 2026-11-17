@@ -1,85 +1,98 @@
-function randomItem(arr) {
-  return arr[Math.floor(Math.random() * arr.length)];
-}
+import { MS } from "./_lib.js";
 
-function randomDate(days = 90) {
-  const date = new Date();
+const COMMENTS = {
+  positive: [
+    "کیفیت خیلی خوبی داشت.",
+    "پیشنهاد می‌کنم.",
+    "ارزش خرید بالایی داره.",
+    "از انتظارم بهتر بود.",
+    "ارسال سریع بود.",
+    "بسته‌بندی عالی.",
+    "کیفیت ساخت فوق‌العاده.",
+    "دوباره می‌خرم.",
+    "کاملا راضی بودم.",
+    "رنگش دقیقا مثل عکس بود.",
+  ],
+  neutral: ["نسبت به قیمت خوبه.", "کیفیت متوسط.", "می‌تونست بهتر باشه.", "معمولی بود، نه بد نه عالی."],
+  negative: ["انتظار بیشتری داشتم.", "بسته‌بندی ضعیف بود.", "با توضیحات فروشنده کمی تفاوت داشت."],
+};
 
-  date.setDate(date.getDate() - Math.floor(Math.random() * days));
+const commentFor = (rng, rating) =>
+  rng.pick(rating >= 4 ? COMMENTS.positive : rating === 3 ? COMMENTS.neutral : COMMENTS.negative);
 
-  return date;
-}
-
-const comments = [
-  "کیفیت خیلی خوبی داشت.",
-  "پیشنهاد میکنم.",
-  "ارزش خرید بالایی داره.",
-  "از انتظارم بهتر بود.",
-  "ارسال سریع بود.",
-  "بسته بندی عالی.",
-  "کیفیت ساخت فوق العاده.",
-  "دوباره میخرم.",
-  "کاملا راضی بودم.",
-  "نسبت به قیمت خوبه.",
-  "میتونست بهتر باشه.",
-  "رنگش دقیقا مثل عکس بود.",
-  "کیفیت متوسط.",
-  "عالی بود.",
-  "پنج ستاره واقعا حقشه.",
-];
-
-export async function seedReviews(prisma) {
+export async function seedReviews({ prisma, rng, now }, { users, products, orders }) {
   console.log("⭐ Seeding reviews...");
 
-  const products = await prisma.product.findMany();
+  const reviewers = users.customers.filter((u) => u.isActive && u.isPhoneVerified);
+  const byId = new Map(reviewers.map((u) => [u.id, u]));
 
-  const customers = await prisma.user.findMany({
-    where: {
-      role: "CUSTOMER",
-    },
-  });
+  // People who really bought a product (paid and not cancelled) review it first.
+  const buyersByProduct = new Map();
+  for (const order of orders) {
+    if (order.paymentStatus !== "PAID" || order.status === "CANCELLED") continue;
+    if (!byId.has(order.userId)) continue;
+    for (const item of order.items) {
+      if (!buyersByProduct.has(item.productId)) buyersByProduct.set(item.productId, new Set());
+      buyersByProduct.get(item.productId).add(order.userId);
+    }
+  }
 
-  for (const product of products) {
-    const count = Math.floor(Math.random() * 8) + 2;
+  const reviewable = products.filter((p) => p.isPublished);
+  // A few products also get a pending review so the admin moderation queue is not empty.
+  const withPending = new Set(rng.shuffle(reviewable).slice(0, 6).map((p) => p.id));
 
-    let sum = 0;
+  let approvedTotal = 0;
+  let pendingTotal = 0;
 
-    for (let i = 0; i < count; i++) {
-      const customer = randomItem(customers);
-      const rating = Math.floor(Math.random() * 2) + 4;
-      const createdAt = randomDate();
+  for (const product of reviewable) {
+    const buyers = [...(buyersByProduct.get(product.id) ?? [])].map((id) => byId.get(id));
+    const others = rng.shuffle(reviewers.filter((u) => !buyers.includes(u)));
+    const people = [...rng.shuffle(buyers), ...others]; // distinct users
 
-      sum += rating;
+    const approvedCount = Math.min(people.length, rng.int(3, 7));
+    const pendingCount = withPending.has(product.id) ? 1 : 0;
+
+    const ratings = [];
+
+    for (let i = 0; i < approvedCount + pendingCount; i++) {
+      const person = people[i];
+      if (!person) break;
+
+      const approved = i < approvedCount;
+      const rating = rng.weighted([[5, 45], [4, 30], [3, 14], [2, 7], [1, 4]]);
+      const createdAt = new Date(now.getTime() - rng.int(1, 60) * MS.day);
 
       await prisma.review.create({
         data: {
           productId: product.id,
-
-          user: customer.name,
-          userId: customer.id,
-
+          user: person.name,
+          userId: person.id,
           rating,
-          comment: randomItem(comments),
-
-          // فیلد date در Schema از نوع String است
+          comment: commentFor(rng, rating),
+          // Review.date is a String in the schema; the app stores the fa-IR date.
           date: createdAt.toLocaleDateString("fa-IR"),
-
-          approved: true,
+          approved,
           createdAt,
         },
       });
+
+      if (approved) {
+        ratings.push(rating);
+        approvedTotal += 1;
+      } else {
+        pendingTotal += 1;
+      }
     }
 
-    await prisma.product.update({
-      where: {
-        id: product.id,
-      },
-      data: {
-        rating: Number((sum / count).toFixed(1)),
-        reviewCount: count,
-      },
-    });
+    // Same rule as src/app/api/admin/reviews: only APPROVED reviews count.
+    if (ratings.length) {
+      const avg = ratings.reduce((a, b) => a + b, 0) / ratings.length;
+      await prisma.product.update({
+        where: { id: product.id },
+        data: { rating: Math.round(avg * 10) / 10, reviewCount: ratings.length },
+      });
+    }
   }
 
-  console.log("✅ Reviews seeded");
+  console.log(`✅ Reviews seeded (${approvedTotal} approved, ${pendingTotal} pending)`);
 }

@@ -1,11 +1,12 @@
+import { MS, slugify } from "./_lib.js";
 
-function slugify(text) {
-  return text
-    .toLowerCase()
-    .replace(/\s+/g, "-")
-    .replace(/[^\w\u0600-\u06FF-]+/g, "")
-    .replace(/--+/g, "-");
-}
+// owner = phone of the SUPPLIER user who owns the product (stored in Product.supplierId).
+// owner: null = Borjak-owned (supplierId NULL), like admin-created and legacy products.
+// Customers only ever see "Borjak" as seller; ownership is internal.
+const SUPPLIER_1 = "09116011003"; // موبایل و لپ‌تاپ
+const SUPPLIER_2 = "09120000003"; // هدفون و ساعت
+const SUPPLIER_3 = "09120000016"; // دوربین و لپ‌تاپ
+const SUPPLIER_4 = "09120000017"; // پوشاک
 
 const products = [
   {
@@ -13,15 +14,13 @@ const products = [
     slug: "samsung-galaxy-s24-256gb",
     category: "موبایل",
     brand: "Samsung",
+    owner: SUPPLIER_1,
+    tags: ["پرفروش", "تخفیف‌دار"],
     price: 42900000,
     originalPrice: 46900000,
     discount: 9,
     image: "/images/samsung-s24.jpg",
-    images: [
-      "/images/samsung-s24.jpg",
-      "/images/samsung-side1.jpg",
-      "/images/samsung-side2.jpg",
-    ],
+    images: ["/images/samsung-s24.jpg", "/images/samsung-side1.jpg", "/images/samsung-side2.jpg"],
     description:
       "گوشی Samsung Galaxy S24 با نمایشگر Dynamic AMOLED 2X، دوربین اصلی 50 مگاپیکسلی و قابلیت‌های هوش مصنوعی Galaxy AI.",
     stock: 12,
@@ -39,6 +38,8 @@ const products = [
     slug: "apple-macbook-air-m2-13",
     category: "لپ تاپ",
     brand: "Apple",
+    owner: SUPPLIER_1,
+    tags: ["جدید"],
     price: 265000000,
     originalPrice: 265000000,
     discount: 0,
@@ -59,6 +60,8 @@ const products = [
     slug: "lenovo-ideapad-slim-3-15",
     category: "لپ تاپ",
     brand: "Lenovo",
+    owner: SUPPLIER_1,
+    tags: [],
     price: 32900000,
     originalPrice: 32900000,
     discount: 0,
@@ -78,6 +81,8 @@ const products = [
     slug: "sony-wh-1000xm5",
     category: "هدفون",
     brand: "Sony",
+    owner: SUPPLIER_2,
+    tags: ["پرفروش", "تخفیف‌دار"],
     price: 12900000,
     originalPrice: 14500000,
     discount: 11,
@@ -98,6 +103,8 @@ const products = [
     slug: "samsung-galaxy-buds-fe",
     category: "هدفون",
     brand: "Samsung",
+    owner: SUPPLIER_2,
+    tags: ["پرفروش"],
     price: 3490000,
     originalPrice: 3490000,
     discount: 0,
@@ -117,6 +124,8 @@ const products = [
     slug: "apple-watch-series-9-gps-45mm",
     category: "ساعت",
     brand: "Apple",
+    owner: SUPPLIER_2,
+    tags: ["جدید"],
     price: 18900000,
     originalPrice: 18900000,
     discount: 0,
@@ -137,13 +146,15 @@ const products = [
     slug: "sony-alpha-a6400-16-50mm",
     category: "دوربین",
     brand: "Sony",
+    owner: SUPPLIER_3,
+    tags: ["تخفیف‌دار"],
     price: 54900000,
     originalPrice: 59900000,
     discount: 8,
     image: "/images/sony-camera.jpg",
     description:
       "دوربین بدون آینه Sony Alpha a6400 همراه لنز 16-50 میلی‌متری، مناسب عکاسی، تولید محتوا و ضبط ویدئو.",
-    stock: 3,
+    stock: 3, // low stock on purpose
     specs: {
       "نوع دوربین": "بدون آینه",
       "حسگر": "APS-C",
@@ -158,6 +169,8 @@ const products = [
     slug: "nike-dri-fit-legend-t-shirt",
     category: "پوشاک",
     brand: "Nike",
+    owner: SUPPLIER_4,
+    tags: ["پرفروش"],
     price: 1490000,
     originalPrice: 1490000,
     discount: 0,
@@ -172,101 +185,176 @@ const products = [
       "کاربری": "تمرین و استفاده روزمره",
     },
   },
+
+  // ── Scenario products (each one exists to test a specific state) ──────────
+  {
+    title: "Sony WH-CH720N",
+    slug: "sony-wh-ch720n",
+    category: "هدفون",
+    brand: "Sony",
+    owner: SUPPLIER_2,
+    tags: [],
+    scenario: "ناموجود (stock = 0)",
+    price: 6900000,
+    originalPrice: 6900000,
+    discount: 0,
+    image: "/images/sony-headphone.jpg",
+    description: "هدفون بی‌سیم سبک Sony با حذف نویز فعال. این محصول عمداً ناموجود است.",
+    stock: 0,
+    specs: { "نوع اتصال": "Bluetooth", "حذف نویز": "فعال (ANC)" },
+  },
+  {
+    title: "Lenovo IdeaPad Slim 5 14",
+    slug: "lenovo-ideapad-slim-5-14",
+    category: "لپ تاپ",
+    brand: "Lenovo",
+    owner: SUPPLIER_3,
+    tags: [],
+    scenario: "فقط ۱ عدد موجودی (تست رقابت رزرو)",
+    price: 48500000,
+    originalPrice: 48500000,
+    discount: 0,
+    image: "/images/laptop.jpg",
+    description: "لپ‌تاپ ۱۴ اینچی لنوو. این محصول عمداً فقط یک عدد موجودی دارد.",
+    stock: 1,
+    specs: { "اندازه نمایشگر": "14 اینچ", "حافظه رم": "16 گیگابایت" },
+  },
+  {
+    title: "Nike Air Zoom Pegasus (پیش‌نویس)",
+    slug: "nike-air-zoom-pegasus-draft",
+    category: "پوشاک",
+    brand: "Nike",
+    owner: SUPPLIER_4,
+    tags: [],
+    scenario: "منتشرنشده (isPublished = false)",
+    isPublished: false,
+    price: 7900000,
+    originalPrice: 7900000,
+    discount: 0,
+    image: "/images/nike-shirt.jpg",
+    description: "محصول پیش‌نویس که هنوز منتشر نشده و نباید در فروشگاه دیده شود.",
+    stock: 10,
+    specs: { "نوع": "کفش ورزشی" },
+  },
+  {
+    title: "Apple Watch Series 8 GPS 41mm",
+    slug: "apple-watch-series-8-gps-41mm",
+    category: "ساعت",
+    brand: "Apple",
+    owner: SUPPLIER_2,
+    tags: [],
+    scenario: "آرشیوشده (deletedAt) ولی دارای سفارش قدیمی",
+    archivedDaysAgo: 20,
+    price: 14500000,
+    originalPrice: 14500000,
+    discount: 0,
+    image: "/images/apple-watch.jpg",
+    description: "مدل قدیمی که آرشیو شده است؛ سفارش‌های قبلی آن باید سالم بمانند.",
+    stock: 4,
+    specs: { "اندازه بدنه": "41 میلی‌متر", "اتصال": "GPS" },
+  },
+  {
+    title: "JBL Tune 520BT",
+    slug: "jbl-tune-520bt",
+    category: "هدفون",
+    brand: "JBL",
+    owner: null,
+    scenario: "مالکیت Borjak (supplierId = NULL)",
+    tags: ["جدید"],
+    price: 3150000,
+    originalPrice: 3500000,
+    discount: 10,
+    image: "/images/headphone.jpg",
+    description: "هدفون بی‌سیم JBL Tune 520BT با باتری ۵۷ ساعته و صدای Pure Bass.",
+    stock: 14,
+    specs: { "نوع اتصال": "بلوتوث 5.3", "عمر باتری": "57 ساعت", "وزن": "157 گرم" },
+  },
+  {
+    title: "Xiaomi Redmi Watch 5 Active",
+    slug: "xiaomi-redmi-watch-5-active",
+    category: "ساعت",
+    brand: "Xiaomi",
+    owner: null,
+    scenario: "مالکیت Borjak (supplierId = NULL)",
+    tags: ["جدید"],
+    price: 4200000,
+    originalPrice: 4200000,
+    discount: 0,
+    image: "/images/apple-watch.jpg",
+    description: "ساعت هوشمند Xiaomi Redmi Watch 5 Active با نمایشگر ۲ اینچی و پایش ورزش.",
+    stock: 9,
+    specs: { "نمایشگر": "2 اینچ LCD", "ضدآب": "5 ATM", "عمر باتری": "18 روز" },
+  },
 ];
 
-export async function seedProducts(prisma) {
+export async function seedProducts({ prisma, rng, now }, { users }) {
   console.log("📦 Seeding products...");
 
-  // دسته‌بندی‌های موردنیاز
-  const categories = [
-    ...new Set(products.map((p) => p.category)),
-  ];
+  // Categories / brands / tags are created once, then referenced by id.
+  const categoryTitles = [...new Set(products.map((p) => p.category))];
+  const brandTitles = [...new Set(products.map((p) => p.brand))];
+  const tagTitles = [...new Set(products.flatMap((p) => p.tags))];
 
-  for (const title of categories) {
-    await prisma.category.upsert({
-      where: { title },
-      update: {},
-      create: {
-        title,
-        slug: slugify(title),
-      },
-    });
+  const categoryIds = new Map();
+  for (const title of categoryTitles) {
+    const row = await prisma.category.create({ data: { title, slug: slugify(title) } });
+    categoryIds.set(title, row.id);
   }
 
-  // برندهای موردنیاز
-  const brands = [...new Set(products.map((p) => p.brand))];
-
-  for (const title of brands) {
-    await prisma.brand.upsert({
-      where: { title },
-      update: {},
-      create: {
-        title,
-        slug: slugify(title),
-      },
-    });
+  const brandIds = new Map();
+  for (const title of brandTitles) {
+    const row = await prisma.brand.create({ data: { title, slug: slugify(title) } });
+    brandIds.set(title, row.id);
   }
+
+  const tagIds = new Map();
+  for (const title of tagTitles) {
+    const row = await prisma.tag.create({ data: { title, slug: slugify(title) } });
+    tagIds.set(title, row.id);
+  }
+
+  const created = [];
 
   for (const item of products) {
-    const {
-      specs,
-      images,
-      category,
-      brand,
-      ...productData
-    } = item;
+    const { specs, images, category, brand, tags, owner, scenario, archivedDaysAgo, ...data } = item;
 
-    // ایجاد یا به‌روزرسانی محصول؛ اجرای مجدد، محصول تکراری نمی‌سازد.
-    const product = await prisma.product.upsert({
-      where: { slug: productData.slug },
-      update: {
-        ...productData,
-        category: { connect: { title: category } },
-        brand: { connect: { title: brand } },
+    const supplierId = owner ? (users.byPhone.get(owner)?.id ?? null) : null;
+    if (owner && !supplierId) throw new Error(`[seed] unknown product owner ${owner} (${item.slug})`);
+
+    const createdAt = new Date(now.getTime() - rng.int(30, 150) * MS.day);
+    const deletedAt = archivedDaysAgo ? new Date(now.getTime() - archivedDaysAgo * MS.day) : null;
+
+    const row = await prisma.product.create({
+      data: {
+        ...data,
+        supplierId,
+        categoryId: categoryIds.get(category),
+        brandId: brandIds.get(brand),
+        isPublished: data.isPublished ?? true,
+        // rating / reviewCount are filled by seedReviews from APPROVED reviews only.
         rating: 0,
         reviewCount: 0,
-        isPublished: true,
+        // reservedStock is filled by seedOrders (sum of RESERVED orders).
+        reservedStock: 0,
+        deletedAt,
+        createdAt,
+        images: images?.length ? { create: images.map((url) => ({ url })) } : undefined,
+        specs: {
+          create: Object.entries(specs ?? {}).map(([key, value]) => ({ key, value })),
+        },
+        tags: tags.length
+          ? { create: tags.map((t) => ({ tagId: tagIds.get(t) })) }
+          : undefined,
       },
-      create: {
-        ...productData,
-        category: { connect: { title: category } },
-        brand: { connect: { title: brand } },
-        rating: 0,
-        reviewCount: 0,
-        isPublished: true,
-      },
     });
 
-    // همگام‌سازی مشخصات فنی
-    await prisma.productSpec.deleteMany({
-      where: { productId: product.id },
+    created.push({
+      ...row,
+      ownerId: supplierId,
+      scenario: scenario ?? null,
     });
-
-    if (specs && Object.keys(specs).length > 0) {
-      await prisma.productSpec.createMany({
-        data: Object.entries(specs).map(([key, value]) => ({
-          productId: product.id,
-          key,
-          value,
-        })),
-      });
-    }
-
-    // فقط Galaxy S24 گالری چندتصویری دارد.
-    // تصاویر قبلی همین محصول همگام‌سازی می‌شوند.
-    await prisma.productImage.deleteMany({
-      where: { productId: product.id },
-    });
-
-    if (images?.length) {
-      await prisma.productImage.createMany({
-        data: images.map((url) => ({
-          productId: product.id,
-          url,
-        })),
-      });
-    }
   }
 
-  console.log(`✅ ${products.length} products seeded`);
+  console.log(`✅ ${created.length} products seeded`);
+  return created;
 }

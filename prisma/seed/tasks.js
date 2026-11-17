@@ -1,18 +1,6 @@
-function randomItem(arr) {
-  return arr[Math.floor(Math.random() * arr.length)];
-}
+import { MS } from "./_lib.js";
 
-function randomDate(days = 60) {
-  const date = new Date();
-
-  date.setDate(
-    date.getDate() - Math.floor(Math.random() * days)
-  );
-
-  return date;
-}
-
-const titles = [
+const TITLES = [
   "بررسی سفارش",
   "پیگیری ارسال",
   "بررسی موجودی انبار",
@@ -25,7 +13,7 @@ const titles = [
   "کنترل کیفیت",
 ];
 
-const descriptions = [
+const DESCRIPTIONS = [
   "در اولین فرصت انجام شود.",
   "با مشتری تماس گرفته شود.",
   "بعد از بررسی موجودی اقدام شود.",
@@ -34,64 +22,38 @@ const descriptions = [
   "نتیجه در پنل ثبت شود.",
 ];
 
-const priorities = [
-  "HIGH",
-  "MEDIUM",
-  "LOW",
-];
-
-export async function seedTasks(prisma) {
-
+export async function seedTasks({ prisma, rng, now }, { users }) {
   console.log("📝 Seeding tasks...");
 
-  const staff = await prisma.user.findMany({
+  // Tasks are ADMIN-only now. With a single admin they are personal to-dos (from = to).
+  const staff = [...users.admins].filter((u) => u.isActive);
 
-    where: {
-
-      role: {
-        in: ["ADMIN", "MANAGER"],
-      },
-
-    },
-
-  });
-
-  if (staff.length < 2) return;
-
-  for (let i = 0; i < 35; i++) {
-
-    let from = randomItem(staff);
-
-    let to = randomItem(staff);
-
-    while (to.id === from.id) {
-      to = randomItem(staff);
-    }
-
-    await prisma.task.create({
-
-      data: {
-
-        title: randomItem(titles),
-
-        description: randomItem(descriptions),
-
-        priority: randomItem(priorities),
-
-        done: Math.random() > 0.6,
-
-        fromId: from.id,
-
-        toId: to.id,
-
-        createdAt: randomDate(),
-
-      },
-
-    });
-
+  if (!staff.length) {
+    console.log("⚠️  No active admin for tasks, skipping");
+    return [];
   }
 
-  console.log("✅ Tasks seeded");
+  const tasks = [];
 
+  for (let i = 0; i < 12; i++) {
+    const from = rng.pick(staff);
+    const to = rng.pick(staff);
+
+    const task = await prisma.task.create({
+      data: {
+        title: rng.pick(TITLES),
+        description: rng.pick(DESCRIPTIONS),
+        priority: rng.pick(["HIGH", "MEDIUM", "LOW"]),
+        done: rng.chance(0.4),
+        fromId: from.id,
+        toId: to.id,
+        createdAt: new Date(now.getTime() - rng.int(0, 60) * MS.day),
+      },
+    });
+
+    tasks.push(task);
+  }
+
+  console.log(`✅ ${tasks.length} tasks seeded`);
+  return tasks;
 }

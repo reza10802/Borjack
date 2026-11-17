@@ -12,25 +12,25 @@ const navItems = [
     label: "داشبورد",
     href: "/admin",
     icon: "⬛",
-    roles: ["ADMIN", "MANAGER"],
+    roles: ["ADMIN"],
   },
   {
     label: "کالاها",
     href: "/admin/products",
     icon: "📦",
-    roles: ["ADMIN", "MANAGER"],
+    roles: ["ADMIN"],
   },
   {
     label: "سفارشات",
     href: "/admin/orders",
     icon: "🛒",
-    roles: ["ADMIN", "MANAGER"],
+    roles: ["ADMIN"],
   },
   {
     label: "نظرات",
     href: "/admin/reviews",
     icon: "💬",
-    roles: ["ADMIN", "MANAGER"],
+    roles: ["ADMIN"],
   },
   {
     label: "دسته‌بندی‌ها",
@@ -45,24 +45,11 @@ const navItems = [
     roles: ["ADMIN"],
   },
   {
-    label: "کارکنان",
-    href: "/admin/staff",
-    icon: "🧑‍💼",
-    roles: ["ADMIN"],
-  },
-  {
     label: "لاگ‌ها",
     href: "/admin/logs",
     icon: "📋",
     roles: ["ADMIN"],
   },
-];
-
-const managerAllowedPages = [
-  "/admin",
-  "/admin/orders",
-  "/admin/products",
-  "/admin/reviews",
 ];
 
 export default function AdminLayout({ children }) {
@@ -80,20 +67,10 @@ export default function AdminLayout({ children }) {
       return;
     }
 
-    if (!["ADMIN", "MANAGER"].includes(user.role)) {
+    // The admin panel is ADMIN-only. Suppliers have their own panel at /supplier.
+    if (user.role !== "ADMIN") {
       router.replace("/403");
       return;
-    }
-
-    if (user.role === "MANAGER") {
-      const allowed = managerAllowedPages.some(
-        (page) =>
-          pathname === page || pathname.startsWith(page + "/")
-      );
-
-      if (!allowed) {
-        router.replace("/403");
-      }
     }
   }, [user, loading, pathname, router]);
 
@@ -194,7 +171,7 @@ export default function AdminLayout({ children }) {
 
             {/* Role */}
             <span className="inline-flex h-9 items-center justify-center rounded-xl bg-[var(--color-primary)] px-3 text-xs font-medium whitespace-nowrap text-white sm:px-4 sm:text-sm dark:bg-zinc-900">
-              {user.role === "ADMIN" ? "ادمین" : "منیجر"}
+              ادمین
             </span>
 
             {/* Logout */}

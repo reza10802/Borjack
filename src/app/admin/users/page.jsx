@@ -9,7 +9,7 @@ import { selectStyles } from "@/components/ui/selectStyles";
 const ROLE_LABELS = {
   CUSTOMER: "مشتری",
   ADMIN: "ادمین",
-  MANAGER: "منیجر",
+  SUPPLIER: "تأمین‌کننده",
 };
 
 const ROLE_COLORS = {
@@ -17,7 +17,7 @@ const ROLE_COLORS = {
     "bg-[var(--color-surface-2)] text-[var(--color-text-muted)]",
   ADMIN:
     "bg-[var(--color-accent)] text-white",
-  MANAGER:
+  SUPPLIER:
     "bg-blue-500/10 text-blue-500",
 };
 
@@ -75,22 +75,50 @@ export default function AdminUsersPage() {
     load();
   }, []);
 
+  // Sends a role / status change. When the server reports that products will be archived it
+  // answers 409 + requiresConfirmation (with the product count in its message). We show that
+  // message and re-send with confirm: true only if the admin agrees.
+  const sendUserChange = async (userId, method, payload) => {
+    let confirm = false;
+
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const res = await fetch(`/api/admin/users/${userId}`, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ ...payload, confirm }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (res.status === 409 && data.requiresConfirmation && !confirm) {
+        if (!window.confirm(data.error)) return { cancelled: true };
+        confirm = true;
+        continue;
+      }
+
+      return { res, data };
+    }
+
+    return { cancelled: true };
+  };
+
   const changeRole = async (userId, role) => {
     if (!role) return;
+
+    const target = users.find((u) => u.id === userId);
+    if (target && target.role === role) return;
+
+    if (!window.confirm(`نقش «${target?.name}» از ${ROLE_LABELS[target?.role] ?? target?.role} به ${ROLE_LABELS[role] ?? role} تغییر کند؟`)) return;
 
     setUpdating(userId);
     setError("");
 
     try {
-      const res = await fetch(`/api/admin/users/${userId}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ role }),
-      });
-
-      const data = await res.json();
+      const result = await sendUserChange(userId, "PATCH", { role });
+      if (result.cancelled) return;
+      const { res, data } = result;
 
       if (!res.ok) {
         setError(data.error || "خطا در تغییر نقش");
@@ -117,15 +145,9 @@ export default function AdminUsersPage() {
     setError("");
 
     try {
-      const res = await fetch(`/api/admin/users/${userId}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ isActive }),
-      });
-
-      const data = await res.json();
+      const result = await sendUserChange(userId, "PUT", { isActive });
+      if (result.cancelled) return;
+      const { res, data } = result;
 
       if (!res.ok) {
         setError(data.error || "خطا در تغییر وضعیت");
@@ -320,8 +342,8 @@ export default function AdminUsersPage() {
                                       label: "مشتری",
                                     },
                                     {
-                                      value: "MANAGER",
-                                      label: "منیجر",
+                                      value: "SUPPLIER",
+                                      label: "تأمین‌کننده",
                                     },
                                   ]}
                                   isDisabled={updating === u.id}

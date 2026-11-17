@@ -54,13 +54,22 @@ export default function Header() {
 
                     {user ? (
                         <>
-                            {(user.role === "ADMIN" || user.role === "MANAGER") && (
+                            {user.role === "ADMIN" && (
                                 <Link
                                     href="/admin"
                                     onClick={() => setMenuOpen(false)}
                                     className=" hidden md:flex h-11 items-center justify-center rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-5 text-sm font-bold text-[var(--color-primary)] dark:text-[var(--color-accent)] transition-all duration-200 hover:border-[var(--color-accent)] hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:shadow-md"
                                 >
                                     پنل ادمین
+                                </Link>
+                            )}
+                            {user.role === "SUPPLIER" && (
+                                <Link
+                                    href="/supplier"
+                                    onClick={() => setMenuOpen(false)}
+                                    className=" hidden md:flex h-11 items-center justify-center rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-5 text-sm font-bold text-[var(--color-primary)] dark:text-[var(--color-accent)] transition-all duration-200 hover:border-[var(--color-accent)] hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:shadow-md"
+                                >
+                                    پنل فروشگاه
                                 </Link>
                             )}
                             <Link href="/profile" className=" hidden md:flex h-11 items-center justify-center px-5 rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm font-bold text-zinc-700 dark:text-zinc-200 transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] hover:bg-zinc-50 dark:hover:bg-zinc-800 ">
@@ -127,9 +136,14 @@ export default function Header() {
                     <div className="flex gap-2 mt-4">
                         {user ? (
                             <>
-                                {(user.role === "ADMIN" || user.role === "MANAGER") && (
+                                {user.role === "ADMIN" && (
                                     <Link onClick={() => setMenuOpen(false)} href="/admin" className="flex-1 h-11 flex items-center justify-center text-sm border border-transparent bg-zinc-100 dark:bg-zinc-800 rounded-xl text-zinc-700 dark:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition">
                                         پنل ادمین
+                                    </Link>
+                                )}
+                                {user.role === "SUPPLIER" && (
+                                    <Link onClick={() => setMenuOpen(false)} href="/supplier" className="flex-1 h-11 flex items-center justify-center text-sm border border-transparent bg-zinc-100 dark:bg-zinc-800 rounded-xl text-zinc-700 dark:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition">
+                                        پنل فروشگاه
                                     </Link>
                                 )}
                                 <Link onClick={() => setMenuOpen(false)} href="/cart" className="flex-1 h-11 flex items-center justify-center text-sm border border-transparent bg-zinc-100 dark:bg-zinc-800 rounded-xl text-zinc-700 dark:text-zinc-200 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition">

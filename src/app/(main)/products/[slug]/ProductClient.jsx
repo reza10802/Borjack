@@ -4,7 +4,7 @@ import { useAuth } from "@/context/AuthContext";
 import BackButton from "@/components/BackButton";
 import { BookmarkIcon as BookmarkOutline } from "@heroicons/react/24/outline";
 import { BookmarkIcon as BookmarkSolid } from "@heroicons/react/24/solid";
-import Image from "next/image";
+import SafeImage from "@/components/SafeImage";
 import Link from "next/link";
 import RelatedProducts from "@/components/RelatedProducts";
 import Breadcrumb from "@/components/Breadcrumb";
@@ -308,7 +308,7 @@ export default function ProductPage({ product }) {
                                 onClick={() => setLightboxOpen(true)}
                                 className="absolute inset-0 cursor-zoom-in"
                             >
-                                <Image
+                                <SafeImage
                                     src={gallery[selectedImage].url}
                                     alt={product.title}
                                     fill
@@ -385,7 +385,7 @@ export default function ProductPage({ product }) {
                                                 : "border border-[var(--color-border)] hover:border-[var(--color-accent)]"
                                             }`}
                                     >
-                                        <Image
+                                        <SafeImage
                                             src={img.url}
                                             alt={product.title}
                                             fill
@@ -740,7 +740,7 @@ export default function ProductPage({ product }) {
                                 </>
                             )}
                             <div className="relative w-[90vw] h-[80vh]">
-                                <Image
+                                <SafeImage
                                     src={gallery[selectedImage].url}
                                     alt={product.title}
                                     fill
@@ -759,7 +759,7 @@ export default function ProductPage({ product }) {
                                                 : "border-white/20"
                                             }`}
                                     >
-                                        <Image
+                                        <SafeImage
                                             src={img.url}
                                             alt=""
                                             fill

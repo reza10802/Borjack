@@ -65,7 +65,32 @@ const iranPostalCodeRegex = /^\d{10}$/;
 const otpPurposeSchema = z.enum([
   "VERIFY_PHONE",
   "RESET_PASSWORD",
+  "LOGIN",
 ]);
+
+
+// ─────────────────────────────────────────────
+// Password policy (bcrypt ignores bytes beyond 72, so we cap at 72 UTF-8 bytes)
+// ─────────────────────────────────────────────
+const COMMON_PASSWORDS = new Set([
+  "12345678", "123456789", "1234567890", "12341234", "11111111", "00000000", "87654321", "987654321",
+  "password", "password1", "password123", "qwerty123", "qwertyui", "asdfghjk", "iloveyou", "admin123",
+  "admin1234", "abc12345", "a1234567", "aa123456", "1q2w3e4r", "123123123", "09123456789", "borjak123",
+]);
+
+export const strongPasswordSchema = z
+  .string()
+  .min(8, "رمز عبور باید حداقل ۸ کاراکتر باشد")
+  .refine((v) => new TextEncoder().encode(v).length <= 72, "رمز عبور خیلی طولانی است")
+  .refine((v) => !COMMON_PASSWORDS.has(v.toLowerCase()), "این رمز عبور بسیار رایج است؛ رمز دیگری انتخاب کنید")
+  .refine((v) => !/^(.)\1+$/.test(v), "رمز عبور نباید تکرار یک کاراکتر باشد")
+  .refine((v) => !(/^\d+$/.test(v) && v.length < 12), "رمز عبور نباید فقط عدد باشد (ترکیبی از حروف و عدد استفاده کنید)");
+
+const otpCodeNormalizer = (value) =>
+  String(value ?? "")
+    .trim()
+    .replace(/[۰-۹]/g, (c) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(c)))
+    .replace(/[٠-٩]/g, (c) => String("٠١٢٣٤٥٦٧٨٩".indexOf(c)));
 
 // ─────────────────────────────────────────────
 // Register
@@ -80,10 +105,7 @@ export const registerSchema = z.object({
 
   phone: iranPhoneSchema,
 
-  password: z
-    .string()
-    .min(6, "رمز عبور باید حداقل ۶ کاراکتر باشد")
-    .max(100, "رمز عبور خیلی طولانی است"),
+  password: strongPasswordSchema,
 });
 
 // ─────────────────────────────────────────────
@@ -92,10 +114,8 @@ export const registerSchema = z.object({
 
 export const loginSchema = z.object({
   phone: iranPhoneSchema,
-
-  password: z
-    .string()
-    .min(1, "رمز عبور الزامی است"),
+  password: z.string().min(1, "رمز عبور الزامی است"),
+  captchaToken: z.string().max(2048).optional(),
 });
 
 // ─────────────────────────────────────────────
@@ -117,8 +137,8 @@ export const verifyOtpSchema = z.object({
 
   code: z
     .string()
-    .trim()
-    .regex(/^\d{6}$/, "کد تایید باید ۶ رقم باشد"),
+    .transform(otpCodeNormalizer)
+    .refine((v) => /^\d{6}$/.test(v), "کد تایید باید ۶ رقم باشد"),
 
   purpose: otpPurposeSchema,
 });

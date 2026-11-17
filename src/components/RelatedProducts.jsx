@@ -1,8 +1,7 @@
-
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
+import SafeImage from "@/components/SafeImage";
 import { toPersianPrice } from "@/lib/utils";
 
 export default function RelatedProducts({ products }) {
@@ -28,7 +27,7 @@ export default function RelatedProducts({ products }) {
             <div className="relative aspect-square shrink-0 overflow-hidden bg-[var(--color-surface-2)]">
               {product.image ? (
                 <div className="absolute inset-0 flex items-center justify-center p-4 sm:p-5">
-                  <Image
+                  <SafeImage
                     src={product.image}
                     alt={product.title}
                     fill

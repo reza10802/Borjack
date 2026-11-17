@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { getClientIp, ipBucketKey } from "@/lib/security";
+import { consumeRateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -540,10 +542,7 @@ export async function POST(req) {
       return jsonError("درخواست بیش از حد بزرگ است.", 413);
     }
 
-    const ip =
-      req.headers.get("x-real-ip") ||
-      req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-      "unknown";
+    const ip = getClientIp(req.headers);
 
     if (!applyRateLimit(ip)) {
       return jsonError(
@@ -552,7 +551,22 @@ export async function POST(req) {
       );
     }
 
-    const body = await req.json().catch(() => null);
+    // Cross-process budget (DB-backed): per client IP/hour and a global daily cap to bound provider cost.
+    const ipLimit = await consumeRateLimit(`ai:ip:${ipBucketKey(ip)}`, Number(process.env.AI_IP_HOURLY_LIMIT || 40), 3600);
+    if (!ipLimit.allowed) {
+      return jsonError("تعداد پیام‌ها زیاد است. کمی بعد دوباره امتحان کن.", 429);
+    }
+    const globalLimit = await consumeRateLimit("ai:global:day", Number(process.env.AI_GLOBAL_DAILY_LIMIT || 3000), 86400);
+    if (!globalLimit.allowed) {
+      return jsonError("دستیار هوشمند امروز در دسترس نیست. لطفاً بعداً امتحان کن.", 429);
+    }
+
+    const rawBody = await req.text().catch(() => "");
+    if (rawBody.length > 20_000) {
+      return jsonError("درخواست بیش از حد بزرگ است.", 413);
+    }
+    let body = null;
+    try { body = JSON.parse(rawBody); } catch { body = null; }
 
     if (!body || !Array.isArray(body.messages)) {
       return jsonError("درخواست معتبر نیست.", 400);

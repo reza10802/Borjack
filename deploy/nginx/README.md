@@ -36,6 +36,5 @@ restored configuration passes validation.
 The limits currently use the client IP address. They do not replace
 application-level protections such as per-account or per-phone OTP
 limits, authorization checks, and payment idempotency.
-'@ | Set-Content .\deploy\nginx\README.md -Encoding utf8
 
 git status --short

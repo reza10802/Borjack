@@ -13,6 +13,14 @@ function createPrismaClient() {
 
   return new PrismaClient({
     adapter,
+    // Defence in depth, NOT a replacement for explicit `select` on public routes:
+    // the internal owner of a product must never leak by default. Trusted internal
+    // code opts in with `select: { supplierId: true }` or `omit: { supplierId: false }`.
+    omit: {
+      product: {
+        supplierId: true,
+      },
+    },
   });
 }
 

@@ -2,6 +2,7 @@ import Breadcrumb from "@/components/Breadcrumb";
 import ProductCard from "@/components/ProductCard";
 import { prisma } from "@/lib/db";
 import { notFound } from "next/navigation";
+import { PUBLIC_CARD_SELECT, toPublicCardProduct } from "@/lib/public-product";
 
 async function getTag(slug) {
     return prisma.tag.findUnique({
@@ -23,22 +24,14 @@ async function getProducts(tagId) {
                 },
             },
         },
-        include: {
-            brand: true,
-            images: true,
-            specs: true,
-        },
+        select: PUBLIC_CARD_SELECT,
 
         orderBy: {
             createdAt: "desc",
         },
     });
 
-    return products.map((product) => ({
-        ...product,
-        image: product.images?.[0]?.url || product.image,
-        isWishlisted: false,
-    }));
+    return products.map(toPublicCardProduct);
 }
 
 export default async function TagPage({ params }) {

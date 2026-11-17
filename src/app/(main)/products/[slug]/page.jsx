@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import ProductClient from "./ProductClient";
+import { safeJsonLd } from "@/lib/json-ld";
 
 const BASE_URL =
   process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
@@ -168,6 +169,14 @@ export default async function Page({ params }) {
             url: productUrl,
             priceCurrency: "IRR",
             price: Number(product.price),
+            // Borjak is the only seller customers and search engines ever see.
+            // Suppliers are internal and must never appear in public output.
+            seller: {
+              "@type": "Organization",
+              name: "Borjak",
+              alternateName: "برجک",
+              url: `${BASE_URL}/`,
+            },
             availability:
               availableStock > 0
                 ? "https://schema.org/InStock"
@@ -222,14 +231,14 @@ export default async function Page({ params }) {
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify(productJsonLd),
+          __html: safeJsonLd(productJsonLd),
         }}
       />
 
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify(breadcrumbJsonLd),
+          __html: safeJsonLd(breadcrumbJsonLd),
         }}
       />
 

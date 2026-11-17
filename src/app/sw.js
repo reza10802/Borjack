@@ -3,7 +3,17 @@ import {
   NetworkFirst,
   CacheFirst,
   ExpirationPlugin,
+  NetworkOnly,
 } from "serwist";
+
+// Never cache authenticated / personal / payment pages or API responses (shared devices, logout).
+const SENSITIVE_PATHS = [
+  "/admin", "/profile", "/checkout", "/login", "/register", "/verify-phone", "/forgot-password", "/reset-password",
+  "/api/auth", "/api/cart", "/api/order", "/api/payment", "/api/profile", "/api/admin", "/api/wishlist",
+  "/api/adress", "/api/assistant", "/api/internal",
+];
+const isSensitive = (pathname) =>
+  SENSITIVE_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"));
 
 const serwist = new Serwist({
   precacheEntries: self.__SW_MANIFEST,
@@ -12,6 +22,10 @@ const serwist = new Serwist({
   clientsClaim: true,
 
   runtimeCaching: [
+    {
+      matcher: ({ url }) => isSensitive(url.pathname),
+      handler: new NetworkOnly(),
+    },
     {
       matcher: ({ request }) => request.mode === "navigate",
       handler: new NetworkFirst({

@@ -1,244 +1,177 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import { cookies } from "next/headers";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
-import { normalizeIranPhone } from "@/lib/validations/auth";
+import { prisma } from "@/lib/db";
+import { strongPasswordSchema } from "@/lib/validations/auth";
+import { consumeRateLimit } from "@/lib/rate-limit";
+import { getClientIp, ipBucketKey } from "@/lib/security";
+import { verifyJwt } from "@/lib/session";
+import {
+  consumePasswordResetGrant,
+  hasPasswordResetGrant,
+} from "@/lib/password-reset";
+import { resetOtpIssuanceState } from "@/lib/otp";
 
-const normalizeOtpCode = (value) =>
-  String(value ?? "")
-    .trim()
-    .replace(/[۰-۹]/g, (char) =>
-      String("۰۱۲۳۴۵۶۷۸۹".indexOf(char))
-    )
-    .replace(/[٠-٩]/g, (char) =>
-      String("٠١٢٣٤٥٦٧٨٩".indexOf(char))
-    );
+const schema = z.object({ password: strongPasswordSchema });
+const COOKIE_NAME = "passwordResetToken";
+const COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "strict",
+  path: "/api/auth/reset-password",
+};
 
-const schema = z.object({
-  phone: z
-    .string()
-    .trim()
-    .transform((value) => normalizeIranPhone(value))
-    .refine(
-      (value) =>
-        typeof value === "string" &&
-        /^09\d{9}$/.test(value),
-      "شماره موبایل معتبر نیست"
-    ),
+async function readResetGrant() {
+  const token = (await cookies()).get(COOKIE_NAME)?.value;
+  if (!token) return null;
+  try {
+    const payload = verifyJwt(token);
+    if (
+      payload?.purpose !== "PASSWORD_RESET" ||
+      typeof payload.id !== "string" ||
+      typeof payload.phone !== "string" ||
+      typeof payload.jti !== "string" ||
+      !Number.isInteger(payload.tv)
+    ) return null;
+    return payload;
+  } catch {
+    return null;
+  }
+}
 
-  code: z
-    .string()
-    .trim()
-    .transform(normalizeOtpCode)
-    .refine(
-      (value) => /^\d{6}$/.test(value),
-      "کد تایید باید ۶ رقم باشد"
-    ),
+function clearResetCookie(response) {
+  response.cookies.set(COOKIE_NAME, "", { ...COOKIE_OPTIONS, maxAge: 0 });
+  return response;
+}
 
-  password: z
-    .string()
-    .min(
-      6,
-      "رمز عبور باید حداقل ۶ کاراکتر باشد"
-    )
-    .max(
-      100,
-      "رمز عبور خیلی طولانی است"
-    ),
-});
+// Allows the reset page to recover its second step after a refresh, without
+// exposing the HttpOnly authorization token to JavaScript.
+export async function GET(req) {
+  try {
+    const requestedPhone = new URL(req.url).searchParams.get("phone");
+    const grant = await readResetGrant();
+    if (!grant || !requestedPhone || requestedPhone !== grant.phone) {
+      const response = clearResetCookie(NextResponse.json({ authorized: false }));
+      response.headers.set("Cache-Control", "no-store");
+      return response;
+    }
 
+    const [user, grantExists] = await Promise.all([
+      prisma.user.findFirst({
+        where: { id: grant.id, phone: grant.phone, isActive: true, tokenVersion: grant.tv },
+        select: { id: true },
+      }),
+      hasPasswordResetGrant({ phone: grant.phone, grantId: grant.jti }),
+    ]);
+
+    if (!user || !grantExists) {
+      const response = clearResetCookie(NextResponse.json({ authorized: false }));
+      response.headers.set("Cache-Control", "no-store");
+      return response;
+    }
+    const response = NextResponse.json({ authorized: true });
+    response.headers.set("Cache-Control", "no-store");
+    return response;
+  } catch (error) {
+    console.error("RESET_PASSWORD_STATUS_ERROR:", error?.name || "error");
+    const response = NextResponse.json({ authorized: false }, { status: 500 });
+    response.headers.set("Cache-Control", "no-store");
+    return response;
+  }
+}
+
+// Step two: the OTP was already verified. Only the HttpOnly, DB-backed,
+// short-lived and single-use grant can authorize this password change.
 export async function POST(req) {
   try {
-    const body = await req.json();
-
+    const body = await req.json().catch(() => null);
     const parsed = schema.safeParse(body);
-
     if (!parsed.success) {
       return NextResponse.json(
-        {
-          error:
-            parsed.error.issues[0]?.message ||
-            "اطلاعات نامعتبر است",
-        },
-        { status: 400 }
+        { error: parsed.error.issues[0]?.message || "رمز عبور نامعتبر است." },
+        { status: 400 },
       );
     }
 
-    const {
-      phone,
-      code,
-      password,
-    } = parsed.data;
-
-    // ─────────────────────────────────────────────
-    // بررسی کاربر
-    // ─────────────────────────────────────────────
-
-    const user = await prisma.user.findUnique({
-      where: {
-        phone,
-      },
-      select: {
-        id: true,
-        isActive: true,
-      },
-    });
-
-    if (!user) {
+    const lim = await consumeRateLimit(`reset:ip:${ipBucketKey(getClientIp(req.headers))}`, 20, 3600);
+    if (!lim.allowed) {
       return NextResponse.json(
-        {
-          error:
-            "کاربری با این شماره موبایل پیدا نشد.",
-        },
-        { status: 404 }
+        { error: "تعداد تلاش‌ها زیاد است. کمی بعد دوباره تلاش کنید." },
+        { status: 429, headers: { "Retry-After": String(lim.retryAfter) } },
       );
     }
 
-    if (!user.isActive) {
-      return NextResponse.json(
-        {
-          error:
-            "حساب کاربری شما مسدود شده است.",
-        },
-        { status: 403 }
-      );
+    const grant = await readResetGrant();
+    if (!grant) {
+      return clearResetCookie(NextResponse.json(
+        { error: "مجوز تغییر رمز منقضی شده است. دوباره کد بازیابی درخواست کنید." },
+        { status: 401 },
+      ));
     }
 
-    // ─────────────────────────────────────────────
-    // پیدا کردن آخرین OTP
-    // ─────────────────────────────────────────────
-
-    const otp = await prisma.otpCode.findFirst({
-      where: {
-        phone,
-        code,
-        purpose: "RESET_PASSWORD",
-        used: false,
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
-
-    if (!otp) {
-      return NextResponse.json(
-        {
-          error:
-            "کد تایید اشتباه یا نامعتبر است.",
-        },
-        { status: 400 }
-      );
-    }
-
-    // ─────────────────────────────────────────────
-    // بررسی انقضا
-    // ─────────────────────────────────────────────
-
-    if (
-      otp.expiresAt.getTime() <= Date.now()
-    ) {
-      await prisma.otpCode.updateMany({
+    const hashedPassword = await bcrypt.hash(parsed.data.password, 12);
+    const completed = await prisma.$transaction(async (tx) => {
+      const user = await tx.user.findFirst({
         where: {
-          id: otp.id,
-          used: false,
+          id: grant.id,
+          phone: grant.phone,
+          isActive: true,
+          tokenVersion: grant.tv,
+        },
+        select: { id: true },
+      });
+      if (!user) return false;
+
+      // Delete is atomic: only one concurrent POST can consume this grant.
+      const consumed = await consumePasswordResetGrant({
+        phone: grant.phone,
+        grantId: grant.jti,
+        tx,
+      });
+      if (!consumed) return false;
+
+      const updated = await tx.user.updateMany({
+        where: {
+          id: grant.id,
+          phone: grant.phone,
+          isActive: true,
+          tokenVersion: grant.tv,
         },
         data: {
-          used: true,
+          password: hashedPassword,
+          passwordChangedAt: new Date(),
+          tokenVersion: { increment: 1 },
         },
       });
+      if (updated.count !== 1) return false;
 
-      return NextResponse.json(
-        {
-          error:
-            "کد تایید منقضی شده است.",
-        },
-        { status: 400 }
-      );
-    }
-
-    // ─────────────────────────────────────────────
-    // Hash password
-    // ─────────────────────────────────────────────
-
-    const hashedPassword =
-      await bcrypt.hash(password, 10);
-
-    // ─────────────────────────────────────────────
-    // تغییر رمز + مصرف اتمیک OTP
-    // ─────────────────────────────────────────────
-
-    try {
-      await prisma.$transaction(async (tx) => {
-        const consumedOtp =
-          await tx.otpCode.updateMany({
-            where: {
-              id: otp.id,
-              used: false,
-            },
-            data: {
-              used: true,
-            },
-          });
-
-        if (consumedOtp.count !== 1) {
-          throw new Error("OTP_ALREADY_USED");
-        }
-
-        await tx.user.update({
-          where: {
-            id: user.id,
-          },
-          data: {
-            password: hashedPassword,
-          },
-        });
-
-        // تمام OTPهای قدیمی‌تر بازیابی باطل شوند
-        await tx.otpCode.updateMany({
-          where: {
-            phone,
-            purpose: "RESET_PASSWORD",
-            used: false,
-            id: {
-              not: otp.id,
-            },
-          },
-          data: {
-            used: true,
-          },
-        });
+      await tx.otpCode.updateMany({
+        where: { phone: grant.phone, purpose: "RESET_PASSWORD", used: false },
+        data: { used: true },
       });
-    } catch (error) {
-      if (error?.message === "OTP_ALREADY_USED") {
-        return NextResponse.json(
-          {
-            error:
-              "این کد قبلاً استفاده شده است.",
-          },
-          { status: 400 }
-        );
-      }
-
-      throw error;
-    }
-
-    return NextResponse.json({
-      success: true,
-      message:
-        "رمز عبور با موفقیت تغییر کرد.",
+      await resetOtpIssuanceState({
+        phone: grant.phone,
+        purpose: "RESET_PASSWORD",
+        tx,
+      });
+      return true;
     });
-  } catch (error) {
-    console.error(
-      "RESET PASSWORD ERROR:",
-      error
-    );
 
-    return NextResponse.json(
-      {
-        error:
-          "خطا در تغییر رمز عبور.",
-      },
-      { status: 500 }
-    );
+    if (!completed) {
+      return clearResetCookie(NextResponse.json(
+        { error: "مجوز تغییر رمز معتبر نیست یا قبلاً استفاده شده است. دوباره کد بازیابی درخواست کنید." },
+        { status: 401 },
+      ));
+    }
+
+    const response = NextResponse.json({
+      success: true,
+      message: "رمز عبور با موفقیت تغییر کرد. برای ورود دوباره اقدام کنید.",
+    });
+    return clearResetCookie(response);
+  } catch (error) {
+    console.error("RESET_PASSWORD_ERROR:", error?.name || "error");
+    return NextResponse.json({ error: "خطای داخلی سرور" }, { status: 500 });
   }
 }

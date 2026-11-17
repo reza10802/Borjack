@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
 import { addToCartSchema } from "@/lib/validations/cart";
+import { PUBLIC_PRODUCT_SCALARS } from "@/lib/public-product";
 
 const MAX_QUANTITY_PER_ITEM = 20;
 
@@ -71,7 +72,8 @@ export async function GET() {
       },
       include: {
         product: {
-          include: {
+          select: {
+            ...PUBLIC_PRODUCT_SCALARS,
             images: true,
           },
         },
@@ -217,7 +219,8 @@ export async function POST(req) {
             },
             include: {
               product: {
-                include: {
+                select: {
+                  ...PUBLIC_PRODUCT_SCALARS,
                   images: true,
                 },
               },
@@ -231,7 +234,8 @@ export async function POST(req) {
             },
             include: {
               product: {
-                include: {
+                select: {
+                  ...PUBLIC_PRODUCT_SCALARS,
                   images: true,
                 },
               },

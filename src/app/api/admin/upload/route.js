@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { mkdir } from "fs/promises";
 import path from "path";
 import crypto from "crypto";
-import { requireManagerOrAdmin } from "@/lib/auth";
+import { requireRoles, ROLES } from "@/lib/auth";
 
 const UPLOAD_DIR = path.resolve(
     process.env.UPLOAD_DIR || path.join(process.cwd(), "storage", "uploads")
@@ -34,7 +34,10 @@ const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif", "im
 
 // POST /api/admin/upload — آپلود عکس محصول، تبدیل به webp، ذخیره با ساختار تاریخی
 export async function POST(req) {
-    const check = await requireManagerOrAdmin();
+    const check = await requireRoles([
+        ROLES.ADMIN,
+        ROLES.SUPPLIER,
+    ]);
     if (check.error) return check.error;
 
     try {

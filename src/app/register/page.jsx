@@ -110,6 +110,13 @@ function RegisterContent() {
         password,
       });
 
+      if (data?.requiresLoginCaptcha) {
+        router.replace(
+          `/login?phone=${encodeURIComponent(normalizedPhone)}&redirect=${encodeURIComponent(redirect)}`
+        );
+        return;
+      }
+
       // کاربر ثبت‌نام شده ولی شماره هنوز تأیید نشده
       if (!data?.isPhoneVerified) {
         router.replace(

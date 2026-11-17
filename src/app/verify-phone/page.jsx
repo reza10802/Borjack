@@ -37,6 +37,16 @@ function getSafeRedirect(value) {
   return value;
 }
 
+function formatCooldown(seconds) {
+  const value = Math.max(0, Number(seconds) || 0);
+  const hours = Math.floor(value / 3600);
+  const minutes = Math.floor((value % 3600) / 60);
+  const secs = value % 60;
+  return hours > 0
+    ? `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`
+    : `${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+}
+
 function normalizeDigits(value) {
   return String(value ?? "")
     .replace(/[۰-۹]/g, (char) =>
@@ -224,13 +234,15 @@ function VerifyPhoneContent() {
       const data = await res.json();
 
       if (!res.ok) {
+        const retryAfter = Number(res.headers.get("Retry-After")) || 0;
+        if (retryAfter > 0) setCooldown(Math.min(3 * 60 * 60, retryAfter));
         throw new Error(
           data?.error ||
             "خطا در ارسال کد تایید"
         );
       }
 
-      setCooldown(RESEND_COOLDOWN);
+      setCooldown(Math.min(3 * 60 * 60, Number(data.nextRequestInSeconds) || RESEND_COOLDOWN));
 
       return true;
     } catch (err) {
@@ -486,6 +498,9 @@ function VerifyPhoneContent() {
           </button>
         </form>
 
+        <p className="text-xs leading-6 text-zinc-500 dark:text-zinc-400 text-center mt-4">
+          هر کد ۲ دقیقه اعتبار دارد و سه بار می‌توان آن را اشتباه وارد کرد. پس از سه پیامک، ارسال بعدی تا سه ساعت محدود می‌شود.
+        </p>
         <div className="text-center mt-5">
           <button
             type="button"
@@ -496,7 +511,7 @@ function VerifyPhoneContent() {
             className="text-sm font-bold text-zinc-500 dark:text-zinc-400 hover:text-[var(--color-accent)] transition disabled:opacity-50"
           >
             {cooldown > 0
-              ? `ارسال دوباره کد (${cooldown} ثانیه)`
+              ? `ارسال دوباره کد (${formatCooldown(cooldown)})`
               : sending
                 ? "در حال ارسال..."
                 : "ارسال دوباره کد"}

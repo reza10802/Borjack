@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
+import { PUBLIC_PRODUCT_SCALARS } from "@/lib/public-product";
 
 function getAvailableStock(product) {
   const stock = Number(product?.stock ?? 0);
@@ -28,7 +29,8 @@ export async function GET(req, { params }) {
         deletedAt: null,
         isPublished: true,
       },
-      include: {
+      select: {
+        ...PUBLIC_PRODUCT_SCALARS,
         category: {
           select: {
             id: true,
@@ -128,7 +130,8 @@ export async function GET(req, { params }) {
             : []),
         ],
       },
-      include: {
+      select: {
+        ...PUBLIC_PRODUCT_SCALARS,
         images: true,
         tags: true,
       },

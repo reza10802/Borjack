@@ -13,8 +13,12 @@ export async function GET(req) {
 
   if (role === "staff") {
     where.role = {
-      in: ["ADMIN", "MANAGER"],
+      in: ["ADMIN"],
     };
+  } else if (role === "supplier") {
+    where.role = "SUPPLIER";
+  } else if (role === "customer") {
+    where.role = "CUSTOMER";
   }
 
   const users = await prisma.user.findMany({
@@ -71,7 +75,32 @@ export async function DELETE(req) {
       );
     }
 
-    await prisma.user.delete({ where: { id: userId } });
+    // Never delete a user who owns products or has orders: Postgres would refuse (and the
+    // history would be lost if it did not). Blocking / demoting is the supported way to retire them.
+    const [productCount, orderCount] = await Promise.all([
+      prisma.product.count({ where: { supplierId: userId } }),
+      prisma.order.count({ where: { userId } }),
+    ]);
+
+    if (productCount > 0 || orderCount > 0) {
+      return NextResponse.json(
+        {
+          error: "این کاربر دارای محصول یا سفارش است و حذف نمی‌شود. به‌جای حذف، حساب را مسدود کنید یا نقش را تغییر دهید.",
+          productCount,
+          orderCount,
+        },
+        { status: 409 },
+      );
+    }
+
+    try {
+      await prisma.user.delete({ where: { id: userId } });
+    } catch (e) {
+      if (e?.code === "P2003") {
+        return NextResponse.json({ error: "به دلیل وابستگی‌های ثبت‌شده، حذف این کاربر ممکن نیست؛ حساب را مسدود کنید." }, { status: 409 });
+      }
+      throw e;
+    }
 
     await logAction({
       userId: auth.user.id,

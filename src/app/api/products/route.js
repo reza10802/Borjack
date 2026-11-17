@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
+import { PUBLIC_PRODUCT_SCALARS } from "@/lib/public-product";
 
 export async function GET(req) {
   try {
@@ -210,7 +211,8 @@ export async function GET(req) {
       orderBy,
       skip,
       take: limit,
-      include: {
+      select: {
+        ...PUBLIC_PRODUCT_SCALARS,
         category: true,
         brand: true,
         images: true,

@@ -32,6 +32,7 @@ function getCartSnapshot(items) {
     .sort((a, b) => a.productId - b.productId);
 }
 
+
 function isSameCheckout(order, data) {
   const oldItems = order.items
     .map((item) => ({
@@ -53,7 +54,8 @@ function isSameCheckout(order, data) {
     order.cityId === data.cityId &&
     order.address === data.address &&
     order.postalCode === data.postalCode &&
-    order.shippingMethod === data.shippingMethod;
+    order.shippingMethod === data.shippingMethod &&
+    order.requiresPrintedInvoice === data.requiresPrintedInvoice;
 
   return (
     sameItems &&
@@ -62,19 +64,44 @@ function isSameCheckout(order, data) {
   );
 }
 
+
+function hasCompleteSupplierSnapshot(items) {
+  return (
+    Array.isArray(items) &&
+    items.length > 0 &&
+    items.every(
+      (item) =>
+        item?.supplierSnapshotCaptured === true &&
+        (
+          item.supplierId === null ||
+          (
+            typeof item.supplierId === "string" &&
+            item.supplierId.trim().length > 0
+          )
+        )
+    )
+  );
+}
+
 function normalizeOrderProducts(orders) {
   return orders.map((order) => ({
     ...order,
     items: order.items.map((item) => {
-      if (!item.product) return item;
+      const publicItem = { ...item };
 
-      const {
-        reservedStock,
-        ...publicProduct
-      } = item.product;
+      // اطلاعات مالکیت داخلی به مشتری نمایش داده نشود.
+      delete publicItem.supplierId;
+      delete publicItem.supplierSnapshotCaptured;
+
+      if (!item.product) return publicItem;
+
+      const publicProduct = { ...item.product };
+
+      delete publicProduct.reservedStock;
+      delete publicProduct.supplierId;
 
       return {
-        ...item,
+        ...publicItem,
         product: {
           ...publicProduct,
           availableStock: getAvailableStock(item.product),
@@ -128,15 +155,78 @@ export async function GET() {
           in: ["PAID", "PENDING"],
         },
       },
+
+      // شناسه داخلی درگاه و اطلاعات داخلی مشکل موجودی
+      // هرگز برای مشتری ارسال نشوند.
+      omit: {
+        authority: true,
+        stockIssueAt: true,
+      },
+
+      take: 100,
+
       orderBy: {
         createdAt: "desc",
       },
+
       include: {
+        // اقلام اصلی سفارش
         items: {
           include: {
             product: {
               include: {
                 images: true,
+              },
+            },
+          },
+        },
+
+        // مرسوله‌های مستقل داخل همان سفارش
+        fulfillments: {
+          orderBy: {
+            createdAt: "asc",
+          },
+
+          select: {
+            id: true,
+            status: true,
+            shippingMethod: true,
+            shippingCost: true,
+            trackingCode: true,
+            trackingCodeAddedAt: true,
+            handedOverAt: true,
+            shippedAt: true,
+            deliveredAt: true,
+            createdAt: true,
+            updatedAt: true,
+
+            // کالاهای متعلق به همین مرسوله
+            items: {
+              select: {
+                id: true,
+                quantity: true,
+
+                orderItem: {
+                  select: {
+                    id: true,
+                    productId: true,
+                    price: true,
+
+                    product: {
+                      select: {
+                        id: true,
+                        title: true,
+                        image: true,
+                        images: {
+                          select: {
+                            id: true,
+                            url: true,
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
               },
             },
           },
@@ -192,6 +282,7 @@ export async function POST(req) {
       cityId,
       address,
       postalCode,
+      requiresPrintedInvoice,
     } = parsed.data;
 
     const shippingMethod = SHIPPING_METHODS.has(body?.shippingMethod)
@@ -314,6 +405,7 @@ export async function POST(req) {
       address,
       postalCode,
       shippingMethod,
+      requiresPrintedInvoice,
       cartItems,
       total,
     };
@@ -340,6 +432,10 @@ export async function POST(req) {
         checkoutData,
       );
 
+      const hasSupplierSnapshot = hasCompleteSupplierSnapshot(
+        pendingOrder.items,
+      );
+
       // سفارش دارای رزرو فعال نباید تغییر کند.
       if (
         pendingOrder.stockReservationStatus === "RESERVED"
@@ -349,6 +445,16 @@ export async function POST(req) {
           pendingOrder.authority &&
           sameCheckout
         ) {
+          if (!hasSupplierSnapshot) {
+            return NextResponse.json(
+              {
+                error:
+                  "اطلاعات مالکیت کالاهای این سفارش ناقص است و پرداخت آن نیازمند بررسی پشتیبانی است.",
+              },
+              { status: 409 },
+            );
+          }
+
           return NextResponse.json({
             success: true,
             orderId: pendingOrder.id,
@@ -416,7 +522,7 @@ export async function POST(req) {
       }
 
       // سفارش یکسان و بدون پرداخت فعال قابل استفاده مجدد است.
-      if (sameCheckout) {
+      if (sameCheckout && hasSupplierSnapshot) {
         return NextResponse.json({
           success: true,
           orderId: pendingOrder.id,
@@ -500,6 +606,7 @@ export async function POST(req) {
             stock: true,
             reservedStock: true,
             price: true,
+            supplierId: true,
           },
         });
 
@@ -574,6 +681,7 @@ export async function POST(req) {
             cityName: city.name,
             address,
             postalCode,
+            requiresPrintedInvoice,
             shippingMethod,
             shippingCost: 0,
             total: freshTotal,
@@ -588,12 +696,18 @@ export async function POST(req) {
         });
 
         await tx.orderItem.createMany({
-          data: cartItems.map((item) => ({
-            orderId: pendingOrder.id,
-            productId: item.productId,
-            quantity: item.quantity,
-            price: freshProductMap.get(item.productId).price,
-          })),
+          data: cartItems.map((item) => {
+            const product = freshProductMap.get(item.productId);
+
+            return {
+              orderId: pendingOrder.id,
+              productId: item.productId,
+              quantity: item.quantity,
+              price: product.price,
+              supplierId: product.supplierId ?? null,
+              supplierSnapshotCaptured: true,
+            };
+          }),
         });
 
         return {
@@ -674,6 +788,7 @@ export async function POST(req) {
           stock: true,
           reservedStock: true,
           price: true,
+          supplierId: true,
         },
       });
 
@@ -731,17 +846,24 @@ export async function POST(req) {
           cityName: city.name,
           address,
           postalCode,
+          requiresPrintedInvoice,
           shippingMethod,
           shippingCost: 0,
           total: freshTotal,
           status: "PENDING",
           paymentStatus: "PENDING",
           items: {
-            create: cartItems.map((item) => ({
-              productId: item.productId,
-              quantity: item.quantity,
-              price: productMap.get(item.productId).price,
-            })),
+            create: cartItems.map((item) => {
+              const product = productMap.get(item.productId);
+
+              return {
+                productId: item.productId,
+                quantity: item.quantity,
+                price: product.price,
+                supplierId: product.supplierId ?? null,
+                supplierSnapshotCaptured: true,
+              };
+            }),
           },
         },
       });

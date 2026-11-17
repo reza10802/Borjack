@@ -85,16 +85,10 @@ export async function DELETE(req, { params }) {
       }
 
       // فقط سفارش بدون رزرو فعال و بدون تراکنش فعال قابل حذف است.
-      await tx.transaction.deleteMany({
-        where: {
-          orderId: order.id,
-        },
-      });
-
-      await tx.order.delete({
-        where: {
-          id: order.id,
-        },
+      // Soft-cancel: orders, transactions and payment attempts are financial records and are never hard-deleted.
+      await tx.order.update({
+        where: { id: order.id },
+        data: { status: "CANCELLED", paymentStatus: "FAILED", paymentExpiresAt: null, authority: null },
       });
 
       return { success: true };

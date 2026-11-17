@@ -1,17 +1,12 @@
 import { NextResponse } from "next/server";
 import { cookies, headers } from "next/headers";
-import jwt from "jsonwebtoken";
+import { verifyJwt } from "@/lib/session";
+import { getClientIp, redactSensitive } from "@/lib/security";
 import { prisma } from "@/lib/db";
-
-const JWT_SECRET = process.env.JWT_SECRET;
-
-if (!JWT_SECRET) {
-  throw new Error("JWT_SECRET is not set in environment variables");
-}
 
 export const ROLES = {
   ADMIN: "ADMIN",
-  MANAGER: "MANAGER",
+  SUPPLIER: "SUPPLIER",
   CUSTOMER: "CUSTOMER",
 };
 
@@ -35,7 +30,7 @@ export async function getSessionUser() {
       return null;
     }
 
-    const decoded = jwt.verify(token, JWT_SECRET);
+    const decoded = verifyJwt(token);
 
     // JWT باید session اصلی و متعلق به کاربر تاییدشده باشد
     if (
@@ -57,6 +52,9 @@ export async function getSessionUser() {
         role: true,
         isActive: true,
         isPhoneVerified: true,
+        tokenVersion: true,
+        address: true,
+        postalCode: true,
 
         addresses: {
           where: {
@@ -72,6 +70,11 @@ export async function getSessionUser() {
     }
 
     if (!user.isActive) {
+      return null;
+    }
+
+    // Session revocation: tokens issued before a password change / security event are rejected.
+    if ((decoded.tv ?? 0) !== user.tokenVersion) {
       return null;
     }
 
@@ -93,10 +96,10 @@ export async function getSessionUser() {
       isPhoneVerified: user.isPhoneVerified,
 
       address:
-        defaultAddress?.address ?? null,
+        defaultAddress?.address ?? user.address ?? null,
 
       postalCode:
-        defaultAddress?.postalCode ?? null,
+        defaultAddress?.postalCode ?? user.postalCode ?? null,
 
       provinceName:
         defaultAddress?.provinceName ?? null,
@@ -196,29 +199,9 @@ export async function requireAdmin() {
   return requireRoles([ROLES.ADMIN]);
 }
 
-export async function requireManagerOrAdmin() {
-  return requireRoles([
-    ROLES.ADMIN,
-    ROLES.MANAGER,
-  ]);
-}
-
-export function canManagerChangeOrderStatus(
-  from,
-  to,
-) {
-  const transitions = {
-    PENDING: ["PROCESSING"],
-    PROCESSING: ["READY_TO_SHIP"],
-    READY_TO_SHIP: ["SHIPPED"],
-    SHIPPED: ["DELIVERED"],
-    DELIVERED: [],
-    CANCELLED: [],
-  };
-
-  return (
-    transitions[from]?.includes(to) ?? false
-  );
+// SUPPLIER-only guard for /api/supplier/*. ADMIN uses the admin routes instead.
+export async function requireSupplier() {
+  return requireRoles([ROLES.SUPPLIER]);
 }
 
 export async function logAction({
@@ -232,29 +215,25 @@ export async function logAction({
 }) {
   try {
     const headersList = await headers();
+    const ipAddress = getClientIp(headersList);
 
-    const forwardedFor =
-      headersList.get("x-forwarded-for");
-
-    const ipAddress =
-      forwardedFor
-        ?.split(",")[0]
-        ?.trim() ||
-      headersList.get("x-real-ip") ||
-      null;
+    let userLabel = null;
+    if (userId) {
+      const actor = await prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
+      userLabel = actor?.name ?? null;
+    }
 
     await prisma.auditLog.create({
       data: {
         userId,
+        userLabel,
         action,
         entityType,
-        entityId: entityId
-          ? String(entityId)
-          : "",
+        entityId: entityId ? String(entityId) : "",
         description,
-        oldValue,
-        newValue,
-        ipAddress,
+        oldValue: redactSensitive(oldValue),
+        newValue: redactSensitive(newValue),
+        ipAddress: ipAddress === "unknown" ? null : ipAddress,
       },
     });
   } catch (e) {

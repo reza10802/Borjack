@@ -23,30 +23,42 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     const controller = new AbortController();
 
-    fetch("/api/auth/me", {
-      cache: "no-store",
-      credentials: "include",
-      signal: controller.signal,
-    })
-      .then((res) => {
+    const loadSession = async () => {
+      try {
+        const res = await fetch("/api/auth/me", {
+          cache: "no-store",
+          credentials: "include",
+          signal: controller.signal,
+        });
+
         if (!res.ok) {
-          return null;
+          if (!controller.signal.aborted) {
+            setUser(null);
+          }
+          return;
         }
 
-        return res.json();
-      })
-      .then((data) => {
-        setUser(data);
-      })
-      .catch((err) => {
-        if (err.name !== "AbortError") {
+        const data = await res.json();
+
+        if (!controller.signal.aborted) {
+          setUser(data);
+        }
+      } catch (err) {
+        if (
+          err.name !== "AbortError" &&
+          !controller.signal.aborted
+        ) {
           console.error("AUTH INIT ERROR:", err);
           setUser(null);
         }
-      })
-      .finally(() => {
-        setLoading(false);
-      });
+      } finally {
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadSession();
 
     return () => controller.abort();
   }, []);
@@ -55,7 +67,7 @@ export function AuthProvider({ children }) {
   // Login
   // ─────────────────────────────────────────────
 
-  const login = async (phone, password) => {
+  const login = async (phone, password, captchaToken = "") => {
     const res = await fetch("/api/auth/login", {
       method: "POST",
       headers: {
@@ -66,6 +78,7 @@ export function AuthProvider({ children }) {
       body: JSON.stringify({
         phone,
         password,
+        ...(captchaToken ? { captchaToken } : {}),
       }),
     });
 
@@ -73,7 +86,16 @@ export function AuthProvider({ children }) {
 
     // Login failed
     if (!res.ok) {
-      throw new Error(data?.error || "خطا در ورود");
+      const error = new Error(data?.error || "خطا در ورود");
+      error.requiresCaptcha = data?.requiresCaptcha === true;
+      error.captchaUnavailable = res.status === 503;
+      error.status = res.status;
+      throw error;
+    }
+
+    // Suspicious-login step-up: no full session exists yet; the login page must collect OTP.
+    if (data?.requiresLoginVerification) {
+      return data;
     }
 
     // شماره هنوز تأیید نشده
@@ -123,8 +145,15 @@ export function AuthProvider({ children }) {
       throw new Error(data?.error || "خطا در ثبت‌نام");
     }
 
-    // بعد از ثبت‌نام، login وضعیت تأیید شماره را تعیین می‌کند
-    return login(phone, password);
+    // بعد از ثبت‌نام، login وضعیت تأیید شماره را تعیین می‌کند.
+    // اگر IP به CAPTCHA رسیده باشد، حساب ساخته شده؛ کاربر را به صفحه ورود می‌فرستیم
+    // تا CAPTCHA را تکمیل کند و سپس تأیید شماره را ادامه دهد.
+    try {
+      return await login(phone, password);
+    } catch (error) {
+      if (error?.requiresCaptcha) return { requiresLoginCaptcha: true };
+      throw error;
+    }
   };
 
   // ─────────────────────────────────────────────

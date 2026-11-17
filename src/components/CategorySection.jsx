@@ -8,18 +8,29 @@ import {
     ShoppingBagIcon,
     SpeakerWaveIcon,
     TvIcon,
-    ClockIcon
+    ClockIcon,
+    Squares2X2Icon
 } from "@heroicons/react/24/outline";
 
+// کلیدها بدون فاصله/نیم‌فاصله/خط‌تیره نوشته می‌شن (normalize پایین)
 const categoryIcons = {
     "موبایل": DevicePhoneMobileIcon,
-    "لپ-تاپ": ComputerDesktopIcon,
+    "لپتاپ": ComputerDesktopIcon,
     "پوشاک": ShoppingBagIcon,
     "هدفون": SpeakerWaveIcon,
     "دوربین": TvIcon,
     "ساعت": ClockIcon,
-
 };
+
+const normalize = (v) => String(v ?? "").replace(/[\s\u200c\-_]+/g, "");
+
+function getCategoryIcon(category) {
+    return (
+        categoryIcons[normalize(category.title)] ||
+        categoryIcons[normalize(category.slug)] ||
+        Squares2X2Icon
+    );
+}
 
 export default function CategorySection() {
     const [categories, setCategories] = useState([]);
@@ -51,8 +62,7 @@ export default function CategorySection() {
                         className=" card group flex flex-col items-center justify-center p-6 text-center transition-all duration-300 hover:-translate-y-1 hover:border-[var(--color-accent)] hover:shadow-lg hover:shadow-[var(--color-accent)]/10 "
                     >
                         {(() => {
-                            const Icon =
-                                categoryIcons[category.slug] || categoryIcons.default;
+                            const Icon = getCategoryIcon(category);
 
                             return (
                                 <span className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-zinc-100 dark:bg-[var(--color-accent)]/10 transition-all duration-300 group-hover:scale-110 group-hover:bg-[var(--color-accent)]">

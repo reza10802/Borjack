@@ -4,6 +4,8 @@ import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
 
 const MAX_QUANTITY_PER_ITEM = 20;
+const MAX_MERGE_ITEMS = 50;
+const MAX_BODY_BYTES = 32 * 1024;
 
 export async function POST(req) {
   try {
@@ -16,8 +18,15 @@ export async function POST(req) {
       );
     }
 
+    // Bounded input: avoids long transactions holding row locks on many Product rows.
+    if (Number(req.headers.get("content-length") || 0) > MAX_BODY_BYTES) {
+      return NextResponse.json({ error: "درخواست بیش از حد بزرگ است" }, { status: 413 });
+    }
     const body = await req.json().catch(() => null);
     const items = Array.isArray(body?.items) ? body.items : [];
+    if (items.length > MAX_MERGE_ITEMS) {
+      return NextResponse.json({ error: "تعداد اقلام سبد بیش از حد مجاز است" }, { status: 400 });
+    }
 
     // اعتبارسنجی و تجمیع شناسه‌های تکراری
     const quantities = new Map();
