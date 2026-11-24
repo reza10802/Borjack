@@ -1,8 +1,8 @@
-
 "use client";
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { useUI } from "@/context/UIContext";
 import Select from "react-select";
 import {
   XMarkIcon,
@@ -10,13 +10,18 @@ import {
   ArrowPathIcon,
   PencilSquareIcon,
   PlusIcon,
+  CheckCircleIcon,
 } from "@heroicons/react/24/outline";
 import Image from "next/image";
+import {
+  calculateProductPricing,
+  PricingError,
+} from "@/lib/pricing";
 
 const emptyForm = {
   title: "",
-  originalPrice: "",
-  price: "",
+  basePrice: "",
+  discount: "0",
   categoryId: "",
   image: "",
   gallery: [],
@@ -146,8 +151,268 @@ const selectStyles = {
   }),
 };
 
+/**
+ * نمایش گالری تصاویر در کارت محصول ادمین
+ * تصویر اصلی و تصاویر اضافی در اندازه یکسان نمایش داده می‌شوند.
+ * با کلیک روی هر تصویر، نسخه بزرگ آن باز می‌شود.
+ */
+function ProductImageGallery({ product }) {
+  const [selectedImage, setSelectedImage] = useState(null);
+
+  const rawImages = [
+    product?.image,
+    ...(Array.isArray(product?.images)
+      ? product.images.map((item) =>
+        typeof item === "string" ? item : item?.url
+      )
+      : []),
+  ];
+
+  // حذف آدرس‌های خالی و تصاویر تکراری
+  const imageUrls = [
+    ...new Set(
+      rawImages
+        .filter(
+          (url) =>
+            typeof url === "string" && url.trim()
+        )
+        .map((url) => url.trim())
+    ),
+  ];
+
+  // بستن تصویر بزرگ با کلید Escape
+  useEffect(() => {
+    if (!selectedImage) return;
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setSelectedImage(null);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [selectedImage]);
+
+  return (
+    <>
+      <section className="min-w-0 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <PhotoIcon className="h-5 w-5 text-[var(--color-accent)]" />
+
+            <h4 className="text-sm font-bold text-[var(--color-text)]">
+              تصاویر محصول
+            </h4>
+          </div>
+
+          <span className="rounded-lg bg-[var(--color-surface-2)] px-2.5 py-1 text-xs text-[var(--color-text-muted)]">
+            {imageUrls.length.toLocaleString("fa-IR")} تصویر
+          </span>
+        </div>
+
+        {imageUrls.length > 0 ? (
+          <div className="grid grid-cols-2 justify-items-start gap-3 sm:grid-cols-3 xl:grid-cols-3">
+            {imageUrls.map((url, index) => (
+              <button
+                key={`${url}-${index}`}
+                type="button"
+                onClick={() => setSelectedImage(url)}
+                aria-label={`مشاهده بزرگ تصویر ${index + 1} محصول ${product?.title || ""}`}
+                title="برای مشاهده تصویر بزرگ‌تر کلیک کنید"
+                className="group relative aspect-square w-full max-w-[180px] overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] transition hover:border-[var(--color-accent)] hover:shadow-md"
+              >
+                <Image
+                  src={url}
+                  alt={`${product?.title || "محصول"} - تصویر ${index + 1}`}
+                  fill
+                  sizes="(max-width: 640px) 45vw, 180px"
+                  className="object-contain p-2"
+                />
+
+                <span className="absolute bottom-2 right-2 rounded-md bg-black/70 px-2 py-1 text-[10px] font-medium text-white">
+                  {index === 0
+                    ? "تصویر اصلی"
+                    : `تصویر ${index + 1}`}
+                </span>
+
+                <span className="absolute inset-0 flex items-center justify-center bg-black/0 text-xs font-medium text-white opacity-0 transition group-hover:bg-black/35 group-hover:opacity-100">
+                  <span className="rounded-lg bg-black/50 px-3 py-2">
+                    مشاهده بزرگ‌تر
+                  </span>
+                </span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="flex min-h-36 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface-2)] text-[var(--color-text-muted)]">
+            <PhotoIcon className="h-9 w-9" />
+            <span className="text-xs">
+              تصویری برای این محصول ثبت نشده است.
+            </span>
+          </div>
+        )}
+
+        {imageUrls.length > 0 && (
+          <p className="mt-3 text-xs leading-5 text-[var(--color-text-muted)]">
+            برای بررسی جزئیات هر عکس، روی آن کلیک کن.
+          </p>
+        )}
+      </section>
+
+      {/* نمایش بزرگ تصویر */}
+      {selectedImage && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="نمایش تصویر محصول"
+          onClick={() => setSelectedImage(null)}
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-3 sm:p-6"
+        >
+          <button
+            type="button"
+            onClick={() => setSelectedImage(null)}
+            aria-label="بستن تصویر"
+            className="absolute left-4 top-4 z-20 flex items-center gap-2 rounded-xl bg-white/15 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-white/25"
+          >
+            <XMarkIcon className="h-5 w-5" />
+            بستن
+          </button>
+
+          <div
+            className="relative h-[80vh] w-full max-w-[1200px]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <Image
+              src={selectedImage}
+              alt={product?.title || "تصویر محصول"}
+              fill
+              sizes="100vw"
+              priority
+              className="object-contain"
+            />
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+/**
+ * راهنمای عکاسی محصول
+ * این راهنما در فرم ادمین و کنار بخش آپلود تصاویر نمایش داده می‌شود.
+ */
+function ProductImageGuide() {
+  const tips = [
+    "از نور کافی و یکنواخت استفاده کن تا جزئیات محصول واضح باشند.",
+    "ترجیحاً پس‌زمینه سفید یا ساده و بدون شلوغی انتخاب کن.",
+    "تمام محصول داخل کادر باشد و بخشی از آن بریده نشود.",
+    "از چند زاویه مختلف و از جزئیات مهم محصول عکس بگیر.",
+    "عکس باید واقعی، واضح و باکیفیت باشد؛ از تصویر اینترنتی نامرتبط استفاده نکن.",
+    "از عکس تار، اسکرین‌شات، نوشته تبلیغاتی و واترمارک استفاده نکن.",
+  ];
+
+  return (
+    <aside className="h-fit min-w-0 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-4 sm:p-5">
+      <div className="mb-4 flex items-center gap-2">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--color-accent)]/10 text-[var(--color-accent)]">
+          <PhotoIcon className="h-5 w-5" />
+        </div>
+
+        <div className="min-w-0">
+          <h3 className="text-sm font-bold text-[var(--color-text)]">
+            راهنمای عکاسی محصول
+          </h3>
+          <p className="mt-1 text-xs text-[var(--color-text-muted)]">
+            برای نمایش بهتر محصول در فروشگاه
+          </p>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        {tips.map((tip, index) => (
+          <div
+            key={index}
+            className="flex min-w-0 items-start gap-2"
+          >
+            <CheckCircleIcon className="mt-0.5 h-4 w-4 shrink-0 text-green-600" />
+            <p className="text-xs leading-6 text-[var(--color-text-muted)]">
+              {tip}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      <div className="my-4 border-t border-[var(--color-border)]" />
+
+      <h4 className="mb-3 text-xs font-bold text-[var(--color-text)]">
+        مشخصات پیشنهادی تصویر
+      </h4>
+
+      <div className="grid grid-cols-2 gap-2">
+        <div className="rounded-xl bg-[var(--color-surface)] p-3">
+          <p className="text-[10px] text-[var(--color-text-muted)]">
+            حداقل ابعاد
+          </p>
+          <p className="mt-1 text-sm font-bold text-[var(--color-text)]">
+            500 × 500
+          </p>
+          <p className="mt-1 text-[10px] text-[var(--color-text-muted)]">
+            پیکسل
+          </p>
+        </div>
+
+        <div className="rounded-xl bg-[var(--color-surface)] p-3">
+          <p className="text-[10px] text-[var(--color-text-muted)]">
+            ابعاد پیشنهادی
+          </p>
+          <p className="mt-1 text-sm font-bold text-[var(--color-text)]">
+            1500 × 1500
+          </p>
+          <p className="mt-1 text-[10px] text-[var(--color-text-muted)]">
+            پیکسل
+          </p>
+        </div>
+
+        <div className="rounded-xl bg-[var(--color-surface)] p-3">
+          <p className="text-[10px] text-[var(--color-text-muted)]">
+            حداکثر حجم هر تصویر
+          </p>
+          <p className="mt-1 text-sm font-bold text-[var(--color-text)]">
+            فرمت‌های معمول: ۱۵ مگابایت
+          </p>
+          <p className="mt-1 text-sm font-bold text-[var(--color-accent)]">
+            HEIC و HEIF: ۲۵ مگابایت
+          </p>
+        </div>
+
+        <div className="rounded-xl bg-[var(--color-surface)] p-3">
+          <p className="text-[10px] text-[var(--color-text-muted)]">
+            فرمت‌های مجاز
+          </p>
+          <p className="mt-1 text-sm font-bold text-[var(--color-text)]">
+            JPG، PNG، WebP، AVIF
+          </p>
+          <p className="mt-1 text-[10px] text-[var(--color-text-muted)]">
+            HEIC و HEIF آیفون
+          </p>
+        </div>
+      </div>
+
+      <p className="mt-3 rounded-xl bg-[var(--color-accent)]/10 p-3 text-xs leading-6 text-[var(--color-text-muted)]">
+        لازم نیست عکس‌ها را قبل از آپلود تغییر اندازه بدهی. تصاویر در سرور به‌صورت خودکار بهینه و به فرمت WebP تبدیل می‌شوند. نسبت اصلی تصویر حفظ می‌شود.
+      </p>
+    </aside>
+  );
+}
+
 export default function AdminProductsPage() {
   const { user } = useAuth();
+  const { showToast, showConfirm, showPrompt } = useUI();
+
   const isAdmin = user?.role === "ADMIN";
 
   const [products, setProducts] = useState([]);
@@ -391,7 +656,10 @@ export default function AdminProductsPage() {
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        alert(data.error || "خطا در تغییر موجودی");
+        showToast(
+          data.error || "خطا در تغییر موجودی",
+          { type: "error" }
+        );
         return;
       }
 
@@ -399,15 +667,22 @@ export default function AdminProductsPage() {
         prev.map((item) =>
           item.id === product.id
             ? {
-                ...item,
-                ...data.product,
-              }
+              ...item,
+              ...data.product,
+            }
             : item
         )
       );
+
+      showToast("موجودی محصول به‌روزرسانی شد.", {
+        type: "success",
+      });
     } catch (error) {
       console.error("TOGGLE STOCK ERROR:", error);
-      alert("خطا در ارتباط با سرور");
+
+      showToast("خطا در ارتباط با سرور", {
+        type: "error",
+      });
     }
   };
 
@@ -415,13 +690,16 @@ export default function AdminProductsPage() {
   const archiveProduct = async (id) => {
     if (!isAdmin) return;
 
-    if (
-      !confirm(
-        "این محصول از فروشگاه مخفی و به بخش محصولات آرشیوشده منتقل شود؟"
-      )
-    ) {
-      return;
-    }
+    const confirmed = await showConfirm({
+      title: "آرشیو محصول",
+      description:
+        "این محصول از فروشگاه مخفی و به بخش محصولات آرشیوشده منتقل شود؟",
+      confirmText: "آرشیو محصول",
+      cancelText: "انصراف",
+      danger: true,
+    });
+
+    if (!confirmed) return;
 
     try {
       const res = await fetch(
@@ -434,7 +712,10 @@ export default function AdminProductsPage() {
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        alert(data.error || "آرشیو محصول ناموفق بود");
+        showToast(
+          data.error || "آرشیو محصول ناموفق بود",
+          { type: "error" }
+        );
         return;
       }
 
@@ -442,10 +723,16 @@ export default function AdminProductsPage() {
         prev.filter((product) => product.id !== id)
       );
 
-      alert(data.message || "محصول با موفقیت آرشیو شد");
+      showToast(
+        data.message || "محصول با موفقیت آرشیو شد",
+        { type: "success" }
+      );
     } catch (error) {
       console.error("ARCHIVE PRODUCT ERROR:", error);
-      alert("خطا در ارتباط با سرور");
+
+      showToast("خطا در ارتباط با سرور", {
+        type: "error",
+      });
     }
   };
 
@@ -453,9 +740,14 @@ export default function AdminProductsPage() {
   const restoreProduct = async (id) => {
     if (!isAdmin || restoring !== null) return;
 
-    if (!confirm("این محصول از آرشیو خارج شود؟")) {
-      return;
-    }
+    const confirmed = await showConfirm({
+      title: "بازگردانی محصول",
+      description: "این محصول از آرشیو خارج شود؟",
+      confirmText: "بازگردانی",
+      cancelText: "انصراف",
+    });
+
+    if (!confirmed) return;
 
     setRestoring(id);
 
@@ -470,7 +762,10 @@ export default function AdminProductsPage() {
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        alert(data.error || "بازگردانی محصول ناموفق بود");
+        showToast(
+          data.error || "بازگردانی محصول ناموفق بود",
+          { type: "error" }
+        );
         return;
       }
 
@@ -478,10 +773,15 @@ export default function AdminProductsPage() {
         prev.filter((product) => product.id !== id)
       );
 
-      alert("محصول با موفقیت بازگردانی شد");
+      showToast("محصول با موفقیت بازگردانی شد", {
+        type: "success",
+      });
     } catch (error) {
       console.error("RESTORE PRODUCT ERROR:", error);
-      alert("خطا در ارتباط با سرور");
+
+      showToast("خطا در ارتباط با سرور", {
+        type: "error",
+      });
     } finally {
       setRestoring(null);
     }
@@ -496,22 +796,33 @@ export default function AdminProductsPage() {
     let reviewNote = null;
 
     if (reviewStatus === "REJECTED") {
-      const reason = window.prompt(
-        "دلیل رد محصول را وارد کنید:"
-      );
+      const reason = await showPrompt({
+        title: "رد محصول",
+        description:
+          "دلیل رد محصول را وارد کنید. این پیام برای بررسی و پیگیری وضعیت محصول استفاده می‌شود.",
+        placeholder: "دلیل رد محصول...",
+        confirmText: "ثبت دلیل",
+        cancelText: "انصراف",
+        required: true,
+        multiline: true,
+      });
 
       if (reason === null) return;
 
       reviewNote = reason.trim();
 
       if (!reviewNote) {
-        alert("برای رد محصول، ثبت دلیل الزامی است.");
+        showToast(
+          "برای رد محصول، ثبت دلیل الزامی است.",
+          { type: "warning" }
+        );
         return;
       }
 
       if (reviewNote.length > 1000) {
-        alert(
-          "دلیل رد نمی‌تواند بیشتر از ۱۰۰۰ کاراکتر باشد."
+        showToast(
+          "دلیل رد نمی‌تواند بیشتر از ۱۰۰۰ کاراکتر باشد.",
+          { type: "warning" }
         );
         return;
       }
@@ -537,8 +848,9 @@ export default function AdminProductsPage() {
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        alert(
-          data.error || "تغییر وضعیت بررسی ناموفق بود"
+        showToast(
+          data.error || "تغییر وضعیت بررسی ناموفق بود",
+          { type: "error" }
         );
         return;
       }
@@ -548,20 +860,24 @@ export default function AdminProductsPage() {
           .map((item) =>
             item.id === product.id
               ? {
-                  ...item,
-                  ...data.product,
-                }
+                ...item,
+                ...data.product,
+              }
               : item
           )
           .filter(keepProductInCurrentView)
       );
 
-      alert(
-        data.message || "وضعیت بررسی محصول تغییر کرد"
+      showToast(
+        data.message || "وضعیت بررسی محصول تغییر کرد",
+        { type: "success" }
       );
     } catch (error) {
       console.error("PRODUCT REVIEW ERROR:", error);
-      alert("خطا در ارتباط با سرور");
+
+      showToast("خطا در ارتباط با سرور", {
+        type: "error",
+      });
     } finally {
       setModeratingProductId(null);
     }
@@ -579,30 +895,44 @@ export default function AdminProductsPage() {
       nextPublished &&
       product.reviewStatus !== "APPROVED"
     ) {
-      alert("ابتدا باید محصول توسط ادمین تأیید شود.");
+      showToast(
+        "ابتدا باید محصول توسط ادمین تأیید شود.",
+        { type: "warning" }
+      );
       return;
     }
 
     let reviewNote = null;
 
     if (!nextPublished) {
-      const reason = window.prompt(
-        "پیام یا دلیل خارج‌کردن محصول از انتشار را وارد کنید:"
-      );
+      const reason = await showPrompt({
+        title: "خارج‌کردن محصول از انتشار",
+        description:
+          "پیام یا دلیل خارج‌کردن محصول از انتشار را وارد کنید.",
+        placeholder: "دلیل خارج‌کردن از انتشار...",
+        confirmText: "ثبت پیام",
+        cancelText: "انصراف",
+        required: true,
+        multiline: true,
+      });
 
       if (reason === null) return;
 
       reviewNote = reason.trim();
 
       if (!reviewNote) {
-        alert(
-          "ثبت پیام برای خارج‌کردن محصول از انتشار الزامی است."
+        showToast(
+          "ثبت پیام برای خارج‌کردن محصول از انتشار الزامی است.",
+          { type: "warning" }
         );
         return;
       }
 
       if (reviewNote.length > 1000) {
-        alert("پیام نمی‌تواند بیشتر از ۱۰۰۰ کاراکتر باشد.");
+        showToast(
+          "پیام نمی‌تواند بیشتر از ۱۰۰۰ کاراکتر باشد.",
+          { type: "warning" }
+        );
         return;
       }
     }
@@ -621,9 +951,9 @@ export default function AdminProductsPage() {
             nextPublished
               ? { isPublished: true }
               : {
-                  isPublished: false,
-                  reviewNote,
-                }
+                isPublished: false,
+                reviewNote,
+              }
           ),
         }
       );
@@ -631,8 +961,9 @@ export default function AdminProductsPage() {
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        alert(
-          data.error || "تغییر وضعیت انتشار ناموفق بود"
+        showToast(
+          data.error || "تغییر وضعیت انتشار ناموفق بود",
+          { type: "error" }
         );
         return;
       }
@@ -641,45 +972,72 @@ export default function AdminProductsPage() {
         prev.map((item) =>
           item.id === product.id
             ? {
-                ...item,
-                isPublished: data.isPublished,
-                reviewNote: data.reviewNote,
-              }
+              ...item,
+              isPublished: data.isPublished,
+              reviewNote: data.reviewNote,
+            }
             : item
         )
       );
 
-      alert(
-        data.message || "وضعیت انتشار تغییر کرد"
+      showToast(
+        data.message || "وضعیت انتشار تغییر کرد",
+        { type: "success" }
       );
     } catch (error) {
       console.error("PRODUCT PUBLICATION ERROR:", error);
-      alert("خطا در ارتباط با سرور");
+
+      showToast("خطا در ارتباط با سرور", {
+        type: "error",
+      });
     } finally {
       setModeratingProductId(null);
     }
   };
 
-  // محاسبه قیمت و تخفیف
-  const originalPrice =
-    form.originalPrice === ""
-      ? Number(form.price)
-      : Number(form.originalPrice);
+  // پیش‌نمایش قیمت‌گذاری؛ محاسبه نهایی و ذخیره قیمت فقط در سرور انجام می‌شود.
+  const hasBasePriceInput =
+    form.basePrice !== "" && form.basePrice !== null;
+  const previewBasePrice = hasBasePriceInput
+    ? Number(form.basePrice)
+    : null;
+  const previewDiscount =
+    form.discount === "" ? NaN : Number(form.discount);
 
-  const price = Number(form.price);
+  const isLegacyProductWithoutBasePrice =
+    Boolean(editingProduct && editingProduct.basePrice == null);
+  const preserveLegacyPricing =
+    isLegacyProductWithoutBasePrice && !hasBasePriceInput;
 
-  const discount =
-    originalPrice > 0
-      ? Math.min(
-          100,
-          Math.max(
-            0,
-            Math.round(
-              ((originalPrice - price) / originalPrice) * 100
-            )
-          )
-        )
-      : 0;
+  let pricingPreview = null;
+  let pricingPreviewError = "";
+
+  if (hasBasePriceInput) {
+    if (
+      !Number.isSafeInteger(previewBasePrice) ||
+      previewBasePrice <= 0
+    ) {
+      pricingPreviewError = "قیمت پایه باید عددی صحیح و مثبت باشد.";
+    } else if (
+      !Number.isSafeInteger(previewDiscount) ||
+      previewDiscount < 0 ||
+      previewDiscount > 99
+    ) {
+      pricingPreviewError = "درصد تخفیف باید عددی صحیح بین صفر تا ۹۹ باشد.";
+    } else {
+      try {
+        pricingPreview = calculateProductPricing({
+          basePrice: previewBasePrice,
+          discount: previewDiscount,
+        });
+      } catch (error) {
+        pricingPreviewError =
+          error instanceof PricingError
+            ? error.message
+            : "محاسبه قیمت محصول با خطا مواجه شد.";
+      }
+    }
+  }
 
   // تغییر مالکیت محصول
   const handleTransferOwnership = async () => {
@@ -710,13 +1068,15 @@ export default function AdminProductsPage() {
     const targetName =
       targetSupplier?.name || "برجک";
 
-    if (
-      !confirm(
-        `مالکیت این محصول به «${targetName}» منتقل شود؟`
-      )
-    ) {
-      return;
-    }
+    const confirmed = await showConfirm({
+      title: "تغییر مالکیت محصول",
+      description:
+        `مالکیت این محصول به «${targetName}» منتقل شود؟`,
+      confirmText: "انتقال مالکیت",
+      cancelText: "انصراف",
+    });
+
+    if (!confirmed) return;
 
     setFormError("");
 
@@ -762,29 +1122,31 @@ export default function AdminProductsPage() {
         prev.map((product) =>
           product.id === editingProduct.id
             ? {
-                ...product,
-                ...updated,
-                supplier: targetSupplier,
-              }
+              ...product,
+              ...updated,
+              supplier: targetSupplier,
+            }
             : product
         )
       );
 
       setFormError("");
 
-      alert(
+      showToast(
         data.message ||
-          "مالکیت محصول با موفقیت تغییر کرد."
+        "مالکیت محصول با موفقیت تغییر کرد.",
+        { type: "success" }
       );
     } catch (error) {
       console.error("TRANSFER OWNERSHIP ERROR:", error);
+
       setFormError("خطا در ارتباط با سرور");
     } finally {
       setTransferringOwnership(false);
     }
   };
 
-  // ایجاد یا ویرایش محصول
+  // ایجاد یا ویرایش محصول؛ قیمت نهایی و کمیسیون را فقط API محاسبه می‌کند.
   const handleSubmit = async (event) => {
     event.preventDefault();
 
@@ -824,6 +1186,18 @@ export default function AdminProductsPage() {
       }))
       .filter((spec) => spec.key && spec.value);
 
+    const basePriceWasEntered =
+      form.basePrice !== "" && form.basePrice !== null;
+    const shouldPreserveLegacyPricing =
+      Boolean(editingProduct && editingProduct.basePrice == null) &&
+      !basePriceWasEntered;
+
+    const requestedBasePrice = basePriceWasEntered
+      ? Number(form.basePrice)
+      : null;
+    const requestedDiscount =
+      form.discount === "" ? NaN : Number(form.discount);
+
     if (
       !form.title.trim() ||
       !form.description.trim() ||
@@ -831,24 +1205,48 @@ export default function AdminProductsPage() {
       !mainImage ||
       !galleryImages.includes(mainImage) ||
       galleryImages.length === 0 ||
-      galleryImages.length > 5 ||
-      !Number.isSafeInteger(price) ||
-      price <= 0
+      galleryImages.length > 5
     ) {
       setFormError(
-        "عنوان، توضیحات، دسته‌بندی، تصویر اصلی و قیمت را به‌درستی وارد کنید."
+        "عنوان، توضیحات، دسته‌بندی و تصاویر محصول را به‌درستی وارد کنید."
       );
       return;
     }
 
-    if (
-      !Number.isSafeInteger(originalPrice) ||
-      price > originalPrice
-    ) {
-      setFormError(
-        "قیمت فروش نمی‌تواند بیشتر از قیمت اصلی باشد."
-      );
-      return;
+    // محصول قدیمی فاقد basePrice می‌تواند بدون تغییر قیمت ویرایش شود.
+    // برای ورود به موتور جدید قیمت‌گذاری، ابتدا باید قیمت پایه تعیین شود.
+    if (!shouldPreserveLegacyPricing) {
+      if (
+        !Number.isSafeInteger(requestedBasePrice) ||
+        requestedBasePrice <= 0
+      ) {
+        setFormError("قیمت پایه باید عددی صحیح و مثبت باشد.");
+        return;
+      }
+
+      if (
+        !Number.isSafeInteger(requestedDiscount) ||
+        requestedDiscount < 0 ||
+        requestedDiscount > 99
+      ) {
+        setFormError("درصد تخفیف باید عددی صحیح بین صفر تا ۹۹ باشد.");
+        return;
+      }
+
+      // پیش‌اعتبارسنجی برای نمایش خطاهای موتور قیمت‌گذاری پیش از ارسال فرم.
+      try {
+        calculateProductPricing({
+          basePrice: requestedBasePrice,
+          discount: requestedDiscount,
+        });
+      } catch (error) {
+        setFormError(
+          error instanceof PricingError
+            ? error.message
+            : "محاسبه قیمت محصول با خطا مواجه شد."
+        );
+        return;
+      }
     }
 
     if (
@@ -861,9 +1259,6 @@ export default function AdminProductsPage() {
 
     const payload = {
       title: form.title.trim(),
-      price,
-      originalPrice,
-      discount,
       categoryId: Number(form.categoryId),
       image: mainImage,
       gallery: additionalGallery,
@@ -874,9 +1269,16 @@ export default function AdminProductsPage() {
       ...(editingProduct
         ? {}
         : {
-            supplierId: form.supplierId || null,
-          }),
+          supplierId: form.supplierId || null,
+        }),
     };
+
+    // برای محصول قدیمی بدون قیمت پایه، این دو فیلد را اصلاً ارسال نمی‌کنیم؛
+    // به این ترتیب قیمت قدیمی با ویرایش عنوان، تصویر یا مشخصات تغییر نمی‌کند.
+    if (!shouldPreserveLegacyPricing) {
+      payload.basePrice = requestedBasePrice;
+      payload.discount = requestedDiscount;
+    }
 
     setSubmitting(true);
 
@@ -903,9 +1305,9 @@ export default function AdminProductsPage() {
           prev.map((product) =>
             product.id === data.product.id
               ? {
-                  ...product,
-                  ...data.product,
-                }
+                ...product,
+                ...data.product,
+              }
               : product
           )
         );
@@ -928,8 +1330,16 @@ export default function AdminProductsPage() {
 
       setFormError("");
       setShowForm(false);
+
+      showToast(
+        editingProduct
+          ? "تغییرات محصول با موفقیت ذخیره شد."
+          : "محصول با موفقیت ثبت شد.",
+        { type: "success" }
+      );
     } catch (error) {
       console.error("SAVE PRODUCT ERROR:", error);
+
       setFormError("خطا در ارتباط با سرور");
     } finally {
       setSubmitting(false);
@@ -1031,6 +1441,11 @@ export default function AdminProductsPage() {
 
       if (errors.length > 0) {
         setFormError(errors.join(" | "));
+      } else if (uploaded.length > 0) {
+        showToast(
+          `${uploaded.length.toLocaleString("fa-IR")} تصویر با موفقیت بارگذاری شد.`,
+          { type: "success" }
+        );
       }
     } finally {
       setGalleryUploading(false);
@@ -1045,9 +1460,9 @@ export default function AdminProductsPage() {
       specs: prev.specs.map((spec, i) =>
         i === index
           ? {
-              ...spec,
-              [field]: value,
-            }
+            ...spec,
+            [field]: value,
+          }
           : spec
       ),
     }));
@@ -1105,10 +1520,9 @@ export default function AdminProductsPage() {
 
     setForm({
       title: product.title || "",
-      price: String(product.price ?? ""),
-      originalPrice: String(
-        product.originalPrice ?? product.price ?? ""
-      ),
+      basePrice:
+        product.basePrice == null ? "" : String(product.basePrice),
+      discount: String(product.discount ?? 0),
       categoryId:
         product.categoryId ??
         product.category?.id ??
@@ -1120,9 +1534,9 @@ export default function AdminProductsPage() {
       stock: product.stock ?? 0,
       specs: Array.isArray(product.specs)
         ? product.specs.map((spec) => ({
-            key: spec.key || "",
-            value: spec.value || "",
-          }))
+          key: spec.key || "",
+          value: spec.value || "",
+        }))
         : [],
     });
 
@@ -1136,7 +1550,6 @@ export default function AdminProductsPage() {
 
   return (
     <div className="w-full min-w-0 space-y-5 overflow-x-hidden sm:space-y-6">
-
       {/* عنوان و فیلترها */}
       <section className="flex min-w-0 flex-col gap-4">
         <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -1183,11 +1596,10 @@ export default function AdminProductsPage() {
                 key={value}
                 type="button"
                 onClick={() => handleViewChange(value)}
-                className={`shrink-0 whitespace-nowrap rounded-xl px-4 py-2 text-xs font-medium transition sm:text-sm ${
-                  view === value
-                    ? "bg-[var(--color-accent)] text-white"
-                    : "bg-[var(--color-surface-2)] text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
-                }`}
+                className={`shrink-0 whitespace-nowrap rounded-xl px-4 py-2 text-xs font-medium transition sm:text-sm ${view === value
+                  ? "bg-[var(--color-accent)] text-white"
+                  : "bg-[var(--color-surface-2)] text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+                  }`}
               >
                 {label}
               </button>
@@ -1327,167 +1739,281 @@ export default function AdminProductsPage() {
               )}
             </div>
 
-            {/* قیمت اصلی */}
+            {/* قیمت پایه فروشنده یا هزینه تأمین کالا */}
             <div className="min-w-0">
-              <label className="mb-2 block text-sm font-medium">
-                قیمت اصلی (تومان)
+              <label
+                htmlFor="product-base-price"
+                className="mb-2 block text-sm font-medium"
+              >
+                قیمت پایه (تومان)
               </label>
 
               <input
-                type="number"
-                min="0"
-                step="1"
-                value={form.originalPrice}
-                onChange={(event) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    originalPrice: event.target.value,
-                  }))
-                }
-                placeholder="قیمت اصلی"
-                className="w-full min-w-0 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-3 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-accent)] sm:px-4"
-              />
-            </div>
-
-            {/* قیمت فروش */}
-            <div className="min-w-0">
-              <label className="mb-2 block text-sm font-medium">
-                قیمت فروش (تومان)
-              </label>
-
-              <input
+                id="product-base-price"
                 type="number"
                 min="1"
                 step="1"
-                value={form.price}
+                inputMode="numeric"
+                value={form.basePrice}
                 onChange={(event) =>
                   setForm((prev) => ({
                     ...prev,
-                    price: event.target.value,
+                    basePrice: event.target.value,
                   }))
                 }
-                placeholder="قیمت فروش"
+                placeholder="قیمت اعلامی فروشنده / قیمت تأمین"
                 className="w-full min-w-0 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-3 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-accent)] sm:px-4"
               />
+              <p className="mt-1 text-xs leading-5 text-[var(--color-text-muted)]">
+                قیمت نهایی و درصد سود به‌صورت خودکار در سرور محاسبه می‌شوند.
+              </p>
             </div>
 
-            {/* تخفیف */}
-            <div className="card flex min-w-0 items-center justify-between gap-3 px-4 py-3 sm:col-span-2">
-              <span className="text-sm text-[var(--color-text-muted)]">
-                درصد تخفیف
-              </span>
+            {/* تخفیف از قیمت پایه تأمین کالا */}
+            <div className="min-w-0">
+              <label
+                htmlFor="product-discount"
+                className="mb-2 block text-sm font-medium"
+              >
+                درصد تخفیف از قیمت پایه (۰ تا ۹۹)
+              </label>
 
-              <span className="font-bold text-[var(--color-text)]">
-                {discount.toLocaleString("fa-IR")}٪
-              </span>
+              <input
+                id="product-discount"
+                type="number"
+                min="0"
+                max="99"
+                step="1"
+                value={form.discount}
+                disabled={
+                  Boolean(editingProduct && editingProduct.basePrice == null) &&
+                  !hasBasePriceInput
+                }
+                onChange={(event) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    discount: event.target.value,
+                  }))
+                }
+                className="w-full min-w-0 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-3 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-50 sm:px-4"
+              />
+              {isLegacyProductWithoutBasePrice && !hasBasePriceInput && (
+                <p className="mt-1 text-xs leading-5 text-[var(--color-text-muted)]">
+                  برای تغییر تخفیف این محصول قدیمی، ابتدا قیمت پایه را وارد کن.
+                </p>
+              )}
             </div>
 
-            {/* تصاویر */}
+            {/* پیش‌نمایش موتور قیمت‌گذاری */}
+            <div className="card min-w-0 space-y-3 p-4 sm:col-span-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="text-sm font-bold">
+                  پیش‌نمایش محاسبه قیمت برجک
+                </h3>
+                <span className="text-xs text-[var(--color-text-muted)]">
+                  مبالغ به تومان
+                </span>
+              </div>
+
+              {pricingPreview ? (
+                <>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <div className="rounded-xl bg-[var(--color-surface-2)] p-3">
+                      <p className="text-xs text-[var(--color-text-muted)]">
+                        قیمت پایه تأمین کالا
+                      </p>
+                      <p className="mt-1 break-words text-sm font-bold">
+                        {pricingPreview.basePrice.toLocaleString("fa-IR")} تومان
+                      </p>
+                    </div>
+                    <div className="rounded-xl bg-[var(--color-surface-2)] p-3">
+                      <p className="text-xs text-[var(--color-text-muted)]">
+                        تخفیف از قیمت پایه ({pricingPreview.discount.toLocaleString("fa-IR")}٪)
+                      </p>
+                      <p className="mt-1 break-words text-sm font-bold">
+                        {pricingPreview.supplierDiscountAmount.toLocaleString("fa-IR")} تومان
+                      </p>
+                    </div>
+                    <div className="rounded-xl bg-[var(--color-surface-2)] p-3">
+                      <p className="text-xs text-[var(--color-text-muted)]">
+                        مبلغ قابل تسویه هر واحد
+                      </p>
+                      <p className="mt-1 break-words text-sm font-bold">
+                        {pricingPreview.supplierPayoutPrice.toLocaleString("fa-IR")} تومان
+                      </p>
+                    </div>
+                    <div className="rounded-xl bg-[var(--color-surface-2)] p-3">
+                      <p className="text-xs text-[var(--color-text-muted)]">
+                        کمیسیون برجک
+                      </p>
+                      <p className="mt-1 text-sm font-bold">
+                        {pricingPreview.commissionPercent.toLocaleString("fa-IR")}٪
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    <div className="rounded-xl border border-[var(--color-border)] p-3">
+                      <p className="text-xs text-[var(--color-text-muted)]">
+                        قیمت عادی مشتری قبل از تخفیف
+                      </p>
+                      <p className="mt-1 break-words text-sm font-bold">
+                        {pricingPreview.originalPrice.toLocaleString("fa-IR")} تومان
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-[var(--color-accent)] p-3">
+                      <p className="text-xs text-[var(--color-text-muted)]">
+                        قیمت نهایی مشتری بعد از تخفیف
+                      </p>
+                      <p className="mt-1 break-words text-base font-bold text-[var(--color-accent)]">
+                        {pricingPreview.price.toLocaleString("fa-IR")} تومان
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-[var(--color-border)] p-3">
+                      <p className="text-xs text-[var(--color-text-muted)]">
+                        اختلاف قیمت فروش و مبلغ تسویه
+                      </p>
+                      <p className="mt-1 break-words text-sm font-bold">
+                        {(pricingPreview.price - pricingPreview.supplierPayoutPrice).toLocaleString("fa-IR")} تومان
+                      </p>
+                    </div>
+                  </div>
+
+                  <p className="text-xs leading-5 text-[var(--color-text-muted)]">
+                    ابتدا تخفیف از قیمت پایه تأمین کالا کم می‌شود؛ سپس کمیسیون برجک روی مبلغ تخفیف‌خورده محاسبه می‌شود. قیمت عادی مشتری نیز جداگانه با احتساب کمیسیون و گردکردن رو به بالا تا مضرب ۱۰٬۰۰۰ تومان نمایش داده می‌شود.
+                  </p>
+                </>
+              ) : preserveLegacyPricing ? (
+                <div className="rounded-xl bg-[var(--color-surface-2)] p-3 text-sm leading-6 text-[var(--color-text-muted)]">
+                  این محصول قدیمی هنوز قیمت پایه مستقلی ندارد. اگر فقط اطلاعاتی مثل عنوان، تصویر یا مشخصات را تغییر بدهی، قیمت فعلی آن حفظ می‌شود. برای انتقال محصول به موتور قیمت‌گذاری جدید، قیمت پایه را وارد کن.
+                  <p className="mt-2 font-semibold text-[var(--color-text)]">
+                    قیمت فعلی مشتری: {Number(editingProduct.price).toLocaleString("fa-IR")} تومان
+                  </p>
+                </div>
+              ) : pricingPreviewError ? (
+                <p className="rounded-xl bg-red-500/10 p-3 text-sm leading-6 text-red-500">
+                  {pricingPreviewError}
+                </p>
+              ) : (
+                <p className="text-sm leading-6 text-[var(--color-text-muted)]">
+                  قیمت پایه را وارد کن تا پیش‌نمایش قیمت مشتری و سود برجک نمایش داده شود.
+                </p>
+              )}
+            </div>
+
+            {/* تصاویر محصول و راهنمای عکاسی */}
             <div className="min-w-0 sm:col-span-2">
               <p className="mb-3 text-sm font-medium">
                 تصاویر محصول
               </p>
 
-              <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:gap-4">
-                {form.gallery.length === 0 && (
-                  <div className="flex aspect-square w-full max-w-32 flex-col items-center justify-center rounded-xl border-2 border-dashed border-[var(--color-border)] bg-[var(--color-surface-2)] text-[var(--color-text-muted)]">
-                    <PhotoIcon className="h-8 w-8 sm:h-10 sm:w-10" />
-                    <span className="mt-2 text-[10px] sm:text-xs">
-                      بدون تصویر
-                    </span>
-                  </div>
-                )}
-
-                {form.gallery.map((img, index) => (
-                  <div
-                    key={`${img}-${index}`}
-                    className={`relative aspect-square w-full max-w-32 overflow-hidden rounded-xl border ${
-                      form.image === img
-                        ? "border-[var(--color-accent)]"
-                        : "border-[var(--color-border)]"
-                    }`}
-                  >
-                    <Image
-                      src={img}
-                      alt={`تصویر محصول ${index + 1}`}
-                      fill
-                      sizes="(max-width: 640px) 30vw, 128px"
-                      className="cursor-pointer object-contain"
-                      onClick={() =>
-                        setForm((prev) => ({
-                          ...prev,
-                          image: img,
-                          gallery: [
-                            img,
-                            ...prev.gallery.filter(
-                              (image) => image !== img
-                            ),
-                          ],
-                        }))
-                      }
-                    />
-
-                    {form.image === img && (
-                      <span className="pointer-events-none absolute bottom-0 right-0 left-0 z-10 bg-[var(--color-text)] px-1 py-1 text-center text-[10px] text-[var(--color-surface)]">
-                        اصلی
-                      </span>
-                    )}
-
-                    <button
-                      type="button"
-                      aria-label="حذف تصویر"
-                      onClick={() =>
-                        setForm((prev) => {
-                          const gallery =
-                            prev.gallery.filter(
-                              (_, i) => i !== index
-                            );
-
-                          return {
-                            ...prev,
-                            gallery,
-                            image: gallery.includes(prev.image)
-                              ? prev.image
-                              : gallery[0] || "",
-                          };
-                        })
-                      }
-                      className="absolute right-1 top-1 z-20 flex h-6 w-6 items-center justify-center rounded-full bg-red-600 text-white shadow transition hover:bg-red-700"
-                    >
-                      <XMarkIcon className="h-4 w-4" />
-                    </button>
-                  </div>
-                ))}
-
-                {form.gallery.length < 5 && (
-                  <label className="flex aspect-square w-full max-w-32 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-[var(--color-border)] bg-[var(--color-surface-2)] transition hover:border-[var(--color-accent)]">
-                    <input
-                      type="file"
-                      hidden
-                      multiple
-                      accept="image/jpeg,image/png,image/webp,image/gif,image/avif"
-                      disabled={galleryUploading}
-                      onChange={handleGalleryUpload}
-                    />
-
-                    {galleryUploading ? (
-                      <ArrowPathIcon className="h-8 w-8 animate-spin" />
-                    ) : (
-                      <>
-                        <PhotoIcon className="h-8 w-8 text-[var(--color-text-muted)]" />
-                        <span className="mt-2 text-[10px] text-[var(--color-text-muted)] sm:text-xs">
-                          افزودن تصویر
+              <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+                {/* بخش آپلود و مدیریت تصاویر */}
+                <div className="min-w-0">
+                  <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:gap-4">
+                    {form.gallery.length === 0 && (
+                      <div className="flex aspect-square w-full max-w-32 flex-col items-center justify-center rounded-xl border-2 border-dashed border-[var(--color-border)] bg-[var(--color-surface-2)] text-[var(--color-text-muted)]">
+                        <PhotoIcon className="h-8 w-8 sm:h-10 sm:w-10" />
+                        <span className="mt-2 text-[10px] sm:text-xs">
+                          بدون تصویر
                         </span>
-                      </>
+                      </div>
                     )}
-                  </label>
-                )}
-              </div>
 
-              <p className="mt-2 text-xs leading-5 text-[var(--color-text-muted)]">
-                حداکثر ۵ تصویر مجاز است. روی هر تصویر کلیک کن تا
-                به‌عنوان تصویر اصلی انتخاب شود.
-              </p>
+                    {form.gallery.map((img, index) => (
+                      <div
+                        key={`${img}-${index}`}
+                        className={`relative aspect-square w-full max-w-32 overflow-hidden rounded-xl border ${form.image === img
+                          ? "border-[var(--color-accent)]"
+                          : "border-[var(--color-border)]"
+                          }`}
+                      >
+                        <Image
+                          src={img}
+                          alt={`تصویر محصول ${index + 1}`}
+                          fill
+                          sizes="(max-width: 640px) 30vw, 128px"
+                          className="cursor-pointer object-contain"
+                          onClick={() =>
+                            setForm((prev) => ({
+                              ...prev,
+                              image: img,
+                              gallery: [
+                                img,
+                                ...prev.gallery.filter(
+                                  (image) => image !== img
+                                ),
+                              ],
+                            }))
+                          }
+                        />
+
+                        {form.image === img && (
+                          <span className="pointer-events-none absolute bottom-0 right-0 left-0 z-10 bg-[var(--color-text)] px-1 py-1 text-center text-[10px] text-[var(--color-surface)]">
+                            اصلی
+                          </span>
+                        )}
+
+                        <button
+                          type="button"
+                          aria-label="حذف تصویر"
+                          onClick={() =>
+                            setForm((prev) => {
+                              const gallery =
+                                prev.gallery.filter(
+                                  (_, i) => i !== index
+                                );
+
+                              return {
+                                ...prev,
+                                gallery,
+                                image: gallery.includes(prev.image)
+                                  ? prev.image
+                                  : gallery[0] || "",
+                              };
+                            })
+                          }
+                          className="absolute right-1 top-1 z-20 flex h-6 w-6 items-center justify-center rounded-full bg-red-600 text-white shadow transition hover:bg-red-700"
+                        >
+                          <XMarkIcon className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+
+                    {form.gallery.length < 5 && (
+                      <label className="flex aspect-square w-full max-w-32 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-[var(--color-border)] bg-[var(--color-surface-2)] transition hover:border-[var(--color-accent)]">
+                        <input
+                          type="file"
+                          hidden
+                          multiple
+                          accept="image/jpeg,image/png,image/webp,image/avif,image/heic,image/heif,.heic,.heif"
+                          disabled={galleryUploading}
+                          onChange={handleGalleryUpload}
+                        />
+
+                        {galleryUploading ? (
+                          <ArrowPathIcon className="h-8 w-8 animate-spin" />
+                        ) : (
+                          <>
+                            <PhotoIcon className="h-8 w-8 text-[var(--color-text-muted)]" />
+                            <span className="mt-2 text-[10px] text-[var(--color-text-muted)] sm:text-xs">
+                              افزودن تصویر
+                            </span>
+                          </>
+                        )}
+                      </label>
+                    )}
+                  </div>
+
+                  <p className="mt-2 text-xs leading-5 text-[var(--color-text-muted)]">
+                    حداکثر ۵ تصویر مجاز است. روی هر تصویر کلیک کن تا
+                    به‌عنوان تصویر اصلی انتخاب شود.
+                  </p>
+                </div>
+
+                {/* راهنمای عکاسی در کنار آپلود */}
+                <ProductImageGuide />
+              </div>
             </div>
           </div>
 
@@ -1688,6 +2214,19 @@ export default function AdminProductsPage() {
               stock - reservedStock
             );
 
+            let productPricing = null;
+
+            if (product.basePrice != null) {
+              try {
+                productPricing = calculateProductPricing({
+                  basePrice: Number(product.basePrice),
+                  discount: Number(product.discount ?? 0),
+                });
+              } catch {
+                // اطلاعات محصولات قدیمی یا ناسازگار نباید فهرست را از کار بیندازد.
+              }
+            }
+
             const reviewStatus =
               reviewStatusLabels[product.reviewStatus] ||
               "نامشخص";
@@ -1700,58 +2239,61 @@ export default function AdminProductsPage() {
                 key={product.id}
                 className="card flex min-w-0 flex-col gap-3 overflow-hidden p-3 transition-shadow hover:shadow-md sm:p-4"
               >
-                {/* اطلاعات اصلی */}
-                <div className="flex min-w-0 items-start gap-3 sm:gap-4">
-                  <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-xl bg-[var(--color-surface-2)] sm:h-24 sm:w-24">
-                    {product.image ? (
-                      <Image
-                        src={product.image}
-                        alt={product.title}
-                        fill
-                        sizes="96px"
-                        className="object-contain p-1"
-                      />
-                    ) : (
-                      <div className="flex h-full items-center justify-center">
-                        <PhotoIcon className="h-8 w-8 text-[var(--color-text-muted)]" />
-                      </div>
-                    )}
-                  </div>
+                {/* اطلاعات اصلی محصول */}
+                <div className="min-w-0">
+                  <h3 className="break-words text-base font-bold leading-7 text-[var(--color-text)] sm:text-lg">
+                    {product.title}
+                  </h3>
 
-                  <div className="min-w-0 flex-1">
-                    <h3 className="break-words text-sm font-bold leading-6 text-[var(--color-text)] sm:text-base">
-                      {product.title}
-                    </h3>
+                  <p className="mt-1 break-words text-xs text-[var(--color-text-muted)]">
+                    دسته‌بندی:{" "}
+                    {product.category?.title || "—"}
+                  </p>
 
+                  <p className="mt-2 break-words text-sm font-bold text-[var(--color-text)]">
+                    قیمت نهایی مشتری:{" "}
+                    {Number(product.price).toLocaleString("fa-IR")} تومان
+                  </p>
+
+                  {product.basePrice != null && (
                     <p className="mt-1 break-words text-xs text-[var(--color-text-muted)]">
-                      دسته‌بندی:{" "}
-                      {product.category?.title || "—"}
+                      قیمت پایه:{" "}
+                      {Number(product.basePrice).toLocaleString("fa-IR")} تومان
+                      {product.commissionPercent != null && (
+                        <>
+                          ؛ کمیسیون برجک:{" "}
+                          {Number(product.commissionPercent).toLocaleString("fa-IR")}٪
+                        </>
+                      )}
                     </p>
+                  )}
 
-                    <p className="mt-1 break-words text-sm font-bold text-[var(--color-text)]">
-                      {Number(product.price).toLocaleString("fa-IR")}
-                      {" "}
-                      <span className="text-xs font-normal text-[var(--color-text-muted)]">
-                        تومان
-                      </span>
+                  {productPricing && (
+                    <p className="mt-1 break-words text-xs text-[var(--color-text-muted)]">
+                      تخفیف از قیمت پایه:{" "}
+                      {productPricing.discount.toLocaleString("fa-IR")}٪؛
+                      مبنای پرداخت هر واحد با قیمت فعلی:{" "}
+                      {productPricing.supplierPayoutPrice.toLocaleString("fa-IR")} تومان
                     </p>
+                  )}
 
-                    {product.supplier && (
-                      <p className="mt-1 break-words text-xs text-[var(--color-text-muted)]">
-                        مالک: {product.supplier.name}
-                        {!product.supplier.isActive &&
-                          " (غیرفعال)"}
-                      </p>
-                    )}
+                  {product.supplier && (
+                    <p className="mt-1 break-words text-xs text-[var(--color-text-muted)]">
+                      مالک: {product.supplier.name}
+                      {!product.supplier.isActive &&
+                        " (غیرفعال)"}
+                    </p>
+                  )}
 
-                    {product.specs?.length > 0 && (
-                      <p className="mt-1 text-xs text-[var(--color-text-muted)]">
-                        {product.specs.length.toLocaleString("fa-IR")}
-                        {" "}مشخصه فنی
-                      </p>
-                    )}
-                  </div>
+                  {product.specs?.length > 0 && (
+                    <p className="mt-1 text-xs text-[var(--color-text-muted)]">
+                      {product.specs.length.toLocaleString("fa-IR")} مشخصه فنی
+                    </p>
+                  )}
                 </div>
+
+                {/* گالری تصاویر محصول */}
+                <ProductImageGallery product={product} />
 
                 {/* موجودی و وضعیت‌ها */}
                 <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -1770,23 +2312,21 @@ export default function AdminProductsPage() {
                   )}
 
                   <span
-                    className={`rounded-lg px-2.5 py-1.5 text-xs ${
-                      product.reviewStatus === "APPROVED"
-                        ? "bg-green-500/10 text-green-600"
-                        : product.reviewStatus === "REJECTED"
-                          ? "bg-red-500/10 text-red-600"
-                          : "bg-amber-500/10 text-amber-600"
-                    }`}
+                    className={`rounded-lg px-2.5 py-1.5 text-xs ${product.reviewStatus === "APPROVED"
+                      ? "bg-green-500/10 text-green-600"
+                      : product.reviewStatus === "REJECTED"
+                        ? "bg-red-500/10 text-red-600"
+                        : "bg-amber-500/10 text-amber-600"
+                      }`}
                   >
                     {reviewStatus}
                   </span>
 
                   <span
-                    className={`rounded-lg px-2.5 py-1.5 text-xs ${
-                      product.isPublished
-                        ? "bg-green-500/10 text-green-600"
-                        : "bg-orange-500/10 text-orange-600"
-                    }`}
+                    className={`rounded-lg px-2.5 py-1.5 text-xs ${product.isPublished
+                      ? "bg-green-500/10 text-green-600"
+                      : "bg-orange-500/10 text-orange-600"
+                      }`}
                   >
                     {product.isPublished
                       ? "منتشرشده"
@@ -1815,11 +2355,10 @@ export default function AdminProductsPage() {
                     <button
                       type="button"
                       onClick={() => toggleStock(product)}
-                      className={`min-w-0 rounded-xl px-3 py-2.5 text-xs font-medium transition sm:w-auto ${
-                        availableStock > 0
-                          ? "bg-green-500/10 text-green-600 hover:bg-green-500/20"
-                          : "bg-red-500/10 text-red-600 hover:bg-red-500/20"
-                      }`}
+                      className={`min-w-0 rounded-xl px-3 py-2.5 text-xs font-medium transition sm:w-auto ${availableStock > 0
+                        ? "bg-green-500/10 text-green-600 hover:bg-green-500/20"
+                        : "bg-red-500/10 text-red-600 hover:bg-red-500/20"
+                        }`}
                     >
                       {availableStock > 0
                         ? "ناموجود کردن"
@@ -1830,24 +2369,24 @@ export default function AdminProductsPage() {
                       <>
                         {(product.reviewStatus === "PENDING" ||
                           product.reviewStatus === "REJECTED") && (
-                          <button
-                            type="button"
-                            disabled={isModerating}
-                            onClick={() =>
-                              updateProductReview(
-                                product,
-                                "APPROVED"
-                              )
-                            }
-                            className="min-w-0 rounded-xl bg-green-500/10 px-3 py-2.5 text-xs font-medium text-green-600 transition hover:bg-green-500/20 disabled:opacity-50"
-                          >
-                            {isModerating
-                              ? "..."
-                              : product.reviewStatus === "REJECTED"
-                                ? "تأیید مجدد"
-                                : "تأیید محصول"}
-                          </button>
-                        )}
+                            <button
+                              type="button"
+                              disabled={isModerating}
+                              onClick={() =>
+                                updateProductReview(
+                                  product,
+                                  "APPROVED"
+                                )
+                              }
+                              className="min-w-0 rounded-xl bg-green-500/10 px-3 py-2.5 text-xs font-medium text-green-600 transition hover:bg-green-500/20 disabled:opacity-50"
+                            >
+                              {isModerating
+                                ? "..."
+                                : product.reviewStatus === "REJECTED"
+                                  ? "تأیید مجدد"
+                                  : "تأیید محصول"}
+                            </button>
+                          )}
 
                         {product.reviewStatus === "PENDING" && (
                           <button

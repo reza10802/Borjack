@@ -10,6 +10,10 @@ import {
   toZarinpalAmount,
 } from "@/lib/zarinpal";
 import {
+  calculateZarinpalPaymentAmount,
+  ZarinpalFeeError,
+} from "@/lib/zarinpal-fee";
+import {
   reserveOrderStock,
   releaseOrderStock,
   StockUnavailableError,
@@ -29,6 +33,147 @@ function isSameDate(a, b) {
     b instanceof Date &&
     a.getTime() === b.getTime()
   );
+}
+
+/**
+ * بازسازی مبلغ موردنیاز سفارش از Snapshot اقلام.
+ *
+ * مبلغ موردنیاز:
+ * مجموع قیمت اقلام + هزینه ارسال - تخفیف فروشگاه
+ *
+ * مبلغ نهایی:
+ * مبلغ موردنیاز + کارمزد درگاه
+ *
+ * این تابع مانع پرداخت سفارش‌هایی می‌شود که total و
+ * gatewayFee آن‌ها با اطلاعات مالی ذخیره‌شده هماهنگ نیست.
+ */
+
+function getOrderPaymentBreakdown(order) {
+  if (!Array.isArray(order?.items) || !order.items.length) {
+    return null;
+  }
+
+  let itemsSubtotal = 0;
+
+  for (const item of order.items) {
+    const price = Number(item.price);
+    const quantity = Number(item.quantity);
+
+    if (
+      !Number.isSafeInteger(price) ||
+      price <= 0 ||
+      !Number.isSafeInteger(quantity) ||
+      quantity <= 0
+    ) {
+      return null;
+    }
+
+    const lineTotal = price * quantity;
+
+    if (
+      !Number.isSafeInteger(lineTotal) ||
+      !Number.isSafeInteger(itemsSubtotal + lineTotal)
+    ) {
+      return null;
+    }
+
+    itemsSubtotal += lineTotal;
+  }
+
+  const shippingCost = Number(order.shippingCost ?? 0);
+  const couponDiscount = Number(order.couponDiscount ?? 0);
+  const couponShippingDiscount = Number(
+    order.couponShippingDiscount ?? 0
+  );
+  const gatewayFee = Number(order.gatewayFee ?? 0);
+  const total = Number(order.total);
+
+  if (
+    !Number.isSafeInteger(shippingCost) ||
+    shippingCost < 0 ||
+    !Number.isSafeInteger(couponDiscount) ||
+    couponDiscount < 0 ||
+    couponDiscount > itemsSubtotal ||
+    !Number.isSafeInteger(couponShippingDiscount) ||
+    couponShippingDiscount < 0 ||
+    couponShippingDiscount > shippingCost ||
+    !Number.isSafeInteger(gatewayFee) ||
+    gatewayFee < 0 ||
+    !Number.isSafeInteger(total) ||
+    total <= 0
+  ) {
+    return null;
+  }
+
+  const couponCode =
+    typeof order.couponCode === "string" &&
+    order.couponCode.trim()
+      ? order.couponCode.trim()
+      : null;
+
+  const couponType = order.couponType ?? null;
+
+  // اعتبارسنجی سازگاری Snapshot کوپن
+  if (couponType === null) {
+    if (
+      couponCode !== null ||
+      couponDiscount !== 0 ||
+      couponShippingDiscount !== 0
+    ) {
+      return null;
+    }
+  } else {
+    if (!couponCode) return null;
+
+    if (couponType === "FREE_SHIPPING") {
+      if (
+        couponDiscount !== 0 ||
+        couponShippingDiscount !== shippingCost ||
+        shippingCost <= 0
+      ) {
+        return null;
+      }
+    } else if (
+      couponType === "PERCENTAGE" ||
+      couponType === "FIXED"
+    ) {
+      if (
+        couponDiscount <= 0 ||
+        couponShippingDiscount !== 0
+      ) {
+        return null;
+      }
+    } else {
+      return null;
+    }
+  }
+
+  // مبلغ کالاها + ارسال - تخفیف کالا - تخفیف ارسال
+  const requiredAmount =
+    itemsSubtotal +
+    shippingCost -
+    couponDiscount -
+    couponShippingDiscount;
+
+  if (
+    !Number.isSafeInteger(requiredAmount) ||
+    requiredAmount <= 0 ||
+    requiredAmount > 2_147_483_647 ||
+    !Number.isSafeInteger(requiredAmount + gatewayFee) ||
+    total !== requiredAmount + gatewayFee
+  ) {
+    return null;
+  }
+
+  return {
+    itemsSubtotal,
+    shippingCost,
+    couponDiscount,
+    couponShippingDiscount,
+    requiredAmount,
+    gatewayFee,
+    total,
+  };
 }
 
 // آزادسازی فقط زمانی مجاز است که Authority به کاربر تحویل نشده باشد
@@ -91,6 +236,16 @@ async function releaseUnlinkedReservation({
   });
 }
 
+function normalizeFeeType(value) {
+  if (typeof value !== "string") return null;
+
+  const normalized = value.trim().toUpperCase();
+
+  return ["MERCHANT", "PAYER"].includes(normalized)
+    ? normalized
+    : null;
+}
+
 export async function POST(req) {
   try {
     const check = await requireAuth();
@@ -99,13 +254,20 @@ export async function POST(req) {
 
     try {
       assertGatewayConfig();
-    } catch (e) {
-      console.error("ZARINPAL_CONFIG_ERROR", e?.code);
-      return NextResponse.json({ error: "تنظیمات درگاه پرداخت معتبر نیست" }, { status: 503 });
+    } catch (error) {
+      console.error("ZARINPAL_CONFIG_ERROR", error?.code);
+
+      return NextResponse.json(
+        { error: "تنظیمات درگاه پرداخت معتبر نیست" },
+        { status: 503 },
+      );
     }
-    // Free this user's own expired reservations (only after gateway confirmation) so a customer who
-    // abandoned a payment is never locked out of checkout.
-    await reconcileExpiredOrders({ limit: 3, userId: check.user.id }).catch(() => {});
+
+    // آزادسازی رزروهای منقضی‌شده کاربر
+    await reconcileExpiredOrders({
+      limit: 3,
+      userId: check.user.id,
+    }).catch(() => {});
 
     const body = await req.json().catch(() => ({}));
     const orderId = Number(body?.orderId);
@@ -136,7 +298,9 @@ export async function POST(req) {
         process.env.NODE_ENV === "production" &&
         parsedUrl.protocol !== "https:"
       ) {
-        throw new Error("Production callback URL must use HTTPS");
+        throw new Error(
+          "Production callback URL must use HTTPS"
+        );
       }
 
       siteUrl = parsedUrl.origin;
@@ -151,15 +315,14 @@ export async function POST(req) {
 
     /*
      * مرحله اول:
-     * قفل کاربر و سفارش، بررسی رزرو فعال و رزرو موجودی.
+     * قفل کاربر و سفارش، اعتبارسنجی مبلغ و رزرو موجودی.
      *
-     * درخواست شبکه‌ای زرین‌پال در این تراکنش اجرا نمی‌شود.
+     * درخواست شبکه‌ای زرین‌پال داخل تراکنش اجرا نمی‌شود.
      */
 
     const reservationResult = await prisma.$transaction(
       async (tx) => {
         // قفل کاربر برای جلوگیری از رزرو هم‌زمان چند سفارش
-        // توسط یک حساب کاربری.
         const userRows = await tx.$queryRaw`
           SELECT "id"
           FROM "User"
@@ -219,11 +382,24 @@ export async function POST(req) {
           );
         }
 
-        if (
-          order.stockReservationStatus === "ISSUE"
-        ) {
+        if (order.stockReservationStatus === "ISSUE") {
           return errorResult(
             "سفارش نیازمند بررسی پشتیبانی است",
+            409,
+          );
+        }
+
+        // اعتبارسنجی مبلغ ذخیره‌شده در سفارش
+        const paymentBreakdown =
+          getOrderPaymentBreakdown(order);
+
+        if (!paymentBreakdown) {
+          console.error("ORDER_PAYMENT_AMOUNT_MISMATCH", {
+            orderId: order.id,
+          });
+
+          return errorResult(
+            "مبلغ سفارش با جزئیات مالی آن هماهنگ نیست. لطفاً سفارش را دوباره ثبت کنید.",
             409,
           );
         }
@@ -329,8 +505,7 @@ export async function POST(req) {
             };
           }
 
-          // سفارش‌های در حال پرداخت قبل از اضافه‌شدن سیستم رزرو
-          // ممکن است تراکنش فعال ولی وضعیت NONE داشته باشند.
+          // سازگاری با تراکنش‌های فعال قدیمی
           if (reservationStatus === "NONE") {
             const expiresAt = new Date(
               Date.now() + RESERVATION_DURATION_MS,
@@ -378,7 +553,7 @@ export async function POST(req) {
         }
 
         // رزروی که Authority ندارد ممکن است متعلق به درخواست
-        // پرداختی باشد که سرور هنگام ارتباط با درگاه متوقف شده است.
+        // پرداختی باشد که هنگام ارتباط با درگاه متوقف شده است.
         if (
           reservationStatus === "RESERVED" &&
           !transaction
@@ -412,7 +587,7 @@ export async function POST(req) {
           );
         }
 
-        // ثبت Authority قدیمی پاک می‌شود تا callback نامعتبر
+        // Authority قدیمی پاک می‌شود تا callback نامعتبر
         // نتواند به سفارش جدید متصل شود.
         if (
           transaction?.status === "FAILED" &&
@@ -427,15 +602,19 @@ export async function POST(req) {
             },
           });
         }
-        // Price snapshot policy: the order price is only honoured while it still matches the catalogue.
-        const priceMismatches = await findPriceMismatches(tx, order);
+
+        // بررسی قیمت محصولات با Snapshot سفارش
+        const priceMismatches = await findPriceMismatches(
+          tx,
+          order
+        );
+
         if (priceMismatches.length > 0) {
           return errorResult(
             "قیمت برخی کالاهای این سفارش تغییر کرده است. لطفاً سبد خرید را بررسی و سفارش را دوباره ثبت کنید.",
             409,
           );
         }
-
 
         const expiresAt = new Date(
           Date.now() + RESERVATION_DURATION_MS,
@@ -456,7 +635,9 @@ export async function POST(req) {
           type: "CREATE",
           orderId: order.id,
           userId: check.user.id,
-          amount: order.total,
+          amount: paymentBreakdown.total,
+          requiredAmount: paymentBreakdown.requiredAmount,
+          gatewayFee: paymentBreakdown.gatewayFee,
           receiverPhone: order.receiverPhone,
           expiresAt,
         };
@@ -469,12 +650,16 @@ export async function POST(req) {
 
     if (reservationResult.type === "ERROR") {
       return NextResponse.json(
-        { error: reservationResult.error },
-        { status: reservationResult.status },
+        {
+          error: reservationResult.error,
+        },
+        {
+          status: reservationResult.status,
+        },
       );
     }
 
-    // سفارش دارای تراکنش فعال، همان Authority را استفاده می‌کند.
+    // سفارش دارای تراکنش فعال، همان Authority قبلی را استفاده می‌کند.
     if (reservationResult.type === "REUSE") {
       return NextResponse.json({
         success: true,
@@ -489,18 +674,80 @@ export async function POST(req) {
 
     /*
      * مرحله دوم:
-     * ایجاد درخواست پرداخت خارج از تراکنش دیتابیس.
+     * اعتبارسنجی مجدد کارمزد پیش از ایجاد درخواست درگاه.
      *
-     * در این مرحله موجودی قبلاً رزرو شده است.
+     * اگر کارمزد تغییر کرده باشد، سفارش با مبلغ جدید و پنهانی
+     * شارژ نمی‌شود؛ رزرو آزاد و پرداخت متوقف می‌شود.
      */
 
     const {
       orderId: reservedOrderId,
       userId,
       amount,
+      requiredAmount,
+      gatewayFee,
       receiverPhone,
       expiresAt,
     } = reservationResult;
+
+    let paymentQuote;
+
+    try {
+      paymentQuote =
+        await calculateZarinpalPaymentAmount(
+          requiredAmount
+        );
+    } catch (feeError) {
+      console.error("ZARINPAL_FEE_RECHECK_ERROR", {
+        orderId: reservedOrderId,
+        code: feeError?.code,
+        message: feeError?.message,
+      });
+
+      await releaseUnlinkedReservation({
+        orderId: reservedOrderId,
+        userId,
+        expiresAt,
+      });
+
+      return NextResponse.json(
+        {
+          error:
+            feeError instanceof ZarinpalFeeError
+              ? feeError.message
+              : "استعلام مجدد کارمزد زرین‌پال ناموفق بود.",
+        },
+        { status: 503 },
+      );
+    }
+
+    // مبلغ استعلام‌شده باید دقیقاً با مبلغ ثبت‌شده در سفارش برابر باشد.
+    if (
+      paymentQuote.totalAmountToman !== amount ||
+      paymentQuote.gatewayFeeToman !== gatewayFee
+    ) {
+      console.warn("ZARINPAL_FEE_QUOTE_CHANGED", {
+        orderId: reservedOrderId,
+        storedAmount: amount,
+        quotedAmount: paymentQuote.totalAmountToman,
+        storedFee: gatewayFee,
+        quotedFee: paymentQuote.gatewayFeeToman,
+      });
+
+      await releaseUnlinkedReservation({
+        orderId: reservedOrderId,
+        userId,
+        expiresAt,
+      });
+
+      return NextResponse.json(
+        {
+          error:
+            "کارمزد درگاه نسبت به پیش‌فاکتور تغییر کرده است. لطفاً Checkout را تازه‌سازی و پیش‌فاکتور جدید دریافت کنید.",
+        },
+        { status: 409 },
+      );
+    }
 
     let amountRial;
 
@@ -518,6 +765,33 @@ export async function POST(req) {
         { status: 400 },
       );
     }
+
+    if (
+      !Number.isSafeInteger(amountRial) ||
+      amountRial <= 0 ||
+      paymentQuote.amountRial !== amountRial
+    ) {
+      await releaseUnlinkedReservation({
+        orderId: reservedOrderId,
+        userId,
+        expiresAt,
+      });
+
+      return NextResponse.json(
+        {
+          error:
+            "مبلغ ریالی سفارش با پیش‌فاکتور زرین‌پال هماهنگ نیست.",
+        },
+        { status: 409 },
+      );
+    }
+
+    /*
+     * مرحله سوم:
+     * ایجاد درخواست پرداخت خارج از تراکنش دیتابیس.
+     *
+     * در این مرحله موجودی قبلاً رزرو شده است.
+     */
 
     let response;
     let responseData;
@@ -549,8 +823,6 @@ export async function POST(req) {
         message: gatewayError?.message,
       });
 
-      // چون Authority دریافت نشده و لینک پرداختی به مشتری
-      // ارائه نشده، رزرو این تلاش را آزاد می‌کنیم.
       await releaseUnlinkedReservation({
         orderId: reservedOrderId,
         userId,
@@ -598,8 +870,42 @@ export async function POST(req) {
       );
     }
 
+    // در صورت بازگشت نوع کارمزد از درخواست پرداخت،
+    // باید با نوع کارمزد استعلام‌شده هماهنگ باشد.
+    if (gatewayData?.fee_type != null) {
+      const actualFeeType = normalizeFeeType(
+        gatewayData.fee_type
+      );
+
+      if (
+        !actualFeeType ||
+        actualFeeType !== paymentQuote.feeType
+      ) {
+        console.error("ZARINPAL_FEE_TYPE_MISMATCH", {
+          orderId: reservedOrderId,
+          quotedFeeType: paymentQuote.feeType,
+          returnedFeeType: gatewayData.fee_type,
+        });
+
+        await releaseUnlinkedReservation({
+          orderId: reservedOrderId,
+          userId,
+          expiresAt,
+          issuedAuthority: authority,
+        });
+
+        return NextResponse.json(
+          {
+            error:
+              "نوع کارمزد اعلام‌شده توسط درگاه با پیش‌فاکتور هماهنگ نیست. پرداخت متوقف شد.",
+          },
+          { status: 502 },
+        );
+      }
+    }
+
     /*
-     * مرحله سوم:
+     * مرحله چهارم:
      * ذخیره Authority و تراکنش.
      *
      * Authority فقط در صورتی ثبت می‌شود که رزرو هنوز فعال باشد.
@@ -635,6 +941,7 @@ export async function POST(req) {
           },
           include: {
             transaction: true,
+            items: true,
           },
         });
 
@@ -646,6 +953,18 @@ export async function POST(req) {
           latestOrder.authority !== null ||
           !isSameDate(latestOrder.paymentExpiresAt, expiresAt) ||
           latestOrder.paymentExpiresAt <= new Date()
+        ) {
+          return false;
+        }
+
+        const latestBreakdown =
+          getOrderPaymentBreakdown(latestOrder);
+
+        if (
+          !latestBreakdown ||
+          latestBreakdown.total !== amount ||
+          latestBreakdown.requiredAmount !== requiredAmount ||
+          latestBreakdown.gatewayFee !== gatewayFee
         ) {
           return false;
         }
@@ -685,9 +1004,19 @@ export async function POST(req) {
             gateway: ZARINPAL_GATEWAY_NAME,
           },
         });
+
         await tx.paymentAttempt.upsert({
-          where: { authority },
-          create: { orderId: reservedOrderId, userId: check.user.id, authority, amount, gateway: ZARINPAL_GATEWAY_NAME, status: "PENDING" },
+          where: {
+            authority,
+          },
+          create: {
+            orderId: reservedOrderId,
+            userId: check.user.id,
+            authority,
+            amount,
+            gateway: ZARINPAL_GATEWAY_NAME,
+            status: "PENDING",
+          },
           update: {},
         });
 
@@ -699,8 +1028,6 @@ export async function POST(req) {
         message: saveError?.message,
       });
 
-      // اگر ذخیره Authority با موفقیت Commit شده باشد،
-      // تابع آزادسازی آن را تشخیص می‌دهد و دست نمی‌زند.
       await releaseUnlinkedReservation({
         orderId: reservedOrderId,
         userId,
@@ -759,6 +1086,13 @@ export async function POST(req) {
           productId: error.productId,
         },
         { status: 409 },
+      );
+    }
+
+    if (error instanceof ZarinpalFeeError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 503 },
       );
     }
 

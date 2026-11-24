@@ -9,6 +9,8 @@
 //  * Rows are locked in ascending id order when retiring multiple products.
 //  * A product can only be published after admin approval.
 //  * Review status and publication status are independent.
+//  * A previously published product may be republished after re-approval.
+//  * A new or previously unpublished product is never auto-published.
 
 import { headers } from "next/headers";
 import { getClientIp, redactSensitive } from "@/lib/security";
@@ -102,6 +104,7 @@ export async function retireSupplierProducts(tx, userId) {
     SET
       "deletedAt" = COALESCE("deletedAt", now()),
       "isPublished" = FALSE,
+      "republishAfterReview" = FALSE,
       "updatedAt" = now()
     WHERE "id" = ANY(${ids}::int[])
   `;
@@ -156,8 +159,16 @@ export class ReviewRefusal extends Error {
 }
 
 // Admin approval / rejection of a product.
-// Approval does NOT publish automatically.
+//
+// Approval behavior:
+// - New products remain unpublished.
+// - Previously unpublished products remain unpublished.
+// - Products that were published before a supplier edit are republished
+//   after approval, provided their supplier is still eligible.
+//
 // Rejection always unpublishes the product and requires a reason.
+// The republish flag is retained after rejection so a corrected product
+// can be resubmitted and republished after a later approval.
 export async function setProductReviewStatus(
   tx,
   productId,
@@ -196,7 +207,7 @@ export async function setProductReviewStatus(
     );
   }
 
-  // Lock product before reading and changing its review state.
+  // Lock product and read the owner state before changing its review state.
   const [row] = await tx.$queryRaw`
     SELECT
       p."id"::int AS id,
@@ -204,8 +215,13 @@ export async function setProductReviewStatus(
       p."reviewStatus"::text AS review_status,
       p."reviewNote" AS review_note,
       p."isPublished",
-      p."deletedAt"
+      p."republishAfterReview" AS republish_after_review,
+      p."deletedAt",
+      p."supplierId" AS supplier_id,
+      u.role::text AS owner_role,
+      u."isActive" AS owner_active
     FROM "Product" p
+    LEFT JOIN "User" u ON u."id" = p."supplierId"
     WHERE p."id" = ${productId}
     FOR UPDATE OF p
   `;
@@ -221,22 +237,44 @@ export async function setProductReviewStatus(
     );
   }
 
-  // Approval clears the previous review message.
-  // Rejection stores the required reason and unpublishes the product.
   const nextReviewNote =
     reviewStatus === PRODUCT_REVIEW_STATUSES.REJECTED
       ? normalizedNote
       : null;
 
+  const ownerEligible =
+    !row.supplier_id ||
+    isEligibleOwner({
+      role: row.owner_role,
+      isActive: row.owner_active,
+    });
+
+  // Only restore publication when the product was published before
+  // the supplier's content edit and its owner is still eligible.
+  const shouldRepublish =
+    reviewStatus === PRODUCT_REVIEW_STATUSES.APPROVED &&
+    row.republish_after_review === true &&
+    ownerEligible;
+
   const nextIsPublished =
     reviewStatus === PRODUCT_REVIEW_STATUSES.REJECTED
       ? false
-      : row.isPublished;
+      : row.republish_after_review
+        ? shouldRepublish
+        : row.isPublished;
+
+  // Clear the flag after a successful automatic republish.
+  // Keep it after rejection, or if the owner is not eligible yet.
+  const nextRepublishAfterReview =
+    shouldRepublish
+      ? false
+      : row.republish_after_review;
 
   const changed =
     row.review_status !== reviewStatus ||
     row.review_note !== nextReviewNote ||
-    row.isPublished !== nextIsPublished;
+    row.isPublished !== nextIsPublished ||
+    row.republish_after_review !== nextRepublishAfterReview;
 
   if (!changed) {
     return {
@@ -245,6 +283,7 @@ export async function setProductReviewStatus(
       reviewStatus,
       reviewNote: nextReviewNote,
       isPublished: nextIsPublished,
+      republishAfterReview: nextRepublishAfterReview,
       changed: false,
     };
   }
@@ -257,6 +296,7 @@ export async function setProductReviewStatus(
       reviewStatus,
       reviewNote: nextReviewNote,
       isPublished: nextIsPublished,
+      republishAfterReview: nextRepublishAfterReview,
     },
     select: {
       id: true,
@@ -264,6 +304,7 @@ export async function setProductReviewStatus(
       reviewStatus: true,
       reviewNote: true,
       isPublished: true,
+      republishAfterReview: true,
     },
   });
 
@@ -274,11 +315,13 @@ export async function setProductReviewStatus(
       reviewStatus: row.review_status,
       reviewNote: row.review_note,
       isPublished: row.isPublished,
+      republishAfterReview: row.republish_after_review,
     },
     newValue: {
       reviewStatus: product.reviewStatus,
       reviewNote: product.reviewNote,
       isPublished: product.isPublished,
+      republishAfterReview: product.republishAfterReview,
     },
   };
 }
@@ -291,7 +334,7 @@ export async function setProductReviewStatus(
 // - products that have not been approved
 //
 // Unpublishing requires a message for the supplier.
-// Publication status and review status remain independent.
+// Explicit admin publication decisions clear the automatic-republish flag.
 export async function setProductPublished(
   tx,
   productId,
@@ -328,6 +371,7 @@ export async function setProductPublished(
     SELECT
       p."id"::int AS id,
       p."isPublished",
+      p."republishAfterReview" AS republish_after_review,
       p."deletedAt",
       p."supplierId",
       p."reviewStatus"::text AS review_status,
@@ -375,19 +419,20 @@ export async function setProductPublished(
     }
   }
 
-  // Publishing clears the previous moderation message.
-  // Unpublishing stores the administrator's message.
   const nextReviewNote = publish ? null : normalizedNote;
+  const nextRepublishAfterReview = false;
 
   const changed =
     row.isPublished !== publish ||
-    row.review_note !== nextReviewNote;
+    row.review_note !== nextReviewNote ||
+    row.republish_after_review !== nextRepublishAfterReview;
 
   if (!changed) {
     return {
       id: row.id,
       isPublished: publish,
       reviewNote: nextReviewNote,
+      republishAfterReview: nextRepublishAfterReview,
       changed: false,
     };
   }
@@ -399,6 +444,7 @@ export async function setProductPublished(
     data: {
       isPublished: publish,
       reviewNote: nextReviewNote,
+      republishAfterReview: nextRepublishAfterReview,
     },
   });
 
@@ -406,14 +452,17 @@ export async function setProductPublished(
     id: row.id,
     isPublished: publish,
     reviewNote: nextReviewNote,
+    republishAfterReview: nextRepublishAfterReview,
     changed: true,
     oldValue: {
       isPublished: row.isPublished,
       reviewNote: row.review_note,
+      republishAfterReview: row.republish_after_review,
     },
     newValue: {
       isPublished: publish,
       reviewNote: nextReviewNote,
+      republishAfterReview: nextRepublishAfterReview,
     },
   };
 }

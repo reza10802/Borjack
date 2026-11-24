@@ -11,6 +11,10 @@ import {
   PublishRefusal,
   ReviewRefusal,
 } from "@/lib/supplier-lifecycle";
+import {
+  calculateProductPricing,
+  PricingError,
+} from "@/lib/pricing";
 
 // PATCH /api/admin/products/[id]
 // ویرایش محصول، تغییر موجودی، انتقال مالکیت، بررسی و انتشار
@@ -196,7 +200,6 @@ export async function PATCH(req, { params }) {
 
     // ---------------------------------------------------------
     // 2. تأیید یا رد محصول
-    // reviewStatus و reviewNote فقط در همین عملیات پذیرفته می‌شوند.
     // ---------------------------------------------------------
     if (has("reviewStatus")) {
       const allowedKeys = ["reviewStatus", "reviewNote"];
@@ -271,7 +274,6 @@ export async function PATCH(req, { params }) {
 
     // ---------------------------------------------------------
     // 3. انتشار یا خارج‌کردن محصول از انتشار
-    // خارج‌کردن از انتشار به پیام اجباری نیاز دارد.
     // ---------------------------------------------------------
     if (has("isPublished")) {
       const allowedKeys = ["isPublished", "reviewNote"];
@@ -350,10 +352,26 @@ export async function PATCH(req, { params }) {
     // ---------------------------------------------------------
     // 4. ویرایش اطلاعات محصول یا تغییر موجودی
     // ---------------------------------------------------------
+
+    // قیمت نهایی، قیمت اصلی مشتری و کمیسیون باید فقط
+    // توسط موتور قیمت‌گذاری محاسبه شوند.
+    if (
+      has("price") ||
+      has("originalPrice") ||
+      has("commissionPercent")
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "قیمت فروش و کمیسیون محاسبه‌شده هستند. فقط قیمت پایه و درصد تخفیف را ارسال کنید.",
+        },
+        { status: 400 },
+      );
+    }
+
     const fullEditKeys = [
       "title",
-      "price",
-      "originalPrice",
+      "basePrice",
       "discount",
       "categoryId",
       "image",
@@ -364,6 +382,9 @@ export async function PATCH(req, { params }) {
 
     const isFullEdit = fullEditKeys.some(has);
     const hasStock = has("stock");
+
+    const hasPricingChange =
+      has("basePrice") || has("discount");
 
     if (!isFullEdit && !hasStock) {
       return NextResponse.json(
@@ -388,12 +409,14 @@ export async function PATCH(req, { params }) {
       updateData.stock = stock;
     }
 
+    let finalBasePrice;
+    let finalDiscount;
+    let finalCategoryId;
+
     // اعتبارسنجی و آماده‌سازی ویرایش کامل محصول
     if (isFullEdit) {
       const requiredFields = [
         "title",
-        "price",
-        "originalPrice",
         "categoryId",
         "image",
         "gallery",
@@ -410,8 +433,7 @@ export async function PATCH(req, { params }) {
 
       const {
         title,
-        price,
-        originalPrice,
+        basePrice,
         discount,
         categoryId,
         image,
@@ -420,25 +442,16 @@ export async function PATCH(req, { params }) {
         specs,
       } = body;
 
-      const finalPrice = Number(price);
-      const finalOriginalPrice = Number(originalPrice);
-      const finalDiscount = Number(discount ?? 0);
-      const finalCategoryId = Number(categoryId);
+      finalCategoryId = Number(categoryId);
 
       if (
         typeof title !== "string" ||
         !title.trim() ||
+        title.length > 200 ||
         typeof description !== "string" ||
         !description.trim() ||
         typeof image !== "string" ||
         !image.trim() ||
-        !Number.isSafeInteger(finalPrice) ||
-        finalPrice <= 0 ||
-        !Number.isSafeInteger(finalOriginalPrice) ||
-        finalOriginalPrice < finalPrice ||
-        !Number.isSafeInteger(finalDiscount) ||
-        finalDiscount < 0 ||
-        finalDiscount > 100 ||
         !Number.isSafeInteger(finalCategoryId) ||
         finalCategoryId <= 0
       ) {
@@ -446,6 +459,35 @@ export async function PATCH(req, { params }) {
           { error: "اطلاعات محصول را به‌درستی وارد کنید" },
           { status: 400 },
         );
+      }
+
+      if (has("basePrice")) {
+        finalBasePrice = Number(basePrice);
+
+        if (
+          !Number.isSafeInteger(finalBasePrice) ||
+          finalBasePrice <= 0
+        ) {
+          return NextResponse.json(
+            { error: "قیمت پایه معتبر نیست" },
+            { status: 400 },
+          );
+        }
+      }
+
+      if (has("discount")) {
+        finalDiscount = Number(discount);
+
+        if (
+          !Number.isSafeInteger(finalDiscount) ||
+          finalDiscount < 0 ||
+          finalDiscount > 99
+        ) {
+          return NextResponse.json(
+            { error: "درصد تخفیف باید بین صفر تا ۹۹ باشد" },
+            { status: 400 },
+          );
+        }
       }
 
       if (
@@ -483,9 +525,6 @@ export async function PATCH(req, { params }) {
         }));
 
       updateData.title = title.trim();
-      updateData.price = finalPrice;
-      updateData.originalPrice = finalOriginalPrice;
-      updateData.discount = finalDiscount;
       updateData.image = image.trim();
       updateData.description = description.trim();
 
@@ -522,6 +561,8 @@ export async function PATCH(req, { params }) {
         select: {
           id: true,
           title: true,
+          basePrice: true,
+          commissionPercent: true,
           price: true,
           originalPrice: true,
           discount: true,
@@ -549,6 +590,38 @@ export async function PATCH(req, { params }) {
           type: "BELOW_RESERVED_STOCK",
           reservedStock: oldProduct.reservedStock,
         };
+      }
+
+      // قیمت‌گذاری فقط در صورت تغییر صریح قیمت پایه یا تخفیف
+      if (hasPricingChange) {
+        const effectiveBasePrice =
+          has("basePrice")
+            ? finalBasePrice
+            : oldProduct.basePrice;
+
+        const effectiveDiscount =
+          has("discount")
+            ? finalDiscount
+            : oldProduct.discount;
+
+        // محصول قدیمی ممکن است هنوز قیمت پایه نداشته باشد.
+        // قیمت‌های قدیمی در ویرایش‌های غیرمالی دست‌نخورده می‌مانند.
+        if (effectiveBasePrice == null) {
+          return { type: "BASE_PRICE_REQUIRED" };
+        }
+
+        const pricing = calculateProductPricing({
+          basePrice: effectiveBasePrice,
+          discount: effectiveDiscount,
+        });
+
+        Object.assign(updateData, {
+          basePrice: pricing.basePrice,
+          commissionPercent: pricing.commissionPercent,
+          originalPrice: pricing.originalPrice,
+          price: pricing.price,
+          discount: pricing.discount,
+        });
       }
 
       const product = await tx.product.update({
@@ -587,6 +660,16 @@ export async function PATCH(req, { params }) {
       );
     }
 
+    if (result.type === "BASE_PRICE_REQUIRED") {
+      return NextResponse.json(
+        {
+          error:
+            "این محصول هنوز قیمت پایه ندارد. برای انتقال آن به سیستم قیمت‌گذاری جدید، قیمت پایه تأمین‌کننده را وارد کنید.",
+        },
+        { status: 409 },
+      );
+    }
+
     if (result.type === "BELOW_RESERVED_STOCK") {
       return NextResponse.json(
         {
@@ -606,6 +689,8 @@ export async function PATCH(req, { params }) {
       oldValue: result.oldProduct,
       newValue: {
         title: result.product.title,
+        basePrice: result.product.basePrice,
+        commissionPercent: result.product.commissionPercent,
         price: result.product.price,
         originalPrice: result.product.originalPrice,
         discount: result.product.discount,
@@ -624,6 +709,13 @@ export async function PATCH(req, { params }) {
       message: error?.message,
       code: error?.code,
     });
+
+    if (error instanceof PricingError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 400 },
+      );
+    }
 
     if (error?.code === "P2025") {
       return NextResponse.json(
@@ -672,6 +764,7 @@ export async function DELETE(_req, { params }) {
           title: true,
           slug: true,
           price: true,
+          basePrice: true,
           stock: true,
           reservedStock: true,
           isPublished: true,
@@ -756,6 +849,7 @@ export async function DELETE(_req, { params }) {
         title: result.product.title,
         slug: result.product.slug,
         price: result.product.price,
+        basePrice: result.product.basePrice,
         stock: result.product.stock,
         reservedStock: result.product.reservedStock,
         isPublished: result.product.isPublished,

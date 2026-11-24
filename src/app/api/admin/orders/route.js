@@ -1,4 +1,3 @@
-
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
@@ -128,6 +127,15 @@ export async function GET(req) {
               quantity: true,
               price: true,
               supplierId: true,
+
+              // اطلاعات مالی ثابت‌شده در زمان ثبت سفارش
+              basePriceAtPurchase: true,
+              commissionPercentAtPurchase: true,
+              originalPriceAtPurchase: true,
+              supplierDiscountPercentAtPurchase: true,
+              supplierDiscountAmountAtPurchase: true,
+              supplierPayoutAtPurchase: true,
+              commissionAmountAtPurchase: true,
               supplierSnapshotCaptured: true,
 
               product: {
@@ -190,6 +198,17 @@ export async function GET(req) {
                       productId: true,
                       quantity: true,
                       price: true,
+                      supplierId: true,
+
+                      // همان Snapshot مالی برای نمایش در مرسوله
+                      basePriceAtPurchase: true,
+                      commissionPercentAtPurchase: true,
+                      originalPriceAtPurchase: true,
+                      supplierDiscountPercentAtPurchase: true,
+                      supplierDiscountAmountAtPurchase: true,
+                      supplierPayoutAtPurchase: true,
+                      commissionAmountAtPurchase: true,
+                      supplierSnapshotCaptured: true,
 
                       product: {
                         select: {

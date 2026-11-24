@@ -3,6 +3,10 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSupplier, logAction } from "@/lib/auth";
 import { PRODUCT_LIST_SELECT } from "@/lib/supplier-products";
+import {
+  calculateProductPricing,
+  PricingError,
+} from "@/lib/pricing";
 
 const STATUS_FILTERS = {
   all: {},
@@ -126,7 +130,7 @@ export async function POST(req) {
       );
     }
 
-    // مالکیت و وضعیت تأیید فقط توسط سرور تعیین می‌شوند.
+    // مالکیت، انتشار و وضعیت بررسی فقط توسط سرور تعیین می‌شوند.
     const forbiddenFields = [
       "supplierId",
       "isPublished",
@@ -135,19 +139,21 @@ export async function POST(req) {
       "deletedAt",
       "reservedStock",
       "slug",
+      "price",
+      "originalPrice",
+      "commissionPercent",
     ];
 
     if (forbiddenFields.some((field) => Object.hasOwn(body, field))) {
       return NextResponse.json(
-        { error: "ارسال فیلدهای مدیریتی یا مالکیت محصول مجاز نیست" },
+        { error: "ارسال فیلدهای مدیریتی، مالکیت یا قیمت محاسبه‌شده مجاز نیست" },
         { status: 400 },
       );
     }
 
     const {
       title,
-      price,
-      originalPrice,
+      basePrice,
       discount,
       categoryId,
       image,
@@ -157,12 +163,7 @@ export async function POST(req) {
       specs,
     } = body;
 
-    const finalPrice = Number(price);
-    const finalOriginalPrice =
-      originalPrice == null || originalPrice === ""
-        ? finalPrice
-        : Number(originalPrice);
-
+    const finalBasePrice = Number(basePrice);
     const finalDiscount = Number(discount ?? 0);
     const finalCategoryId = Number(categoryId);
     const finalStock = Number(stock ?? 0);
@@ -174,13 +175,11 @@ export async function POST(req) {
       !description.trim() ||
       typeof image !== "string" ||
       !image.trim() ||
-      !Number.isSafeInteger(finalPrice) ||
-      finalPrice <= 0 ||
-      !Number.isSafeInteger(finalOriginalPrice) ||
-      finalOriginalPrice < finalPrice ||
+      !Number.isSafeInteger(finalBasePrice) ||
+      finalBasePrice <= 0 ||
       !Number.isSafeInteger(finalDiscount) ||
       finalDiscount < 0 ||
-      finalDiscount > 100 ||
+      finalDiscount > 99 ||
       !Number.isSafeInteger(finalCategoryId) ||
       finalCategoryId <= 0 ||
       !Number.isSafeInteger(finalStock) ||
@@ -190,6 +189,25 @@ export async function POST(req) {
         { error: "اطلاعات ضروری محصول را به‌درستی وارد کنید" },
         { status: 400 },
       );
+    }
+
+    // محاسبه قیمت نهایی فقط در سمت سرور انجام می‌شود.
+    let pricing;
+
+    try {
+      pricing = calculateProductPricing({
+        basePrice: finalBasePrice,
+        discount: finalDiscount,
+      });
+    } catch (error) {
+      if (error instanceof PricingError) {
+        return NextResponse.json(
+          { error: error.message },
+          { status: 400 },
+        );
+      }
+
+      throw error;
     }
 
     // تصویر اصلی جدا از حداکثر ۴ تصویر گالری است.
@@ -262,9 +280,14 @@ export async function POST(req) {
         data: {
           title: title.trim(),
           slug,
-          price: finalPrice,
-          originalPrice: finalOriginalPrice,
-          discount: finalDiscount,
+
+          // تمام مقادیر مالی از موتور قیمت‌گذاری سرور می‌آیند.
+          basePrice: pricing.basePrice,
+          commissionPercent: pricing.commissionPercent,
+          price: pricing.price,
+          originalPrice: pricing.originalPrice,
+          discount: pricing.discount,
+
           categoryId: finalCategoryId,
           image: image.trim(),
           description: description.trim(),
@@ -318,7 +341,10 @@ export async function POST(req) {
       description: `تأمین‌کننده محصول «${result.product.title}» را برای بررسی ثبت کرد`,
       newValue: {
         title: result.product.title,
-        price: result.product.price,
+        basePrice: pricing.basePrice,
+        price: pricing.price,
+        originalPrice: pricing.originalPrice,
+        discount: pricing.discount,
         stock: result.product.stock,
         reviewStatus: result.product.reviewStatus,
       },

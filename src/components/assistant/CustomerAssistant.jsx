@@ -51,7 +51,8 @@ function BorjakBotIcon({ className = "" }) {
       viewBox="0 0 48 48"
       fill="none"
       aria-hidden="true"
-      className={className}
+      className={`block shrink-0 ${className}`}
+      preserveAspectRatio="xMidYMid meet"
     >
       {/* antenna */}
       <line
@@ -600,18 +601,21 @@ export default function CustomerAssistant() {
               isOpen ? "بستن دستیار خرید" : "باز کردن دستیار خرید برجک"
             }
             aria-expanded={isOpen}
-            className="relative flex h-[60px] w-[60px] items-center justify-center rounded-full bg-primary text-white shadow-[0_10px_30px_-5px_rgba(220,151,80,0.55)] ring-2 ring-accent transition hover:scale-105 hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent"
+            className="relative grid h-[60px] w-[60px] shrink-0 place-items-center rounded-full bg-primary p-0 text-white shadow-[0_10px_30px_-5px_rgba(220,151,80,0.55)] ring-2 ring-accent transition hover:scale-105 hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent"
           >
-            {isOpen ? (
-              <CloseIcon className="h-6 w-6" />
-            ) : (
-              <BorjakBotIcon className="h-9 w-9" />
-            )}
+            {/* لایه مستقل برای قرارگیری دقیق آیکون در مرکز دکمه */}
+            <span className="pointer-events-none absolute inset-0 grid place-items-center" aria-hidden="true">
+              {isOpen ? (
+                <CloseIcon className="block h-6 w-6" />
+              ) : (
+                <BorjakBotIcon className="block h-9 w-9" />
+              )}
+            </span>
 
             {!isOpen && (
               <span
                 aria-hidden="true"
-                className="absolute bottom-0.5 right-0.5 h-3 w-3 rounded-full bg-emerald-400 ring-2 ring-primary"
+                className="absolute bottom-0.5 right-0.5 z-10 h-3 w-3 rounded-full bg-emerald-400 ring-2 ring-primary"
               />
             )}
           </button>

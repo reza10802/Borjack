@@ -28,8 +28,8 @@ const REVIEW_STATES = {
 
 const EMPTY_FORM = {
   title: "",
-  price: "",
-  originalPrice: "",
+  basePrice: "",
+  discount: "0",
   categoryId: "",
   image: "",
   gallery: [],
@@ -68,6 +68,131 @@ function reviewState(product) {
   );
 }
 
+function ImageGuide() {
+  return (
+    <aside className="h-fit rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-4 sm:p-5">
+      <div className="flex items-center gap-2.5">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--color-accent)]/10 text-xl">
+          📸
+        </span>
+
+        <div>
+          <h4 className="font-bold text-[var(--color-text)]">
+            راهنمای عکاسی محصول
+          </h4>
+
+          <p className="mt-1 text-xs text-[var(--color-text-muted)]">
+            برای نمایش بهتر کالا در فروشگاه برجک
+          </p>
+        </div>
+      </div>
+
+      <p className="mt-4 text-sm leading-7 text-[var(--color-text-muted)]">
+        لطفاً هنگام عکاسی از محصول، تا حد امکان نکات زیر را رعایت کنید:
+      </p>
+
+      <ul className="mt-3 space-y-3 text-sm leading-6 text-[var(--color-text)]">
+        <li className="flex items-start gap-2">
+          <span className="mt-1 text-emerald-600">✓</span>
+          <span>
+            در محیطی روشن و با نور مناسب عکس بگیرید تا تصویر واضح و بدون سایه‌های شدید باشد.
+          </span>
+        </li>
+
+        <li className="flex items-start gap-2">
+          <span className="mt-1 text-emerald-600">✓</span>
+          <span>
+            ترجیحاً از پس‌زمینه سفید یا ساده استفاده کنید.
+          </span>
+        </li>
+
+        <li className="flex items-start gap-2">
+          <span className="mt-1 text-emerald-600">✓</span>
+          <span>
+            کل محصول باید در تصویر دیده شود و بخشی از آن از کادر خارج نباشد.
+          </span>
+        </li>
+
+        <li className="flex items-start gap-2">
+          <span className="mt-1 text-emerald-600">✓</span>
+          <span>
+            از چند زاویه مختلف، جزئیات محصول و محتویات جعبه عکس بگیرید.
+          </span>
+        </li>
+
+        <li className="flex items-start gap-2">
+          <span className="mt-1 text-emerald-600">✓</span>
+          <span>
+            از تصاویر واقعی، واضح و باکیفیت محصولی که عرضه می‌کنید استفاده کنید.
+          </span>
+        </li>
+
+        <li className="flex items-start gap-2">
+          <span className="mt-1 text-red-500">×</span>
+          <span>
+            از تصاویر تار، اسکرین‌شات، عکس‌های بی‌کیفیت و تصاویر دارای واترمارک یا نوشته تبلیغاتی استفاده نکنید.
+          </span>
+        </li>
+      </ul>
+
+      <div className="mt-4 space-y-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+        <div>
+          <p className="text-xs text-[var(--color-text-muted)]">
+            حداقل ابعاد تصویر
+          </p>
+
+          <p className="mt-1 font-bold text-[var(--color-text)]" dir="ltr">
+            500 × 500 px
+          </p>
+        </div>
+
+        <div>
+          <p className="text-xs text-[var(--color-text-muted)]">
+            ابعاد پیشنهادی
+          </p>
+
+          <p className="mt-1 font-bold text-[var(--color-accent)]" dir="ltr">
+            1500 × 1500 px
+          </p>
+        </div>
+
+        <div>
+          <p className="mt-1 font-bold text-[var(--color-text)]">
+            JPG، PNG، WebP و AVIF: حداکثر ۱۵ مگابایت
+          </p>
+          <p className="mt-1 font-bold text-[var(--color-accent)]">
+            HEIC و HEIF آیفون: حداکثر ۲۵ مگابایت
+          </p>
+        </div>
+
+        <div>
+          <p className="text-xs text-[var(--color-text-muted)]">
+            فرمت‌های قابل قبول
+          </p>
+          <p className="mt-1 font-bold text-[var(--color-text)]">
+            JPG، PNG، WebP و AVIF
+          </p>
+          <p className="mt-1 text-xs text-[var(--color-accent)]">
+            HEIC و HEIF مخصوص عکس‌های آیفون
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3">
+        <div className="flex items-start gap-2">
+          <span className="text-emerald-600">✦</span>
+
+          <p className="text-xs leading-6 text-[var(--color-text)]">
+            نیازی به تغییر دستی اندازه عکس قبل از بارگذاری نیست.
+            تصاویر پس از دریافت، به‌صورت خودکار توسط سیستم برجک
+            بهینه‌سازی و برای نمایش در موبایل و کامپیوتر آماده می‌شوند.
+          </p>
+        </div>
+      </div>
+    </aside>
+  );
+}
+
 export default function SupplierProductsPage() {
   const [items, setItems] = useState([]);
 
@@ -85,18 +210,26 @@ export default function SupplierProductsPage() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
-  // فرم ایجاد محصول
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [formError, setFormError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [editingProductId, setEditingProductId] = useState(null);
 
-  // دسته‌بندی‌ها
+  const [editConfirmProduct, setEditConfirmProduct] =
+    useState(null);
+  const [editLoading, setEditLoading] = useState(false);
+
+  const [stockEditProduct, setStockEditProduct] =
+    useState(null);
+  const [stockEditValue, setStockEditValue] = useState("");
+  const [stockEditError, setStockEditError] = useState("");
+  const [stockSubmitting, setStockSubmitting] = useState(false);
+
   const [categories, setCategories] = useState([]);
   const [categoriesLoading, setCategoriesLoading] =
     useState(true);
 
-  // آپلود تصاویر
   const [galleryUploading, setGalleryUploading] =
     useState(false);
 
@@ -231,7 +364,6 @@ export default function SupplierProductsPage() {
     return () => controller.abort();
   }, []);
 
-  // تغییر فیلتر
   const handleStatusChange = (nextStatus) => {
     if (status === nextStatus) return;
 
@@ -242,7 +374,6 @@ export default function SupplierProductsPage() {
     setPage(1);
   };
 
-  // تغییر صفحه
   const handlePageChange = (nextPage) => {
     if (page === nextPage) return;
 
@@ -251,12 +382,12 @@ export default function SupplierProductsPage() {
     setPage(nextPage);
   };
 
-  // باز و بسته کردن فرم
   const toggleForm = () => {
     if (showForm) {
       setShowForm(false);
       setForm(EMPTY_FORM);
       setFormError("");
+      setEditingProductId(null);
       return;
     }
 
@@ -267,32 +398,173 @@ export default function SupplierProductsPage() {
         : "",
     });
 
+    setEditingProductId(null);
     setFormError("");
     setNotice("");
     setShowForm(true);
   };
 
-  // محاسبه تخفیف
-  const priceNumber =
-    form.price.trim() === "" ? 0 : Number(form.price);
+  const requestProductEdit = (product) => {
+    if (product.deletedAt) return;
 
-  const originalPriceNumber =
-    form.originalPrice.trim() === ""
-      ? priceNumber
-      : Number(form.originalPrice);
+    setStockEditProduct(null);
+    setEditConfirmProduct(product);
+    setFormError("");
+    setError("");
+  };
 
-  const discount =
-    originalPriceNumber > priceNumber &&
-    originalPriceNumber > 0
-      ? Math.min(
-          100,
-          Math.round(
-            ((originalPriceNumber - priceNumber) /
-              originalPriceNumber) *
-              100
+  const confirmProductEdit = async () => {
+    if (!editConfirmProduct || editLoading) return;
+
+    const productId = editConfirmProduct.id;
+
+    setEditLoading(true);
+    setError("");
+    setNotice("");
+    setFormError("");
+
+    try {
+      const res = await fetch(
+        `/api/supplier/products/${productId}`,
+        {
+          cache: "no-store",
+        }
+      );
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || !data.product) {
+        throw new Error(
+          data.error || "دریافت اطلاعات محصول ناموفق بود"
+        );
+      }
+
+      const product = data.product;
+
+      const imageUrls = Array.isArray(product.images)
+        ? product.images
+          .map((item) =>
+            typeof item === "string" ? item : item.url
           )
-        )
-      : 0;
+          .filter(Boolean)
+        : [];
+
+      const gallery = [
+        ...new Set([
+          product.image,
+          ...imageUrls,
+        ].filter(Boolean)),
+      ].slice(0, 5);
+
+      setForm({
+        title: product.title || "",
+        basePrice: String(product.basePrice ?? ""),
+        discount: String(product.discount ?? 0),
+        categoryId: String(product.categoryId ?? ""),
+        image: product.image || gallery[0] || "",
+        gallery,
+        description: product.description || "",
+        stock: String(product.stock ?? 0),
+        specs: (product.specs || []).map((spec) => ({
+          key: spec.key || "",
+          value: String(spec.value ?? ""),
+        })),
+      });
+
+      setEditingProductId(productId);
+      setEditConfirmProduct(null);
+      setShowForm(true);
+      setFormError("");
+    } catch (err) {
+      console.error("LOAD SUPPLIER PRODUCT FOR EDIT ERROR:", err);
+
+      setError(
+        err.message || "خطا در دریافت اطلاعات محصول"
+      );
+
+      setEditConfirmProduct(null);
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
+  const openStockEditor = (product) => {
+    if (product.deletedAt) return;
+
+    setEditConfirmProduct(null);
+    setStockEditProduct(product);
+    setStockEditValue(String(product.stock ?? 0));
+    setStockEditError("");
+  };
+
+  const saveStockOnly = async () => {
+    if (!stockEditProduct || stockSubmitting) return;
+
+    const stock = Number(stockEditValue);
+    const reservedStock =
+      Number(stockEditProduct.reservedStock) || 0;
+
+    if (!Number.isSafeInteger(stock) || stock < 0) {
+      setStockEditError("موجودی باید عدد صحیح و غیرمنفی باشد.");
+      return;
+    }
+
+    if (stock < reservedStock) {
+      setStockEditError(
+        `موجودی نمی‌تواند کمتر از ${reservedStock.toLocaleString("fa-IR")} عدد رزروشده باشد.`
+      );
+      return;
+    }
+
+    setStockSubmitting(true);
+    setStockEditError("");
+
+    try {
+      const res = await fetch(
+        `/api/supplier/products/${stockEditProduct.id}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ stock }),
+        }
+      );
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(
+          data.error || "ویرایش موجودی انجام نشد."
+        );
+      }
+
+      setStockEditProduct(null);
+      setStockEditValue("");
+      setStockEditError("");
+
+      setNotice(
+        "موجودی محصول با موفقیت به‌روزرسانی شد."
+      );
+
+      setLoading(true);
+      setError("");
+      setReloadKey((prev) => prev + 1);
+    } catch (err) {
+      console.error("UPDATE PRODUCT STOCK ERROR:", err);
+
+      setStockEditError(
+        err.message || "خطا در ارتباط با سرور"
+      );
+    } finally {
+      setStockSubmitting(false);
+    }
+  };
+
+  const discountNumber =
+    form.discount.trim() === ""
+      ? 0
+      : Number(form.discount);
 
   // آپلود تصاویر
   const handleGalleryUpload = async (event) => {
@@ -383,7 +655,6 @@ export default function SupplierProductsPage() {
     }
   };
 
-  // انتخاب تصویر اصلی
   const selectMainImage = (url) => {
     setForm((prev) => ({
       ...prev,
@@ -395,7 +666,6 @@ export default function SupplierProductsPage() {
     }));
   };
 
-  // حذف تصویر
   const removeImage = (url) => {
     setForm((prev) => {
       const gallery = prev.gallery.filter(
@@ -413,16 +683,15 @@ export default function SupplierProductsPage() {
     });
   };
 
-  // مشخصات فنی
   const updateSpec = (index, field, value) => {
     setForm((prev) => ({
       ...prev,
       specs: prev.specs.map((spec, i) =>
         i === index
           ? {
-              ...spec,
-              [field]: value,
-            }
+            ...spec,
+            [field]: value,
+          }
           : spec
       ),
     }));
@@ -450,7 +719,6 @@ export default function SupplierProductsPage() {
     }));
   };
 
-  // ثبت محصول جدید
   const handleSubmit = async (event) => {
     event.preventDefault();
 
@@ -461,12 +729,11 @@ export default function SupplierProductsPage() {
     const title = form.title.trim();
     const description = form.description.trim();
 
-    const price = Number(form.price);
-
-    const originalPrice =
-      form.originalPrice.trim() === ""
-        ? price
-        : Number(form.originalPrice);
+    const basePrice = Number(form.basePrice);
+    const discount =
+      form.discount.trim() === ""
+        ? 0
+        : Number(form.discount);
 
     const categoryId = Number(form.categoryId);
     const stock = Number(form.stock);
@@ -483,21 +750,17 @@ export default function SupplierProductsPage() {
       return;
     }
 
-    if (
-      !Number.isSafeInteger(price) ||
-      price <= 0
-    ) {
-      setFormError("قیمت فروش باید یک عدد صحیح و مثبت باشد.");
+    if (!Number.isSafeInteger(basePrice) || basePrice <= 0) {
+      setFormError("قیمت پایه باید یک عدد صحیح و مثبت باشد.");
       return;
     }
 
     if (
-      !Number.isSafeInteger(originalPrice) ||
-      originalPrice < price
+      !Number.isSafeInteger(discount) ||
+      discount < 0 ||
+      discount > 99
     ) {
-      setFormError(
-        "قیمت اصلی باید برابر یا بیشتر از قیمت فروش باشد."
-      );
+      setFormError("درصد تخفیف باید عددی بین صفر تا ۹۹ باشد.");
       return;
     }
 
@@ -555,8 +818,7 @@ export default function SupplierProductsPage() {
 
     const payload = {
       title,
-      price,
-      originalPrice,
+      basePrice,
       discount,
       categoryId,
       image: mainImage,
@@ -566,22 +828,29 @@ export default function SupplierProductsPage() {
       specs,
     };
 
+    const isEditing = Boolean(editingProductId);
+
     setSubmitting(true);
 
     try {
-      const res = await fetch("/api/supplier/products", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
+      const res = await fetch(
+        isEditing
+          ? `/api/supplier/products/${editingProductId}`
+          : "/api/supplier/products",
+        {
+          method: isEditing ? "PATCH" : "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(payload),
+        }
+      );
 
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
         setFormError(
-          data.error || "ثبت محصول انجام نشد."
+          data.error || "ذخیره محصول انجام نشد."
         );
         return;
       }
@@ -589,20 +858,22 @@ export default function SupplierProductsPage() {
       setForm(EMPTY_FORM);
       setShowForm(false);
       setFormError("");
+      setEditingProductId(null);
 
       setNotice(
-        data.message ||
+        isEditing
+          ? "تغییرات محصول ذخیره شد و برای بررسی مجدد مدیر ارسال گردید."
+          : data.message ||
           "محصول ثبت شد و برای بررسی مدیر ارسال گردید."
       );
 
-      // محصول جدید در فیلتر منتشرنشده دیده می‌شود.
       setLoading(true);
       setError("");
       setPage(1);
       setStatus("unpublished");
       setReloadKey((prev) => prev + 1);
     } catch (err) {
-      console.error("CREATE SUPPLIER PRODUCT ERROR:", err);
+      console.error("SAVE SUPPLIER PRODUCT ERROR:", err);
 
       setFormError("خطا در ارتباط با سرور");
     } finally {
@@ -612,7 +883,145 @@ export default function SupplierProductsPage() {
 
   return (
     <div className="space-y-5">
-      {/* عنوان و عملیات */}
+      {editConfirmProduct && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="edit-confirm-title"
+        >
+          <div className="w-full max-w-md rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-2xl">
+            <h2
+              id="edit-confirm-title"
+              className="text-lg font-bold"
+            >
+              ویرایش محصول
+            </h2>
+
+            <p className="mt-3 text-sm leading-7 text-[var(--color-text-muted)]">
+              با ویرایش محتوای محصول «
+              <strong className="text-[var(--color-text)]">
+                {editConfirmProduct.title}
+              </strong>
+              »، پس از ذخیره تغییرات، محصول موقتاً از انتشار خارج
+              و برای بررسی مجدد به مدیر ارسال می‌شود.
+            </p>
+
+            <p className="mt-2 text-sm leading-7 text-[var(--color-text-muted)]">
+              اگر محصول پیش از ویرایش منتشر بوده باشد، پس از
+              تأیید مجدد مدیر دوباره منتشر خواهد شد. تغییر موجودی
+              به‌تنهایی نیازی به بررسی مجدد ندارد.
+            </p>
+
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                disabled={editLoading}
+                onClick={() => setEditConfirmProduct(null)}
+                className="rounded-xl border border-[var(--color-border)] px-4 py-2.5 text-sm disabled:opacity-50"
+              >
+                انصراف
+              </button>
+
+              <button
+                type="button"
+                disabled={editLoading}
+                onClick={confirmProductEdit}
+                className="btn-primary rounded-xl px-4 py-2.5 text-sm disabled:opacity-50"
+              >
+                {editLoading
+                  ? "در حال دریافت اطلاعات..."
+                  : "متوجه شدم، ادامه ویرایش"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {stockEditProduct && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="stock-edit-title"
+        >
+          <div className="w-full max-w-md rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-2xl">
+            <h2
+              id="stock-edit-title"
+              className="text-lg font-bold"
+            >
+              ویرایش موجودی
+            </h2>
+
+            <p className="mt-2 text-sm leading-7 text-[var(--color-text-muted)]">
+              محصول: {stockEditProduct.title}
+            </p>
+
+            <p className="mt-1 text-xs leading-6 text-[var(--color-text-muted)]">
+              این عملیات فقط موجودی را تغییر می‌دهد و وضعیت
+              انتشار یا بررسی محصول را تغییر نمی‌دهد.
+            </p>
+
+            <label className="mb-2 mt-4 block text-sm font-medium">
+              موجودی جدید
+            </label>
+
+            <input
+              type="number"
+              min={Number(stockEditProduct.reservedStock) || 0}
+              step="1"
+              value={stockEditValue}
+              onChange={(event) => {
+                setStockEditValue(event.target.value);
+                setStockEditError("");
+              }}
+              className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-accent)]"
+            />
+
+            <p className="mt-2 text-xs text-[var(--color-text-muted)]">
+              موجودی رزروشده:{" "}
+              {(
+                Number(stockEditProduct.reservedStock) || 0
+              ).toLocaleString("fa-IR")}
+            </p>
+
+            {stockEditError && (
+              <p
+                role="alert"
+                className="mt-3 rounded-lg bg-red-500/10 p-3 text-sm text-red-500"
+              >
+                {stockEditError}
+              </p>
+            )}
+
+            <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                disabled={stockSubmitting}
+                onClick={() => {
+                  setStockEditProduct(null);
+                  setStockEditError("");
+                }}
+                className="rounded-xl border border-[var(--color-border)] px-4 py-2.5 text-sm disabled:opacity-50"
+              >
+                انصراف
+              </button>
+
+              <button
+                type="button"
+                disabled={stockSubmitting}
+                onClick={saveStockOnly}
+                className="btn-primary rounded-xl px-4 py-2.5 text-sm disabled:opacity-50"
+              >
+                {stockSubmitting
+                  ? "در حال ذخیره..."
+                  : "ذخیره موجودی"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold">
@@ -633,13 +1042,13 @@ export default function SupplierProductsPage() {
         </button>
       </div>
 
-      {/* پیام موفقیت */}
       {notice && (
         <div
           role="status"
           className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-700 dark:text-emerald-400"
         >
           {notice}
+
           <button
             type="button"
             onClick={() => setNotice("")}
@@ -651,7 +1060,6 @@ export default function SupplierProductsPage() {
         </div>
       )}
 
-      {/* فرم ایجاد محصول */}
       {showForm && (
         <form
           onSubmit={handleSubmit}
@@ -659,16 +1067,18 @@ export default function SupplierProductsPage() {
         >
           <div>
             <h2 className="text-lg font-bold">
-              ثبت کالای جدید
+              {editingProductId
+                ? "ویرایش محصول"
+                : "ثبت کالای جدید"}
             </h2>
 
             <p className="mt-1 text-xs leading-6 text-[var(--color-text-muted)]">
-              محصول پس از ثبت برای بررسی و تأیید مدیر ارسال
-              می‌شود و تا زمان تأیید منتشر نخواهد شد.
+              {editingProductId
+                ? "پس از ذخیره تغییرات محتوایی، محصول برای بررسی مجدد مدیر ارسال می‌شود."
+                : "محصول پس از ثبت برای بررسی و تأیید مدیر ارسال می‌شود و تا زمان تأیید منتشر نخواهد شد."}
             </p>
           </div>
 
-          {/* اطلاعات پایه */}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="sm:col-span-2">
               <label className="mb-2 block text-sm font-medium">
@@ -733,21 +1143,20 @@ export default function SupplierProductsPage() {
                 )}
             </div>
 
-            {/* قیمت */}
             <div>
               <label className="mb-2 block text-sm font-medium">
-                قیمت فروش (تومان) *
+                قیمت پایه تأمین‌کننده (تومان) *
               </label>
 
               <input
                 type="number"
                 min="1"
                 step="1"
-                value={form.price}
+                value={form.basePrice}
                 onChange={(event) =>
                   setForm((prev) => ({
                     ...prev,
-                    price: event.target.value,
+                    basePrice: event.target.value,
                   }))
                 }
                 placeholder="مثلاً ۱۵۰۰۰۰۰۰"
@@ -758,21 +1167,22 @@ export default function SupplierProductsPage() {
 
             <div>
               <label className="mb-2 block text-sm font-medium">
-                قیمت اصلی (تومان)
+                درصد تخفیف (اختیاری)
               </label>
 
               <input
                 type="number"
-                min="1"
+                min="0"
+                max="99"
                 step="1"
-                value={form.originalPrice}
+                value={form.discount}
                 onChange={(event) =>
                   setForm((prev) => ({
                     ...prev,
-                    originalPrice: event.target.value,
+                    discount: event.target.value,
                   }))
                 }
-                placeholder="اختیاری؛ بدون تخفیف خالی بگذار"
+                placeholder="۰ تا ۹۹"
                 className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-accent)]"
               />
             </div>
@@ -780,26 +1190,29 @@ export default function SupplierProductsPage() {
             <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-3 sm:col-span-2">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-sm text-[var(--color-text-muted)]">
-                  درصد تخفیف محاسبه‌شده
+                  تخفیف انتخاب‌شده
                 </span>
 
                 <span className="font-bold text-[var(--color-text)]">
-                  {discount.toLocaleString("fa-IR")}٪
+                  {Number.isFinite(discountNumber) &&
+                    Number.isInteger(discountNumber) &&
+                    discountNumber >= 0 &&
+                    discountNumber <= 99
+                    ? discountNumber.toLocaleString("fa-IR")
+                    : "—"}٪
                 </span>
               </div>
 
-              {form.originalPrice.trim() !== "" &&
-                originalPriceNumber < priceNumber && (
-                  <p className="mt-2 text-xs text-red-500">
-                    قیمت اصلی نمی‌تواند از قیمت فروش کمتر باشد.
-                  </p>
-                )}
+              <p className="mt-2 text-xs leading-6 text-[var(--color-text-muted)]">
+                قیمت نهایی مشتری با محاسبه کمیسیون و گرد کردن
+                توسط سیستم تعیین می‌شود. مبلغ تخفیف تأمین‌کننده
+                نیز در محاسبه مبلغ دریافتی او لحاظ خواهد شد.
+              </p>
             </div>
 
-            {/* موجودی */}
             <div className="sm:col-span-2">
               <label className="mb-2 block text-sm font-medium">
-                موجودی اولیه *
+                موجودی *
               </label>
 
               <input
@@ -823,7 +1236,6 @@ export default function SupplierProductsPage() {
             </div>
           </div>
 
-          {/* توضیحات */}
           <div>
             <label className="mb-2 block text-sm font-medium">
               توضیحات محصول *
@@ -844,7 +1256,7 @@ export default function SupplierProductsPage() {
             />
           </div>
 
-          {/* تصاویر */}
+          {/* تصاویر محصول و راهنمای عکاسی */}
           <section className="space-y-3">
             <div>
               <h3 className="text-sm font-bold">
@@ -857,80 +1269,95 @@ export default function SupplierProductsPage() {
               </p>
             </div>
 
-            <div className="flex flex-wrap gap-3">
-              {form.gallery.map((img, index) => (
-                <div
-                  key={img}
-                  className={`relative h-28 w-28 overflow-hidden rounded-xl border ${
-                    form.image === img
-                      ? "border-[var(--color-accent)]"
-                      : "border-[var(--color-border)]"
-                  }`}
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={img}
-                    alt={`تصویر محصول ${index + 1}`}
-                    onClick={() => selectMainImage(img)}
-                    className="h-full w-full cursor-pointer object-contain"
-                  />
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+              {/* گالری و آپلود */}
+              <div className="min-w-0 space-y-3">
+                <div className="flex flex-wrap gap-3">
+                  {form.gallery.map((img, index) => (
+                    <div
+                      key={`${img}-${index}`}
+                      className={`relative h-28 w-28 overflow-hidden rounded-xl border ${form.image === img
+                        ? "border-[var(--color-accent)]"
+                        : "border-[var(--color-border)]"
+                        }`}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={img}
+                        alt={`تصویر محصول ${index + 1}`}
+                        onClick={() => selectMainImage(img)}
+                        className="h-full w-full cursor-pointer object-contain"
+                      />
 
-                  {form.image === img && (
-                    <span className="absolute bottom-0 right-0 left-0 bg-[var(--color-accent)] px-1 py-1 text-center text-[10px] text-white">
-                      تصویر اصلی
-                    </span>
+                      {form.image === img && (
+                        <span className="absolute bottom-0 right-0 left-0 bg-[var(--color-accent)] px-1 py-1 text-center text-[10px] text-white">
+                          تصویر اصلی
+                        </span>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => removeImage(img)}
+                        aria-label="حذف تصویر"
+                        className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-600 text-sm text-white shadow"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+
+                  {form.gallery.length < 5 && (
+                    <label className="flex h-28 w-28 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-[var(--color-border)] bg-[var(--color-surface-2)] text-[var(--color-text-muted)] transition hover:border-[var(--color-accent)]">
+                      <input
+                        type="file"
+                        hidden
+                        multiple
+                        accept="image/jpeg,image/png,image/webp,image/avif,image/heic,image/heif,.heic,.heif"
+                        disabled={galleryUploading}
+                        onChange={handleGalleryUpload}
+                      />
+
+                      {galleryUploading ? (
+                        <span className="animate-spin text-2xl">
+                          ↻
+                        </span>
+                      ) : (
+                        <>
+                          <span className="text-3xl">+</span>
+                          <span className="mt-1 text-xs">
+                            افزودن تصویر
+                          </span>
+                        </>
+                      )}
+                    </label>
                   )}
-
-                  <button
-                    type="button"
-                    onClick={() => removeImage(img)}
-                    aria-label="حذف تصویر"
-                    className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-600 text-sm text-white shadow"
-                  >
-                    ×
-                  </button>
                 </div>
-              ))}
 
-              {form.gallery.length < 5 && (
-                <label className="flex h-28 w-28 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-[var(--color-border)] bg-[var(--color-surface-2)] text-[var(--color-text-muted)] transition hover:border-[var(--color-accent)]">
-                  <input
-                    type="file"
-                    hidden
-                    multiple
-                    accept="image/jpeg,image/png,image/webp,image/gif,image/avif"
-                    disabled={galleryUploading}
-                    onChange={handleGalleryUpload}
-                  />
+                <p className="text-xs text-[var(--color-text-muted)]">
+                  برای انتخاب تصویر اصلی روی آن کلیک کن.
+                </p>
 
-                  {galleryUploading ? (
-                    <span className="animate-spin text-2xl">
-                      ↻
-                    </span>
-                  ) : (
-                    <>
-                      <span className="text-3xl">+</span>
-                      <span className="mt-1 text-xs">
-                        افزودن تصویر
-                      </span>
-                    </>
-                  )}
-                </label>
-              )}
+                {galleryUploading && (
+                  <p
+                    role="status"
+                    className="text-xs text-[var(--color-accent)]"
+                  >
+                    در حال آپلود و بهینه‌سازی تصاویر...
+                  </p>
+                )}
+
+                <p className="rounded-lg bg-[var(--color-surface-2)] p-3 text-xs leading-6 text-[var(--color-text-muted)]">
+                  تصاویر بارگذاری‌شده به‌صورت خودکار به فرمت WebP
+                  تبدیل می‌شوند. تصویر اصلی محصول را با دقت انتخاب
+                  کن؛ این تصویر در کارت‌های فروشگاه نمایش داده می‌شود.
+                </p>
+              </div>
+
+              {/* راهنمای عکاسی کنار آپلود */}
+              <ImageGuide />
             </div>
-
-            <p className="text-xs text-[var(--color-text-muted)]">
-              برای انتخاب تصویر اصلی روی آن کلیک کن.
-            </p>
-
-            {galleryUploading && (
-              <p className="text-xs text-[var(--color-accent)]">
-                در حال آپلود و بهینه‌سازی تصاویر...
-              </p>
-            )}
           </section>
 
-          {/* مشخصات فنی */}
           <section className="rounded-xl border border-[var(--color-border)] p-4">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div>
@@ -939,7 +1366,7 @@ export default function SupplierProductsPage() {
                 </h3>
 
                 <p className="mt-1 text-xs text-[var(--color-text-muted)]">
-                  ردیف‌های خالی هنگام ثبت محصول ذخیره نمی‌شوند.
+                  ردیف‌های خالی هنگام ذخیره محصول ثبت نمی‌شوند.
                 </p>
               </div>
 
@@ -1005,7 +1432,6 @@ export default function SupplierProductsPage() {
             )}
           </section>
 
-          {/* خطاها */}
           {formError && (
             <p
               role="alert"
@@ -1015,7 +1441,6 @@ export default function SupplierProductsPage() {
             </p>
           )}
 
-          {/* عملیات فرم */}
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <button
               type="button"
@@ -1037,16 +1462,17 @@ export default function SupplierProductsPage() {
               className="btn-primary rounded-xl px-6 py-3 text-sm disabled:opacity-50"
             >
               {submitting
-                ? "در حال ثبت محصول..."
+                ? "در حال ذخیره..."
                 : galleryUploading
                   ? "در حال آپلود تصاویر..."
-                  : "ثبت و ارسال برای بررسی"}
+                  : editingProductId
+                    ? "ذخیره تغییرات و ارسال برای بررسی"
+                    : "ثبت و ارسال برای بررسی"}
             </button>
           </div>
         </form>
       )}
 
-      {/* فیلترها */}
       <div className="flex flex-wrap gap-2">
         {FILTERS.map((filter) => (
           <button
@@ -1055,18 +1481,16 @@ export default function SupplierProductsPage() {
             onClick={() =>
               handleStatusChange(filter.value)
             }
-            className={`h-9 rounded-xl border px-4 text-sm transition ${
-              status === filter.value
-                ? "btn-primary"
-                : "border-[var(--color-border)] hover:bg-[var(--color-surface-2)]"
-            }`}
+            className={`h-9 rounded-xl border px-4 text-sm transition ${status === filter.value
+              ? "btn-primary"
+              : "border-[var(--color-border)] hover:bg-[var(--color-surface-2)]"
+              }`}
           >
             {filter.label}
           </button>
         ))}
       </div>
 
-      {/* راهنمای وضعیت‌ها */}
       <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
         <p className="mb-2 text-sm font-medium">
           راهنمای وضعیت محصول
@@ -1087,11 +1511,11 @@ export default function SupplierProductsPage() {
 
         <p className="mt-2 text-xs leading-6 text-[var(--color-text-muted)]">
           وضعیت بررسی و وضعیت انتشار مستقل هستند. تأیید محصول
-          به معنی انتشار خودکار آن نیست.
+          به معنی انتشار خودکار آن نیست؛ مگر اینکه محصول پیش از
+          ویرایش محتوایی منتشر بوده باشد و پس از بررسی مجدد تأیید شود.
         </p>
       </div>
 
-      {/* خطای دریافت محصولات */}
       {error && (
         <p
           role="alert"
@@ -1101,9 +1525,8 @@ export default function SupplierProductsPage() {
         </p>
       )}
 
-      {/* جدول محصولات */}
       <div className="overflow-x-auto rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]">
-        <table className="w-full min-w-[850px] text-sm">
+        <table className="w-full min-w-[1100px] text-sm">
           <thead className="border-b border-[var(--color-border)] text-[var(--color-text-muted)]">
             <tr>
               <th className="p-3 text-right font-medium">
@@ -1115,7 +1538,11 @@ export default function SupplierProductsPage() {
               </th>
 
               <th className="p-3 text-right font-medium">
-                قیمت (تومان)
+                قیمت پایه (تومان)
+              </th>
+
+              <th className="p-3 text-right font-medium">
+                قیمت فروش مشتری (تومان)
               </th>
 
               <th className="p-3 text-right font-medium">
@@ -1133,6 +1560,10 @@ export default function SupplierProductsPage() {
               <th className="p-3 text-right font-medium">
                 پیام مدیریت
               </th>
+
+              <th className="p-3 text-right font-medium">
+                عملیات
+              </th>
             </tr>
           </thead>
 
@@ -1140,7 +1571,7 @@ export default function SupplierProductsPage() {
             {loading ? (
               <tr>
                 <td
-                  colSpan={7}
+                  colSpan={9}
                   className="p-6 text-center text-[var(--color-text-muted)]"
                 >
                   در حال بارگذاری...
@@ -1149,7 +1580,7 @@ export default function SupplierProductsPage() {
             ) : items.length === 0 ? (
               <tr>
                 <td
-                  colSpan={7}
+                  colSpan={9}
                   className="p-6 text-center text-[var(--color-text-muted)]"
                 >
                   کالایی پیدا نشد.
@@ -1193,6 +1624,12 @@ export default function SupplierProductsPage() {
 
                     <td className="p-3">
                       {product.category?.title ?? "—"}
+                    </td>
+
+                    <td className="whitespace-nowrap p-3">
+                      {Number(product.basePrice).toLocaleString(
+                        "fa-IR"
+                      )}
                     </td>
 
                     <td className="whitespace-nowrap p-3">
@@ -1248,6 +1685,28 @@ export default function SupplierProductsPage() {
                         <span className="text-xs text-[var(--color-text-muted)]">
                           —
                         </span>
+                      )}
+                    </td>
+
+                    <td className="p-3">
+                      {!product.deletedAt && (
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => openStockEditor(product)}
+                            className="whitespace-nowrap rounded-lg border border-[var(--color-border)] px-3 py-2 text-xs transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+                          >
+                            موجودی
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => requestProductEdit(product)}
+                            className="whitespace-nowrap rounded-lg border border-[var(--color-border)] px-3 py-2 text-xs transition hover:border-[var(--color-accent)] hover:text-[var(--color-accent)]"
+                          >
+                            ویرایش محتوا
+                          </button>
+                        </div>
                       )}
                     </td>
                   </tr>

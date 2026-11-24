@@ -13,6 +13,12 @@ enum Role {
   SUPPLIER
 }
 
+enum CouponType {
+  PERCENTAGE
+  FIXED
+  FREE_SHIPPING
+}
+
 enum OrderStatus {
   PENDING
   PROCESSING
@@ -56,6 +62,44 @@ enum StockReservationStatus {
   CONSUMED
   RELEASED
   ISSUE
+}
+
+enum AdminOrderSmsStatus {
+  PENDING
+  SENDING
+  SENT
+  FAILED
+  UNKNOWN
+}
+
+model Coupon {
+  id   Int        @id @default(autoincrement())
+  code String     @unique
+  type CouponType
+
+  // درصد تخفیف یا مبلغ ثابت به تومان.
+  // برای FREE_SHIPPING مقدار null است.
+  value Int?
+
+  // حداقل مبلغ کالاها برای استفاده از کوپن
+  minOrderAmount Int @default(0)
+
+  // سقف تخفیف برای کوپن درصدی
+  maxDiscountAmount Int?
+
+  description String?
+
+  startsAt  DateTime?
+  expiresAt DateTime?
+
+  isActive Boolean @default(true)
+
+  orders Order[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive, startsAt, expiresAt])
 }
 
 model Transaction {
@@ -108,8 +152,7 @@ enum Priority {
 
 enum ShippingMethod {
   POST
-  SNAPPBOX
-  TIPAX
+  POST_EXPRESS
 }
 
 enum OtpPurpose {
@@ -248,30 +291,50 @@ model ProductTag {
 }
 
 model Product {
-  id            Int                 @id @default(autoincrement())
-  title         String
-  categoryId    Int
+  id         Int    @id @default(autoincrement())
+  title      String
+  categoryId Int
+
+  // Customer-facing prices (Toman)
   price         Int
   originalPrice Int
-  discount      Int                 @default(0)
-  category      Category            @relation(fields: [categoryId], references: [id])
-  image         String
-  description   String
-  stock         Int                 @default(0)
-  rating        Float               @default(0)
-  reviewCount   Int                 @default(0)
-  createdAt     DateTime            @default(now())
-  updatedAt     DateTime            @updatedAt
-  brandId       Int?
-  brand         Brand?              @relation(fields: [brandId], references: [id])
-  tags          ProductTag[]
-  isPublished   Boolean             @default(true)
-  reviewStatus  ProductReviewStatus @default(APPROVED)
-  reviewNote    String?
-  slug          String?             @unique
-  reservedStock Int                 @default(0)
+  discount      Int @default(0)
 
-  // Internal owner. NULL = Borjak-owned (admin-created / legacy). Never exposed publicly.
+  // Borjak pricing system (Toman)
+  // NULL values are preserved for legacy products.
+  basePrice         Int?
+  commissionPercent Int?
+
+  category Category @relation(fields: [categoryId], references: [id])
+
+  image       String
+  description String
+  stock       Int    @default(0)
+  rating      Float  @default(0)
+  reviewCount Int    @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  brandId Int?
+  brand   Brand? @relation(fields: [brandId], references: [id])
+
+  tags ProductTag[]
+
+  isPublished Boolean @default(true)
+
+  // اگر محصول منتشرشده ویرایش محتوایی شود،
+  // پس از تأیید مجدد ادمین دوباره منتشر می‌شود.
+  republishAfterReview Boolean @default(false)
+
+  reviewStatus ProductReviewStatus @default(APPROVED)
+  reviewNote   String?
+
+  slug          String? @unique
+  reservedStock Int     @default(0)
+
+  // Internal owner. NULL = Borjak-owned (admin-created / legacy).
+  // Never expose publicly.
   supplierId String?
   supplier   User?   @relation("ProductSupplier", fields: [supplierId], references: [id], onDelete: Restrict)
 
@@ -346,8 +409,8 @@ model Order {
 
   status OrderStatus @default(PENDING)
 
-  paymentStatus PaymentStatus @default(PENDING)
-  requiresPrintedInvoice Boolean @default(false)
+  paymentStatus          PaymentStatus @default(PENDING)
+  requiresPrintedInvoice Boolean       @default(false)
 
   stockReservationStatus StockReservationStatus @default(NONE)
   stockIssueAt           DateTime?
@@ -374,9 +437,26 @@ model Order {
   // New multi-seller shipment data is stored in OrderFulfillment.
   shippingMethod ShippingMethod?
   shippingCost   Int             @default(0)
-  trackingCode   String?
-  shippedAt      DateTime?
-  deliveredAt    DateTime?
+
+  // Store coupon snapshot at checkout.
+  couponId   Int?
+  couponCode String?
+  couponType CouponType?
+
+  // Discount applied to merchandise (Toman).
+  couponDiscount Int @default(0)
+
+  // Discount applied to shipping (Toman).
+  couponShippingDiscount Int @default(0)
+
+  coupon Coupon? @relation(fields: [couponId], references: [id], onDelete: SetNull)
+
+  // Payment gateway fee recovered in checkout (Toman).
+  gatewayFee Int @default(0)
+
+  trackingCode String?
+  shippedAt    DateTime?
+  deliveredAt  DateTime?
 
   items        OrderItem[]
   fulfillments OrderFulfillment[]
@@ -388,9 +468,33 @@ model Order {
 
   stockRestockedAt DateTime?
 
+  adminSmsRecipients AdminOrderSmsRecipient[]
+
   @@index([stockReservationStatus, paymentExpiresAt])
   @@index([userId, paymentStatus, status])
   @@index([paymentStatus, status])
+  @@index([couponId])
+}
+
+model AdminOrderSmsRecipient {
+  id          String              @id @default(cuid())
+  orderId     Int
+  mobile      String
+  status      AdminOrderSmsStatus @default(PENDING)
+  attempts    Int                 @default(0)
+  attemptedAt DateTime?
+  sentAt      DateTime?
+  messageId   String?
+  error       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@unique([orderId, mobile])
+  @@index([orderId, status])
+  @@index([status, createdAt])
 }
 
 model OrderItem {
@@ -398,7 +502,25 @@ model OrderItem {
   orderId   Int
   productId Int
   quantity  Int
-  price     Int
+
+  // Final customer price at purchase time (Toman)
+  price Int
+
+  // Financial snapshots at purchase time.
+  // NULL values are retained for historical orders.
+  basePriceAtPurchase         Int?
+  commissionPercentAtPurchase Int?
+
+  // Customer regular price before supplier discount.
+  originalPriceAtPurchase Int?
+
+  // Supplier discount snapshots.
+  supplierDiscountPercentAtPurchase Int?
+  supplierDiscountAmountAtPurchase  Int?
+
+  // Actual supplier payout and Borjak commission per unit.
+  supplierPayoutAtPurchase   Int?
+  commissionAmountAtPurchase Int?
 
   // Snapshot of the seller who owned the product when this order item was created.
   // NULL + supplierSnapshotCaptured=true means Borjak-owned.
@@ -428,6 +550,7 @@ model OrderFulfillment {
   status              FulfillmentStatus @default(PREPARING)
   shippingMethod      ShippingMethod?
   shippingCost        Int               @default(0)
+  shippingDiscount    Int               @default(0)
   handedOverAt        DateTime?
   trackingCode        String?
   trackingCodeAddedAt DateTime?

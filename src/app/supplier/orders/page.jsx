@@ -78,8 +78,9 @@ function StatusBadge({ status }) {
 
     return (
         <span
-            className={`inline-flex rounded-lg px-2.5 py-1 text-xs font-medium ${meta?.className || "bg-zinc-500/10 text-zinc-500"
-                }`}
+            className={`inline-flex rounded-lg px-2.5 py-1 text-xs font-medium ${
+                meta?.className || "bg-zinc-500/10 text-zinc-500"
+            }`}
         >
             {meta?.label || status || "نامشخص"}
         </span>
@@ -127,7 +128,9 @@ export default function SupplierOrdersPage() {
                 const data = await res.json().catch(() => ({}));
 
                 if (!res.ok) {
-                    throw new Error(data.error || "خطا در دریافت سفارش‌ها");
+                    throw new Error(
+                        data.error || "خطا در دریافت سفارش‌ها"
+                    );
                 }
 
                 return data;
@@ -154,7 +157,9 @@ export default function SupplierOrdersPage() {
             .catch((err) => {
                 if (cancelled) return;
 
-                setError(err.message || "خطا در ارتباط با سرور");
+                setError(
+                    err.message || "خطا در ارتباط با سرور"
+                );
             })
             .finally(() => {
                 if (!cancelled) {
@@ -191,7 +196,9 @@ export default function SupplierOrdersPage() {
             id: fulfillment.id,
             type,
             nextStatus:
-                type === "transition" ? nextAction?.status : "ISSUE",
+                type === "transition"
+                    ? nextAction?.status
+                    : "ISSUE",
         });
 
         setTrackingCode("");
@@ -236,7 +243,9 @@ export default function SupplierOrdersPage() {
                 : {
                     status: nextStatus,
                     ...(nextStatus === "SHIPPED"
-                        ? { trackingCode: trackingCode.trim() }
+                        ? {
+                            trackingCode: trackingCode.trim(),
+                        }
                         : {}),
                 };
 
@@ -245,18 +254,23 @@ export default function SupplierOrdersPage() {
             setError("");
             setNotice("");
 
-            const res = await fetch(`/api/supplier/orders/${id}`, {
-                method: "PATCH",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify(payload),
-            });
+            const res = await fetch(
+                `/api/supplier/orders/${id}`,
+                {
+                    method: "PATCH",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify(payload),
+                }
+            );
 
             const data = await res.json().catch(() => ({}));
 
             if (!res.ok) {
-                setError(data.error || "به‌روزرسانی مرسوله انجام نشد.");
+                setError(
+                    data.error || "به‌روزرسانی مرسوله انجام نشد."
+                );
                 return;
             }
 
@@ -280,7 +294,10 @@ export default function SupplierOrdersPage() {
         <div className="space-y-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                    <h1 className="text-xl font-bold">سفارش‌های من</h1>
+                    <h1 className="text-xl font-bold">
+                        سفارش‌های من
+                    </h1>
+
                     <p className="mt-1 text-sm text-[var(--color-text-muted)]">
                         مدیریت آماده‌سازی و ارسال مرسوله‌های شما
                     </p>
@@ -303,11 +320,14 @@ export default function SupplierOrdersPage() {
                             key={filter.value}
                             type="button"
                             aria-pressed={active}
-                            onClick={() => handleFilterChange(filter.value)}
-                            className={`inline-flex h-10 shrink-0 items-center justify-center whitespace-nowrap rounded-xl border px-3.5 py-2 text-sm font-medium leading-5 transition-colors duration-150 ${active
-                                ? "border-[var(--color-primary)] bg-[var(--color-primary)] text-white"
-                                : "border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] hover:bg-[var(--color-surface-2)]"
-                                }`}
+                            onClick={() =>
+                                handleFilterChange(filter.value)
+                            }
+                            className={`inline-flex h-10 shrink-0 items-center justify-center whitespace-nowrap rounded-xl border px-3.5 py-2 text-sm font-medium leading-5 transition-colors duration-150 ${
+                                active
+                                    ? "border-[var(--color-primary)] bg-[var(--color-primary)] text-white"
+                                    : "border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] hover:bg-[var(--color-surface-2)]"
+                            }`}
                         >
                             {filter.label}
                         </button>
@@ -346,9 +366,12 @@ export default function SupplierOrdersPage() {
                     {fulfillments.map((fulfillment) => {
                         const order = fulfillment.order;
                         const action = NEXT_ACTION[fulfillment.status];
+
                         const isActionOpen =
                             activeAction?.id === fulfillment.id;
-                        const isSaving = savingId === fulfillment.id;
+
+                        const isSaving =
+                            savingId === fulfillment.id;
 
                         return (
                             <section
@@ -360,12 +383,16 @@ export default function SupplierOrdersPage() {
                                         <p className="font-bold">
                                             سفارش #{formatNumber(order?.id)}
                                         </p>
+
                                         <p className="mt-1 text-xs text-[var(--color-text-muted)]">
-                                            ثبت سفارش: {formatDate(order?.createdAt)}
+                                            ثبت سفارش:{" "}
+                                            {formatDate(order?.createdAt)}
                                         </p>
                                     </div>
 
-                                    <StatusBadge status={fulfillment.status} />
+                                    <StatusBadge
+                                        status={fulfillment.status}
+                                    />
                                 </div>
 
                                 <div className="grid gap-5 p-4 lg:grid-cols-2">
@@ -386,7 +413,8 @@ export default function SupplierOrdersPage() {
                                                     </span>
 
                                                     <span className="shrink-0 rounded-lg bg-[var(--background-app)] px-2.5 py-1 text-xs">
-                                                        تعداد: {formatNumber(item.quantity)}
+                                                        تعداد:{" "}
+                                                        {formatNumber(item.quantity)}
                                                     </span>
                                                 </div>
                                             ))}
@@ -394,7 +422,8 @@ export default function SupplierOrdersPage() {
 
                                         {fulfillment.shippingMethod && (
                                             <p className="text-xs text-[var(--color-text-muted)]">
-                                                روش ارسال: {fulfillment.shippingMethod}
+                                                روش ارسال:{" "}
+                                                {fulfillment.shippingMethod}
                                             </p>
                                         )}
                                     </div>
@@ -423,7 +452,10 @@ export default function SupplierOrdersPage() {
                                                 <span className="text-[var(--color-text-muted)]">
                                                     استان و شهر:{" "}
                                                 </span>
-                                                {[order?.provinceName, order?.cityName]
+                                                {[
+                                                    order?.provinceName,
+                                                    order?.cityName,
+                                                ]
                                                     .filter(Boolean)
                                                     .join("، ") || "—"}
                                             </p>
@@ -445,14 +477,19 @@ export default function SupplierOrdersPage() {
                                     </div>
                                 </div>
 
-                                {(fulfillment.trackingCode || fulfillment.issueNote) && (
+                                {(fulfillment.trackingCode ||
+                                    fulfillment.issueNote) && (
                                     <div className="mx-4 mb-4 space-y-2 rounded-xl bg-[var(--background-app)] p-3 text-sm">
                                         {fulfillment.trackingCode && (
                                             <p>
                                                 <span className="text-[var(--color-text-muted)]">
                                                     کد رهگیری:{" "}
                                                 </span>
-                                                <b dir="ltr" className="inline-block">
+
+                                                <b
+                                                    dir="ltr"
+                                                    className="inline-block"
+                                                >
                                                     {fulfillment.trackingCode}
                                                 </b>
                                             </p>
@@ -463,6 +500,7 @@ export default function SupplierOrdersPage() {
                                                 <span className="font-medium">
                                                     توضیح مشکل:{" "}
                                                 </span>
+
                                                 {fulfillment.issueNote}
                                             </p>
                                         )}
@@ -474,48 +512,82 @@ export default function SupplierOrdersPage() {
                                         {fulfillment.handedOverAt && (
                                             <span>
                                                 تحویل به شرکت حمل:{" "}
-                                                {formatDate(fulfillment.handedOverAt)}
+                                                {formatDate(
+                                                    fulfillment.handedOverAt
+                                                )}
                                             </span>
                                         )}
 
                                         {fulfillment.shippedAt && (
                                             <span>
-                                                تاریخ ارسال: {formatDate(fulfillment.shippedAt)}
+                                                تاریخ ارسال:{" "}
+                                                {formatDate(
+                                                    fulfillment.shippedAt
+                                                )}
                                             </span>
                                         )}
 
                                         {fulfillment.deliveredAt && (
                                             <span>
-                                                تاریخ تحویل: {formatDate(fulfillment.deliveredAt)}
+                                                تاریخ تحویل:{" "}
+                                                {formatDate(
+                                                    fulfillment.deliveredAt
+                                                )}
                                             </span>
                                         )}
                                     </div>
 
-                                    {action && fulfillment.status !== "ISSUE" && (
-                                        <div className="flex flex-wrap items-center gap-2">
-                                            <button
-                                                type="button"
-                                                disabled={isSaving}
-                                                onClick={() =>
-                                                    openAction(fulfillment, "transition")
-                                                }
-                                                className="btn-primary rounded-xl px-4 py-2.5 text-sm disabled:opacity-50"
+                                    {/* فاکتور اختصاصی همین مرسوله */}
+                                    {order?.requiresPrintedInvoice &&
+                                        fulfillment.status !== "ISSUE" && (
+                                            <a
+                                                href={`/fulfillments/${encodeURIComponent(
+                                                    fulfillment.id
+                                                )}/invoice`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="inline-flex items-center gap-2 rounded-xl border border-[var(--color-primary)] px-4 py-2.5 text-sm font-medium text-[var(--color-primary)] transition hover:bg-[var(--color-surface-2)]"
                                             >
-                                                {action.label}
-                                            </button>
+                                                <span aria-hidden="true">
+                                                    ▤
+                                                </span>
 
-                                            <button
-                                                type="button"
-                                                disabled={isSaving}
-                                                onClick={() =>
-                                                    openAction(fulfillment, "issue")
-                                                }
-                                                className="rounded-xl border border-red-300 px-4 py-2.5 text-sm text-red-600 transition hover:bg-red-50 disabled:opacity-50"
-                                            >
-                                                گزارش مشکل
-                                            </button>
-                                        </div>
-                                    )}
+                                                مشاهده و چاپ فاکتور این مرسوله
+                                            </a>
+                                        )}
+
+                                    {action &&
+                                        fulfillment.status !== "ISSUE" && (
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <button
+                                                    type="button"
+                                                    disabled={isSaving}
+                                                    onClick={() =>
+                                                        openAction(
+                                                            fulfillment,
+                                                            "transition"
+                                                        )
+                                                    }
+                                                    className="btn-primary rounded-xl px-4 py-2.5 text-sm disabled:opacity-50"
+                                                >
+                                                    {action.label}
+                                                </button>
+
+                                                <button
+                                                    type="button"
+                                                    disabled={isSaving}
+                                                    onClick={() =>
+                                                        openAction(
+                                                            fulfillment,
+                                                            "issue"
+                                                        )
+                                                    }
+                                                    className="rounded-xl border border-red-300 px-4 py-2.5 text-sm text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+                                                >
+                                                    گزارش مشکل
+                                                </button>
+                                            </div>
+                                        )}
 
                                     {fulfillment.status === "ISSUE" && (
                                         <p className="text-sm text-red-600">
@@ -549,7 +621,9 @@ export default function SupplierOrdersPage() {
                                                     <textarea
                                                         value={issueNote}
                                                         onChange={(event) =>
-                                                            setIssueNote(event.target.value)
+                                                            setIssueNote(
+                                                                event.target.value
+                                                            )
                                                         }
                                                         maxLength={1000}
                                                         rows={3}
@@ -572,7 +646,9 @@ export default function SupplierOrdersPage() {
                                                         type="text"
                                                         value={trackingCode}
                                                         onChange={(event) =>
-                                                            setTrackingCode(event.target.value)
+                                                            setTrackingCode(
+                                                                event.target.value
+                                                            )
                                                         }
                                                         maxLength={100}
                                                         required
@@ -597,7 +673,9 @@ export default function SupplierOrdersPage() {
                                                     disabled={isSaving}
                                                     className="btn-primary rounded-xl px-5 py-2.5 text-sm disabled:opacity-50"
                                                 >
-                                                    {isSaving ? "در حال ثبت..." : "تأیید و ثبت"}
+                                                    {isSaving
+                                                        ? "در حال ثبت..."
+                                                        : "تأیید و ثبت"}
                                                 </button>
 
                                                 <button

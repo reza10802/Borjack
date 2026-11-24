@@ -3,6 +3,12 @@ import { z } from "zod";
 
 const iranPhoneRegex = /^09\d{9}$/;
 const iranPostalCodeRegex = /^\d{10}$/;
+const couponCodeRegex = /^[A-Z0-9][A-Z0-9_-]{2,39}$/;
+
+export const SHIPPING_METHODS = [
+  "POST",
+  "POST_EXPRESS",
+];
 
 export const checkoutSchema = z.object({
   receiverName: z
@@ -40,6 +46,36 @@ export const checkoutSchema = z.object({
     .string()
     .trim()
     .regex(iranPostalCodeRegex, "کد پستی باید ۱۰ رقم باشد"),
+
+  // کد تخفیف فروشگاه؛ محاسبه و اعتبارسنجی نهایی فقط در سرور انجام می‌شود.
+  couponCode: z
+    .string()
+    .trim()
+    .max(40, "کد تخفیف بیش از حد طولانی است")
+    .refine(
+      (value) =>
+        value === "" ||
+        couponCodeRegex.test(value.toUpperCase()),
+      "فرمت کد تخفیف معتبر نیست"
+    )
+    .transform((value) => value.toUpperCase())
+    .optional()
+    .default(""),
+
+  // روش ارسال مستقل برای هر گروه فروشنده
+  shippingMethodsBySeller: z
+    .record(
+      z.string().regex(
+        /^seller-\d+$/,
+        "شناسه گروه فروشنده معتبر نیست"
+      ),
+      z.enum(SHIPPING_METHODS, {
+        errorMap: () => ({
+          message: "روش ارسال انتخاب‌شده معتبر نیست",
+        }),
+      })
+    )
+    .default({}),
 
   // درخواست اختیاری فاکتور چاپی
   requiresPrintedInvoice: z.boolean().default(false),

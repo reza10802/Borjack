@@ -67,6 +67,7 @@ export async function GET(req) {
           orderId: true,
           status: true,
           shippingMethod: true,
+          shippingCost: true,
           trackingCode: true,
           trackingCodeAddedAt: true,
           handedOverAt: true,
@@ -81,6 +82,7 @@ export async function GET(req) {
             select: {
               id: true,
               createdAt: true,
+              requiresPrintedInvoice: true,
               receiverName: true,
               receiverPhone: true,
               provinceName: true,
@@ -128,18 +130,25 @@ export async function GET(req) {
       }),
     ]);
 
-    return NextResponse.json({
-      fulfillments,
+    return NextResponse.json(
+      {
+        fulfillments,
 
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-        hasNext: page * limit < total,
-        hasPrev: page > 1,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+          hasNext: page * limit < total,
+          hasPrev: page > 1,
+        },
       },
-    });
+      {
+        headers: {
+          "Cache-Control": "no-store",
+        },
+      },
+    );
   } catch (error) {
     console.error("SUPPLIER_ORDERS_ERROR", {
       message: error?.message,

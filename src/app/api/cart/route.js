@@ -7,11 +7,26 @@ import { PUBLIC_PRODUCT_SCALARS } from "@/lib/public-product";
 
 const MAX_QUANTITY_PER_ITEM = 20;
 
-function withAvailableStock(item) {
+const CART_PRODUCT_SELECT = {
+  ...PUBLIC_PRODUCT_SCALARS,
+  images: true,
+  supplier: {
+    select: {
+      id: true,
+    },
+  },
+};
+
+function getSellerIdentity(item) {
+  return item?.product?.supplier?.id ?? "BORJAK";
+}
+
+function withAvailableStock(item, sellerKey) {
   if (!item?.product) return item;
 
   const {
     reservedStock,
+    supplier,
     ...publicProduct
   } = item.product;
 
@@ -28,11 +43,78 @@ function withAvailableStock(item) {
 
   return {
     ...item,
+
+    // مشتری همیشه برجک را به‌عنوان فروشنده می‌بیند.
+    // شناسه واقعی تأمین‌کننده فقط برای گروه‌بندی داخلی استفاده می‌شود.
+    seller: {
+      key: sellerKey,
+      name: "فروشگاه برجک",
+    },
+
     product: {
       ...publicProduct,
       availableStock,
     },
   };
+}
+
+// تولید کلید پایدار گروه‌بندی بر اساس کوچک‌ترین شناسه محصول آن فروشنده
+function withSellerGroups(cartItems) {
+  const groupRepresentatives = new Map();
+
+  for (const item of cartItems) {
+    if (!item?.product) continue;
+
+    const identity = getSellerIdentity(item);
+    const productId = Number(item.productId);
+
+    if (!Number.isSafeInteger(productId) || productId <= 0) {
+      continue;
+    }
+
+    const currentRepresentative = groupRepresentatives.get(identity);
+
+    if (
+      currentRepresentative == null ||
+      productId < currentRepresentative
+    ) {
+      groupRepresentatives.set(identity, productId);
+    }
+  }
+
+  return cartItems.map((item) => {
+    if (!item?.product) return item;
+
+    const identity = getSellerIdentity(item);
+    const representativeId =
+      groupRepresentatives.get(identity) ?? Number(item.productId);
+
+    return withAvailableStock(
+      item,
+      `seller-${representativeId}`,
+    );
+  });
+}
+
+async function getCartItems(userId) {
+  return prisma.cartItem.findMany({
+    where: {
+      userId,
+      product: {
+        is: {
+          deletedAt: null,
+        },
+      },
+    },
+    include: {
+      product: {
+        select: CART_PRODUCT_SELECT,
+      },
+    },
+    orderBy: {
+      id: "desc",
+    },
+  });
 }
 
 // دریافت سبد خرید
@@ -61,30 +143,10 @@ export async function GET() {
       },
     });
 
-    const cartItems = await prisma.cartItem.findMany({
-      where: {
-        userId: user.id,
-        product: {
-          is: {
-            deletedAt: null,
-          },
-        },
-      },
-      include: {
-        product: {
-          select: {
-            ...PUBLIC_PRODUCT_SCALARS,
-            images: true,
-          },
-        },
-      },
-      orderBy: {
-        id: "desc",
-      },
-    });
+    const cartItems = await getCartItems(user.id);
 
     return NextResponse.json(
-      cartItems.map(withAvailableStock),
+      withSellerGroups(cartItems),
     );
   } catch (error) {
     console.error("CART GET ERROR:", {
@@ -217,14 +279,6 @@ export async function POST(req) {
             data: {
               quantity: newQuantity,
             },
-            include: {
-              product: {
-                select: {
-                  ...PUBLIC_PRODUCT_SCALARS,
-                  images: true,
-                },
-              },
-            },
           })
         : await tx.cartItem.create({
             data: {
@@ -232,19 +286,11 @@ export async function POST(req) {
               productId,
               quantity,
             },
-            include: {
-              product: {
-                select: {
-                  ...PUBLIC_PRODUCT_SCALARS,
-                  images: true,
-                },
-              },
-            },
           });
 
       return {
         type: "SUCCESS",
-        cartItem: withAvailableStock(cartItem),
+        cartItem,
       };
     });
 
@@ -288,8 +334,20 @@ export async function POST(req) {
       );
     }
 
+    // دریافت مجدد تمام اقلام برای تولید کلید گروه‌بندی یکسان با GET
+    const cartItems = await getCartItems(user.id);
+    const enrichedItems = withSellerGroups(cartItems);
+
+    const updatedItem = enrichedItems.find(
+      (item) => item.id === result.cartItem.id,
+    );
+
+    if (!updatedItem) {
+      throw new Error("Updated cart item could not be retrieved");
+    }
+
     return NextResponse.json(
-      result.cartItem,
+      updatedItem,
       { status: 201 },
     );
   } catch (error) {

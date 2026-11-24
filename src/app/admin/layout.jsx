@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useAuth } from "@/context/AuthContext";
@@ -24,6 +25,12 @@ const navItems = [
     label: "سفارشات",
     href: "/admin/orders",
     icon: "🛒",
+    roles: ["ADMIN"],
+  },
+  {
+    label: "کدهای تخفیف",
+    href: "/admin/coupons",
+    icon: "🎟️",
     roles: ["ADMIN"],
   },
   {
@@ -59,6 +66,7 @@ export default function AdminLayout({ children }) {
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  // کنترل دسترسی پنل مدیریت
   useEffect(() => {
     if (loading) return;
 
@@ -67,17 +75,11 @@ export default function AdminLayout({ children }) {
       return;
     }
 
-    // The admin panel is ADMIN-only. Suppliers have their own panel at /supplier.
+    // تأمین‌کنندگان پنل مستقل خود را دارند.
     if (user.role !== "ADMIN") {
       router.replace("/403");
-      return;
     }
   }, [user, loading, pathname, router]);
-
-  // بستن منوی موبایل هنگام تغییر صفحه
-  useEffect(() => {
-    setMobileMenuOpen(false);
-  }, [pathname]);
 
   // بستن منو با Escape
   useEffect(() => {
@@ -96,7 +98,9 @@ export default function AdminLayout({ children }) {
     };
   }, [mobileMenuOpen]);
 
-  if (loading || !user) return null;
+  if (loading || !user || user.role !== "ADMIN") {
+    return null;
+  }
 
   const visibleNav = navItems.filter((item) =>
     item.roles.includes(user.role)
@@ -131,6 +135,7 @@ export default function AdminLayout({ children }) {
               onClick={() => setMobileMenuOpen(true)}
               aria-label="باز کردن منو"
               aria-expanded={mobileMenuOpen}
+              aria-controls="admin-mobile-navigation"
               className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[var(--color-border)] text-lg text-[var(--color-text)] transition hover:bg-[var(--background-app)] lg:hidden"
             >
               ☰
@@ -199,10 +204,12 @@ export default function AdminLayout({ children }) {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`flex min-h-11 items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-all duration-200 ${isActive
+                  aria-current={isActive ? "page" : undefined}
+                  className={`flex min-h-11 items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-all duration-200 ${
+                    isActive
                       ? "btn-primary"
                       : "text-[var(--color-text)] hover:bg-[var(--background-app)]"
-                    }`}
+                  }`}
                 >
                   <span className="flex h-5 w-5 shrink-0 items-center justify-center text-base">
                     {item.icon}
@@ -228,11 +235,14 @@ export default function AdminLayout({ children }) {
 
         {/* Mobile Drawer */}
         <aside
-          className={`fixed inset-y-0 right-0 z-[60] flex w-72 max-w-[85vw] flex-col bg-[var(--color-surface)] shadow-2xl transition-transform duration-300 lg:hidden ${mobileMenuOpen
+          id="admin-mobile-navigation"
+          className={`fixed inset-y-0 right-0 z-[60] flex w-72 max-w-[85vw] flex-col bg-[var(--color-surface)] shadow-2xl transition-transform duration-300 lg:hidden ${
+            mobileMenuOpen
               ? "translate-x-0"
               : "translate-x-full"
-            }`}
+          }`}
           aria-label="منوی مدیریت"
+          aria-hidden={!mobileMenuOpen}
         >
           {/* Drawer header */}
           <div className="flex h-16 shrink-0 items-center justify-between border-b border-[var(--color-border)] px-4">
@@ -259,10 +269,13 @@ export default function AdminLayout({ children }) {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`flex min-h-11 items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-all duration-200 ${isActive
+                  aria-current={isActive ? "page" : undefined}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={`flex min-h-11 items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-all duration-200 ${
+                    isActive
                       ? "btn-primary"
                       : "text-[var(--color-text)] hover:bg-[var(--background-app)]"
-                    }`}
+                  }`}
                 >
                   <span className="flex h-5 w-5 shrink-0 items-center justify-center text-base">
                     {item.icon}

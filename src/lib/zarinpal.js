@@ -1,3 +1,4 @@
+
 const IS_SANDBOX =
   process.env.ZARINPAL_SANDBOX?.trim().toLowerCase() === "true";
 
@@ -13,6 +14,9 @@ export const ZARINPAL_GATEWAY_NAME = IS_SANDBOX
   ? "ZARINPAL_SANDBOX"
   : "ZARINPAL_PRODUCTION";
 
+// Currency used by ZarinPal fee calculation and payment APIs.
+export const ZARINPAL_CURRENCY = "IRR";
+
 export const ZARINPAL_REQUEST_URL =
   `${API_BASE_URL}/pg/v4/payment/request.json`;
 
@@ -22,6 +26,10 @@ export const ZARINPAL_VERIFY_URL =
 export const ZARINPAL_INQUIRY_URL =
   `${API_BASE_URL}/pg/v4/payment/inquiry.json`;
 
+// Calculate the actual fee before creating a payment request.
+export const ZARINPAL_FEE_CALCULATION_URL =
+  `${API_BASE_URL}/pg/v4/payment/feeCalculation.json`;
+
 export function getZarinpalStartPayUrl(authority) {
   if (typeof authority !== "string" || !authority.trim()) {
     throw new Error("ZarinPal authority is required");
@@ -30,7 +38,8 @@ export function getZarinpalStartPayUrl(authority) {
   return `${START_PAY_BASE_URL}/${encodeURIComponent(authority)}`;
 }
 
-// Borjak stores product/order prices in Toman; ZarinPal API expects Rial.
+// Borjak stores product/order prices in Toman.
+// ZarinPal API receives the amount in Rial.
 export function toZarinpalAmount(amountInToman) {
   const amount = Number(amountInToman);
 
@@ -49,11 +58,18 @@ export function toZarinpalAmount(amountInToman) {
 
 export { IS_SANDBOX as ZARINPAL_IS_SANDBOX };
 
-// Call at request time (not at import time, so `next build` never fails on build-env values).
+// Call at request time, not at import time.
 export function assertGatewayConfig() {
-  if (IS_SANDBOX && process.env.NODE_ENV === "production" && process.env.ALLOW_ZARINPAL_SANDBOX_IN_PRODUCTION !== "true") {
-    const e = new Error("ZARINPAL_SANDBOX is enabled in production");
-    e.code = "SANDBOX_IN_PRODUCTION";
-    throw e;
+  if (
+    IS_SANDBOX &&
+    process.env.NODE_ENV === "production" &&
+    process.env.ALLOW_ZARINPAL_SANDBOX_IN_PRODUCTION !== "true"
+  ) {
+    const error = new Error(
+      "ZARINPAL_SANDBOX is enabled in production"
+    );
+
+    error.code = "SANDBOX_IN_PRODUCTION";
+    throw error;
   }
 }

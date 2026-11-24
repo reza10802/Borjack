@@ -3,6 +3,10 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireSupplier, logAction } from "@/lib/auth";
 import { PRODUCT_LIST_SELECT } from "@/lib/supplier-products";
+import {
+  calculateProductPricing,
+  PricingError,
+} from "@/lib/pricing";
 
 const notFound = () =>
   NextResponse.json({ error: "محصول پیدا نشد" }, { status: 404 });
@@ -73,7 +77,7 @@ export async function PATCH(req, { params }) {
       return badRequest("اطلاعات ارسالی معتبر نیست");
     }
 
-    // تأمین‌کننده اجازه تغییر فیلدهای مدیریتی را ندارد.
+    // تأمین‌کننده اجازه تغییر فیلدهای مدیریتی و قیمت‌های محاسبه‌شده را ندارد.
     const forbiddenFields = [
       "supplierId",
       "isPublished",
@@ -84,16 +88,22 @@ export async function PATCH(req, { params }) {
       "slug",
       "rating",
       "reviewCount",
+      "price",
+      "originalPrice",
+      "commissionPercent",
+      "republishAfterReview",
     ];
 
     if (forbiddenFields.some((field) => has(body, field))) {
-      return badRequest("تغییر فیلدهای مدیریتی یا مالکیت محصول مجاز نیست", 403);
+      return badRequest(
+        "تغییر فیلدهای مدیریتی، مالکیت یا قیمت‌های محاسبه‌شده مجاز نیست",
+        403,
+      );
     }
 
     const fullEditFields = [
       "title",
-      "price",
-      "originalPrice",
+      "basePrice",
       "discount",
       "categoryId",
       "image",
@@ -127,8 +137,7 @@ export async function PATCH(req, { params }) {
     if (isFullEdit) {
       const requiredFields = [
         "title",
-        "price",
-        "originalPrice",
+        "basePrice",
         "categoryId",
         "image",
         "gallery",
@@ -142,8 +151,7 @@ export async function PATCH(req, { params }) {
 
       const {
         title,
-        price,
-        originalPrice,
+        basePrice,
         discount,
         categoryId,
         image,
@@ -152,29 +160,42 @@ export async function PATCH(req, { params }) {
         specs,
       } = body;
 
-      const finalPrice = Number(price);
-      const finalOriginalPrice = Number(originalPrice);
+      const finalBasePrice = Number(basePrice);
       const finalDiscount = Number(discount ?? 0);
       const finalCategoryId = Number(categoryId);
 
       if (
         typeof title !== "string" ||
         !title.trim() ||
+        title.length > 200 ||
         typeof description !== "string" ||
         !description.trim() ||
         typeof image !== "string" ||
         !image.trim() ||
-        !Number.isSafeInteger(finalPrice) ||
-        finalPrice <= 0 ||
-        !Number.isSafeInteger(finalOriginalPrice) ||
-        finalOriginalPrice < finalPrice ||
+        !Number.isSafeInteger(finalBasePrice) ||
+        finalBasePrice <= 0 ||
         !Number.isSafeInteger(finalDiscount) ||
         finalDiscount < 0 ||
-        finalDiscount > 100 ||
+        finalDiscount > 99 ||
         !Number.isSafeInteger(finalCategoryId) ||
         finalCategoryId <= 0
       ) {
         return badRequest("اطلاعات محصول را به‌درستی وارد کنید");
+      }
+
+      let pricing;
+
+      try {
+        pricing = calculateProductPricing({
+          basePrice: finalBasePrice,
+          discount: finalDiscount,
+        });
+      } catch (error) {
+        if (error instanceof PricingError) {
+          return badRequest(error.message);
+        }
+
+        throw error;
       }
 
       // تصویر اصلی جداگانه است؛ حداکثر ۴ تصویر گالری
@@ -208,9 +229,14 @@ export async function PATCH(req, { params }) {
 
       Object.assign(updateData, {
         title: title.trim(),
-        price: finalPrice,
-        originalPrice: finalOriginalPrice,
-        discount: finalDiscount,
+
+        // تمام مقادیر مالی توسط موتور قیمت‌گذاری محاسبه می‌شوند.
+        basePrice: pricing.basePrice,
+        commissionPercent: pricing.commissionPercent,
+        price: pricing.price,
+        originalPrice: pricing.originalPrice,
+        discount: pricing.discount,
+
         categoryId: finalCategoryId,
         image: image.trim(),
         description: description.trim(),
@@ -227,7 +253,7 @@ export async function PATCH(req, { params }) {
           create: normalizedSpecs,
         },
 
-        // هر ویرایش محتوایی باید دوباره بررسی شود.
+        // ویرایش محتوایی باید دوباره بررسی شود.
         isPublished: false,
         reviewStatus: "PENDING",
         reviewNote: null,
@@ -256,6 +282,7 @@ export async function PATCH(req, { params }) {
         select: {
           id: true,
           title: true,
+          basePrice: true,
           price: true,
           originalPrice: true,
           discount: true,
@@ -263,6 +290,7 @@ export async function PATCH(req, { params }) {
           reservedStock: true,
           categoryId: true,
           isPublished: true,
+          republishAfterReview: true,
           reviewStatus: true,
           reviewNote: true,
           deletedAt: true,
@@ -299,6 +327,12 @@ export async function PATCH(req, { params }) {
         if (!category) {
           return { type: "CATEGORY_NOT_FOUND" };
         }
+
+        // اگر محصول قبلاً منتشر بوده، پس از تأیید مجدد منتشر شود.
+        // اگر قبلاً برای بررسی رد شده، پرچم قبلی حفظ می‌شود.
+        updateData.republishAfterReview =
+          oldProduct.republishAfterReview ||
+          oldProduct.isPublished;
       }
 
       const product = await tx.product.update({
@@ -345,12 +379,17 @@ export async function PATCH(req, { params }) {
       oldValue: result.oldProduct,
       newValue: {
         title: result.product.title,
+        basePrice: result.product.basePrice,
         price: result.product.price,
+        originalPrice: result.product.originalPrice,
+        discount: result.product.discount,
         stock: result.product.stock,
         reservedStock: result.product.reservedStock,
         isPublished: result.product.isPublished,
         reviewStatus: result.product.reviewStatus,
-        reviewNote: result.product.reviewNote,
+        republishAfterReview: isFullEdit
+          ? result.product.republishAfterReview
+          : result.oldProduct.republishAfterReview,
       },
     });
 
@@ -364,6 +403,10 @@ export async function PATCH(req, { params }) {
       message: error?.message,
       code: error?.code,
     });
+
+    if (error instanceof PricingError) {
+      return badRequest(error.message);
+    }
 
     if (error?.code === "P2025") {
       return notFound();

@@ -4,6 +4,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
+import { useUI } from "@/context/UIContext";
 import Select from "react-select";
 import Pagination from "@/components/pagination";
 
@@ -130,6 +131,7 @@ function toIsoDate(value) {
 
 export default function AdminDashboard() {
     const { user } = useAuth();
+    const { showConfirm, showToast } = useUI();
 
     const [stats, setStats] = useState(null);
     const [statsLoading, setStatsLoading] = useState(true);
@@ -204,8 +206,8 @@ export default function AdminDashboard() {
                 if (!ignore && res.ok) {
                     setStats(data);
                 }
-            } catch {
-                // آمار در صورت خطای شبکه خالی باقی می‌ماند.
+            } catch (error) {
+                console.error("LOAD DASHBOARD STATS ERROR:", error);
             } finally {
                 if (!ignore) {
                     setStatsLoading(false);
@@ -225,10 +227,7 @@ export default function AdminDashboard() {
         let ignore = false;
 
         async function loadUsers() {
-            if (!user) return;
-
-            if (user.role !== "ADMIN") {
-                setUsers([]);
+            if (!user || user.role !== "ADMIN") {
                 return;
             }
 
@@ -245,7 +244,16 @@ export default function AdminDashboard() {
                         )
                     );
                 }
-            } catch {
+
+                if (!res.ok && !ignore) {
+                    console.error(
+                        "LOAD SUPPLIERS ERROR:",
+                        data.error || res.status
+                    );
+                }
+            } catch (error) {
+                console.error("LOAD SUPPLIERS ERROR:", error);
+
                 if (!ignore) {
                     setUsers([]);
                 }
@@ -264,9 +272,6 @@ export default function AdminDashboard() {
         let ignore = false;
 
         async function loadTasks() {
-            setTasksLoading(true);
-            setTasksError("");
-
             try {
                 const params = new URLSearchParams({
                     filter,
@@ -307,13 +312,16 @@ export default function AdminDashboard() {
                     setTasksPagination(pagination);
 
                     // اگر صفحه درخواستی دیگر معتبر نباشد،
-                    // مثلاً بعد از حذف آخرین تسک صفحه،
                     // شماره صفحه را با پاسخ سرور هماهنگ می‌کنیم.
                     if (pagination.page !== tasksPage) {
                         setTasksPage(pagination.page);
                     }
+
+                    setTasksError("");
                 }
-            } catch {
+            } catch (error) {
+                console.error("LOAD TASKS ERROR:", error);
+
                 if (!ignore) {
                     setTasks([]);
                     setTasksError("خطا در ارتباط با سرور");
@@ -414,6 +422,10 @@ export default function AdminDashboard() {
 
             setShowNewTask(false);
 
+            showToast("تسک با موفقیت ایجاد و ارسال شد.", {
+                type: "success",
+            });
+
             // تسک جدید از طرف ادمین ارسال شده است.
             // در فیلتر دریافتی باید به ارسالی برویم.
             setTasksPage(1);
@@ -426,7 +438,8 @@ export default function AdminDashboard() {
                 // همان فیلتر را با داده تازه دریافت می‌کنیم.
                 setTasksReloadKey((prev) => prev + 1);
             }
-        } catch {
+        } catch (error) {
+            console.error("CREATE TASK ERROR:", error);
             setTasksError("خطا در ارتباط با سرور");
         } finally {
             setSubmitting(false);
@@ -466,7 +479,8 @@ export default function AdminDashboard() {
                     item.id === data.task.id ? data.task : item
                 )
             );
-        } catch {
+        } catch (error) {
+            console.error("UPDATE TASK STATUS ERROR:", error);
             setTasksError("خطا در ارتباط با سرور");
         } finally {
             setSavingTaskId(null);
@@ -532,7 +546,12 @@ export default function AdminDashboard() {
             );
 
             setEditingTask(null);
-        } catch {
+
+            showToast("تغییرات تسک ذخیره شد.", {
+                type: "success",
+            });
+        } catch (error) {
+            console.error("SAVE TASK ERROR:", error);
             setTasksError("خطا در ارتباط با سرور");
         } finally {
             setSavingTaskId(null);
@@ -541,9 +560,15 @@ export default function AdminDashboard() {
 
     // حذف تسک و دریافت مجدد صفحه
     const deleteTask = async (id) => {
-        const confirmed = window.confirm(
-            "از حذف این تسک مطمئنی؟"
-        );
+        if (deletingTaskId !== null) return;
+
+        const confirmed = await showConfirm({
+            title: "حذف وظیفه",
+            description: "از حذف این تسک مطمئنی؟ این عملیات قابل بازگشت نیست.",
+            confirmText: "حذف تسک",
+            cancelText: "انصراف",
+            danger: true,
+        });
 
         if (!confirmed) return;
 
@@ -568,11 +593,16 @@ export default function AdminDashboard() {
                 setEditingTask(null);
             }
 
+            showToast("تسک با موفقیت حذف شد.", {
+                type: "success",
+            });
+
             // پس از حذف، تعداد صفحات و محتوای صفحه
             // دوباره از دیتابیس محاسبه می‌شود.
             setTasksLoading(true);
             setTasksReloadKey((prev) => prev + 1);
-        } catch {
+        } catch (error) {
+            console.error("DELETE TASK ERROR:", error);
             setTasksError("خطا در ارتباط با سرور");
         } finally {
             setDeletingTaskId(null);
@@ -964,7 +994,7 @@ export default function AdminDashboard() {
                                                     onClick={() =>
                                                         deleteTask(task.id)
                                                     }
-                                                    disabled={deletingTaskId === task.id}
+                                                    disabled={deletingTaskId !== null}
                                                     aria-label="حذف تسک"
                                                     className="rounded-lg border border-red-500/20 px-3 py-1.5 text-xs text-red-500 transition hover:bg-red-500/10 disabled:opacity-50"
                                                 >

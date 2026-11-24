@@ -1,3 +1,4 @@
+
 import { prisma } from "@/lib/db";
 import { ZARINPAL_GATEWAY_NAME } from "@/lib/zarinpal";
 import {
@@ -5,6 +6,10 @@ import {
   getOrderStockEntries,
   tryReserveOrderStock,
 } from "@/lib/stock-reservation";
+import { sendAdminOrderNotificationSms } from "@/lib/sms";
+
+const SHIPPING_METHODS = new Set(["POST", "POST_EXPRESS"]);
+const SHIPPING_COST_PER_FULFILLMENT = 200_000;
 
 export async function lockAndGetOrder(tx, orderId, userId) {
   // ترتیب قفل‌گذاری با payment/request یکسان است.
@@ -93,36 +98,56 @@ export async function releaseReservationSafely(tx, order) {
 }
 
 async function removePurchasedCartItems(tx, order) {
-  // Decrement by the purchased quantity; never delete quantities added after checkout.
+  // فقط تعداد خریداری‌شده کم می‌شود؛
+  // تعدادهایی که بعد از Checkout به سبد اضافه شده‌اند باقی می‌مانند.
   const wanted = new Map();
+
   for (const item of order.items) {
     if (Number.isSafeInteger(item.productId) && item.productId > 0) {
-      wanted.set(item.productId, (wanted.get(item.productId) || 0) + Number(item.quantity));
+      wanted.set(
+        item.productId,
+        (wanted.get(item.productId) || 0) + Number(item.quantity),
+      );
     }
   }
+
   if (wanted.size === 0) return;
+
   const cart = await tx.cartItem.findMany({
-    where: { userId: order.userId, productId: { in: [...wanted.keys()] } },
+    where: {
+      userId: order.userId,
+      productId: { in: [...wanted.keys()] },
+    },
   });
-  for (const ci of cart) {
-    const remaining = ci.quantity - wanted.get(ci.productId);
+
+  for (const cartItem of cart) {
+    const remaining =
+      cartItem.quantity - wanted.get(cartItem.productId);
+
     if (remaining > 0) {
-      await tx.cartItem.update({ where: { id: ci.id }, data: { quantity: remaining } });
+      await tx.cartItem.update({
+        where: { id: cartItem.id },
+        data: { quantity: remaining },
+      });
     } else {
-      await tx.cartItem.delete({ where: { id: ci.id } });
+      await tx.cartItem.delete({
+        where: { id: cartItem.id },
+      });
     }
   }
 }
 
-async function createOrderFulfillments(tx, order) {
-  if (
-    !Array.isArray(order.items) ||
-    order.items.length === 0
-  ) {
+/**
+ * اعتبارسنجی مرسوله‌هایی که هنگام ایجاد سفارش ساخته شده‌اند.
+ *
+ * این تابع عمداً هیچ مرسوله‌ای ایجاد یا اصلاح نمی‌کند.
+ * اگر اطلاعات مرسوله‌ها ناقص یا ناسازگار باشد، پرداخت وارد مسیر بررسی دستی می‌شود.
+ */
+async function validateOrderFulfillments(tx, order) {
+  if (!Array.isArray(order.items) || order.items.length === 0) {
     throw new Error("Order has no items for fulfillment");
   }
 
-  // مالکیت تمام اقلام باید هنگام Checkout ثبت شده باشد.
   const hasCompleteSnapshot = order.items.every(
     (item) =>
       item.supplierSnapshotCaptured === true &&
@@ -136,74 +161,195 @@ async function createOrderFulfillments(tx, order) {
   );
 
   if (!hasCompleteSnapshot) {
-    throw new Error(
-      "Order supplier snapshot is incomplete",
-    );
+    throw new Error("Order supplier snapshot is incomplete");
   }
 
-  // جلوگیری از ساخت مرسوله تکراری
-  const existingCount = await tx.orderFulfillment.count({
-    where: {
-      orderId: order.id,
-    },
-  });
+  const expectedGroups = new Map();
+  const expectedItems = new Map();
 
-  if (existingCount > 0) {
-    throw new Error(
-      "Fulfillments already exist for this order",
-    );
-  }
-
-  const groups = new Map();
+  let productSubtotal = 0;
 
   for (const item of order.items) {
     if (
+      !Number.isSafeInteger(item.id) ||
       !Number.isSafeInteger(item.quantity) ||
-      item.quantity <= 0
+      item.quantity <= 0 ||
+      !Number.isSafeInteger(item.price) ||
+      item.price < 0
     ) {
       throw new Error(
-        `Invalid fulfillment quantity for order item ${item.id}`,
+        `Invalid order item data for item ${item.id}`,
       );
     }
 
     const supplierId = item.supplierId ?? null;
-
-    // برای هر تأمین‌کننده یک کلید مستقل
-    // کالاهای خود برجک با کلید BORJAK مشخص می‌شوند.
     const sellerKey = supplierId
       ? `SUPPLIER:${supplierId}`
       : "BORJAK";
 
-    if (!groups.has(sellerKey)) {
-      groups.set(sellerKey, {
+    if (!expectedGroups.has(sellerKey)) {
+      expectedGroups.set(sellerKey, {
         supplierId,
         sellerKey,
-        items: [],
+        items: new Map(),
       });
     }
 
-    groups.get(sellerKey).items.push({
-      orderItemId: item.id,
-      quantity: item.quantity,
-    });
+    const group = expectedGroups.get(sellerKey);
+
+    group.items.set(item.id, item.quantity);
+    expectedItems.set(item.id, item.quantity);
+
+    productSubtotal += item.price * item.quantity;
+
+    if (!Number.isSafeInteger(productSubtotal)) {
+      throw new Error("Order product subtotal is invalid");
+    }
   }
 
-  // هر تأمین‌کننده در هر سفارش فقط یک مرسوله دارد.
-  for (const group of groups.values()) {
-    await tx.orderFulfillment.create({
-      data: {
-        orderId: order.id,
-        supplierId: group.supplierId,
-        sellerKey: group.sellerKey,
-        status: "PREPARING",
-        shippingMethod: order.shippingMethod,
-        shippingCost: 0,
-        items: {
-          create: group.items,
+  const fulfillments = await tx.orderFulfillment.findMany({
+    where: {
+      orderId: order.id,
+    },
+    include: {
+      items: {
+        select: {
+          orderItemId: true,
+          quantity: true,
         },
       },
-    });
+    },
+  });
+
+  if (fulfillments.length !== expectedGroups.size) {
+    throw new Error(
+      "Order fulfillment count does not match seller groups",
+    );
   }
+
+  const seenSellerKeys = new Set();
+  const seenOrderItemIds = new Set();
+
+  let totalShippingCost = 0;
+
+  for (const fulfillment of fulfillments) {
+    if (
+      !fulfillment.sellerKey ||
+      seenSellerKeys.has(fulfillment.sellerKey)
+    ) {
+      throw new Error("Duplicate or invalid fulfillment seller key");
+    }
+
+    seenSellerKeys.add(fulfillment.sellerKey);
+
+    const expectedGroup = expectedGroups.get(
+      fulfillment.sellerKey,
+    );
+
+    if (!expectedGroup) {
+      throw new Error(
+        `Unexpected fulfillment seller ${fulfillment.sellerKey}`,
+      );
+    }
+
+    if (
+      (fulfillment.supplierId ?? null) !==
+      expectedGroup.supplierId
+    ) {
+      throw new Error(
+        `Fulfillment supplier mismatch for ${fulfillment.sellerKey}`,
+      );
+    }
+
+    if (fulfillment.status !== "PREPARING") {
+      throw new Error(
+        `Unexpected fulfillment status for ${fulfillment.sellerKey}`,
+      );
+    }
+
+    if (!SHIPPING_METHODS.has(fulfillment.shippingMethod)) {
+      throw new Error(
+        `Invalid shipping method for ${fulfillment.sellerKey}`,
+      );
+    }
+
+    if (
+      fulfillment.shippingCost !==
+      SHIPPING_COST_PER_FULFILLMENT
+    ) {
+      throw new Error(
+        `Invalid shipping cost for ${fulfillment.sellerKey}`,
+      );
+    }
+
+    if (
+      !Array.isArray(fulfillment.items) ||
+      fulfillment.items.length !== expectedGroup.items.size
+    ) {
+      throw new Error(
+        `Fulfillment item count mismatch for ${fulfillment.sellerKey}`,
+      );
+    }
+
+    for (const fulfillmentItem of fulfillment.items) {
+      const expectedQuantity = expectedGroup.items.get(
+        fulfillmentItem.orderItemId,
+      );
+
+      if (
+        expectedQuantity === undefined ||
+        fulfillmentItem.quantity !== expectedQuantity ||
+        seenOrderItemIds.has(fulfillmentItem.orderItemId)
+      ) {
+        throw new Error(
+          `Invalid fulfillment item mapping for order item ${fulfillmentItem.orderItemId}`,
+        );
+      }
+
+      seenOrderItemIds.add(fulfillmentItem.orderItemId);
+    }
+
+    totalShippingCost += fulfillment.shippingCost;
+  }
+
+  if (seenOrderItemIds.size !== expectedItems.size) {
+    throw new Error("Some order items are missing from fulfillments");
+  }
+
+  if (
+    !Number.isSafeInteger(order.shippingCost) ||
+    totalShippingCost !== order.shippingCost
+  ) {
+    throw new Error("Order shipping cost does not match fulfillments");
+  }
+
+  const couponDiscount = Number(order.couponDiscount ?? 0);
+  const gatewayFee = Number(order.gatewayFee ?? 0);
+
+  if (
+    !Number.isSafeInteger(couponDiscount) ||
+    couponDiscount < 0 ||
+    !Number.isSafeInteger(gatewayFee) ||
+    gatewayFee < 0
+  ) {
+    throw new Error("Invalid order discount or gateway fee");
+  }
+
+  const expectedTotal =
+    productSubtotal +
+    totalShippingCost -
+    couponDiscount +
+    gatewayFee;
+
+  if (
+    !Number.isSafeInteger(expectedTotal) ||
+    expectedTotal < 0 ||
+    expectedTotal !== order.total
+  ) {
+    throw new Error("Order total does not match its financial breakdown");
+  }
+
+  return true;
 }
 
 export async function settleCanceledPayment({
@@ -252,9 +398,7 @@ export async function settleCanceledPayment({
 
     let stockIssue = false;
 
-    if (
-      latestOrder.stockReservationStatus === "RESERVED"
-    ) {
+    if (latestOrder.stockReservationStatus === "RESERVED") {
       const released = await releaseReservationSafely(
         tx,
         latestOrder,
@@ -271,20 +415,19 @@ export async function settleCanceledPayment({
       stockIssue = true;
     }
 
-    const transactionUpdate =
-      await tx.transaction.updateMany({
-        where: {
-          orderId: latestOrder.id,
-          authority,
-          gateway: ZARINPAL_GATEWAY_NAME,
-          status: {
-            in: ["PENDING", "FAILED"],
-          },
+    const transactionUpdate = await tx.transaction.updateMany({
+      where: {
+        orderId: latestOrder.id,
+        authority,
+        gateway: ZARINPAL_GATEWAY_NAME,
+        status: {
+          in: ["PENDING", "FAILED"],
         },
-        data: {
-          status: "FAILED",
-        },
-      });
+      },
+      data: {
+        status: "FAILED",
+      },
+    });
 
     if (transactionUpdate.count !== 1) {
       throw new Error(
@@ -367,22 +510,21 @@ export async function settleSuccessfulPayment({
       );
     }
 
-    const transactionUpdate =
-      await tx.transaction.updateMany({
-        where: {
-          orderId: latestOrder.id,
-          authority,
-          amount: latestOrder.total,
-          gateway: ZARINPAL_GATEWAY_NAME,
-          status: {
-            in: ["PENDING", "FAILED"],
-          },
+    const transactionUpdate = await tx.transaction.updateMany({
+      where: {
+        orderId: latestOrder.id,
+        authority,
+        amount: latestOrder.total,
+        gateway: ZARINPAL_GATEWAY_NAME,
+        status: {
+          in: ["PENDING", "FAILED"],
         },
-        data: {
-          status: "SUCCESS",
-          refId,
-        },
-      });
+      },
+      data: {
+        status: "SUCCESS",
+        refId,
+      },
+    });
 
     if (transactionUpdate.count !== 1) {
       throw new Error(
@@ -396,9 +538,7 @@ export async function settleSuccessfulPayment({
     try {
       if (latestOrder.status === "CANCELLED") {
         // سفارش قبلاً لغو شده؛ رزرو را آزاد می‌کنیم.
-        if (
-          latestOrder.stockReservationStatus === "RESERVED"
-        ) {
+        if (latestOrder.stockReservationStatus === "RESERVED") {
           const released = await releaseReservationSafely(
             tx,
             latestOrder,
@@ -419,7 +559,7 @@ export async function settleSuccessfulPayment({
           latestOrder.stockReservationStatus,
         )
       ) {
-        // پرداخت موفق پس از آزاد شدن رزرو
+        // پرداخت موفق پس از آزاد شدن رزرو:
         // تلاش برای رزرو مجدد و مصرف اتمیک موجودی
         const reserved = await tryReserveOrderStock(
           tx,
@@ -442,7 +582,9 @@ export async function settleSuccessfulPayment({
       if (!stockIssue) {
         failureStage = "FULFILLMENT";
 
-        await createOrderFulfillments(tx, latestOrder);
+        // مرسوله‌ها قبلاً در زمان ثبت سفارش ساخته شده‌اند.
+        // اینجا فقط صحت آن‌ها بررسی می‌شود.
+        await validateOrderFulfillments(tx, latestOrder);
       }
     } catch (cause) {
       const isFulfillmentFailure =
@@ -450,7 +592,7 @@ export async function settleSuccessfulPayment({
 
       const error = new Error(
         isFulfillmentFailure
-          ? "Order fulfillment creation failed"
+          ? "Order fulfillment validation failed"
           : "Stock reservation settlement failed",
       );
 
@@ -498,7 +640,8 @@ export async function settleSuccessfulPayment({
 }
 
 /**
- * ثبت پرداخت موفق در حالتی که مصرف رزرو با خطا مواجه شده است.
+ * ثبت پرداخت موفق در حالتی که مصرف رزرو یا اعتبارسنجی مرسوله
+ * با خطا مواجه شده است.
  *
  * آزادسازی رزرو در این مرحله بهترین تلاش امن است.
  * اگر شمارنده‌ها ناسازگار باشند، رزرو را حدسی تغییر نمی‌دهیم
@@ -556,9 +699,7 @@ export async function recordPaidStockIssue({
 
     let reservationReleased = true;
 
-    if (
-      latestOrder.stockReservationStatus === "RESERVED"
-    ) {
+    if (latestOrder.stockReservationStatus === "RESERVED") {
       reservationReleased = await releaseReservationSafely(
         tx,
         latestOrder,
@@ -571,22 +712,21 @@ export async function recordPaidStockIssue({
       reservationReleased = false;
     }
 
-    const transactionUpdate =
-      await tx.transaction.updateMany({
-        where: {
-          orderId: latestOrder.id,
-          authority,
-          amount: latestOrder.total,
-          gateway: ZARINPAL_GATEWAY_NAME,
-          status: {
-            in: ["PENDING", "FAILED"],
-          },
+    const transactionUpdate = await tx.transaction.updateMany({
+      where: {
+        orderId: latestOrder.id,
+        authority,
+        amount: latestOrder.total,
+        gateway: ZARINPAL_GATEWAY_NAME,
+        status: {
+          in: ["PENDING", "FAILED"],
         },
-        data: {
-          status: "SUCCESS",
-          refId,
-        },
-      });
+      },
+      data: {
+        status: "SUCCESS",
+        refId,
+      },
+    });
 
     if (transactionUpdate.count !== 1) {
       throw new Error(
@@ -620,27 +760,40 @@ export async function recordPaidStockIssue({
     await removePurchasedCartItems(tx, latestOrder);
 
     if (!reservationReleased) {
-      console.error("ZARINPAL_STOCK_RESERVATION_REQUIRES_RECONCILIATION", {
-        orderId: latestOrder.id,
-        authority,
-        reservationStatus:
-          latestOrder.stockReservationStatus,
-      });
+      console.error(
+        "ZARINPAL_STOCK_RESERVATION_REQUIRES_RECONCILIATION",
+        {
+          orderId: latestOrder.id,
+          authority,
+          reservationStatus:
+            latestOrder.stockReservationStatus,
+        },
+      );
     }
 
     return "STOCK_ISSUE";
   });
 }
 
-
 /**
- * Settle a gateway-verified payment (shared by the callback route and the reconcile job).
+ * Settle a gateway-verified payment
+ * (shared by the callback route and the reconcile job).
+ *
  * Returns "SUCCESS" | "STOCK_ISSUE".
  */
-export async function settlePaidOrder({ order, authority, refId }) {
+export async function settlePaidOrder({
+  order,
+  authority,
+  refId,
+}) {
   let outcome;
+
   try {
-    outcome = await settleSuccessfulPayment({ order, authority, refId });
+    outcome = await settleSuccessfulPayment({
+      order,
+      authority,
+      refId,
+    });
   } catch (settlementError) {
     const failureCode = settlementError?.code;
 
@@ -652,9 +805,10 @@ export async function settlePaidOrder({ order, authority, refId }) {
     ) {
       throw settlementError;
     }
+
     console.error(
       failureCode === "FULFILLMENT_CREATION_FAILED"
-        ? "ZARINPAL_PAID_BUT_FULFILLMENT_CREATION_FAILED"
+        ? "ZARINPAL_PAID_BUT_FULFILLMENT_VALIDATION_FAILED"
         : "ZARINPAL_PAID_BUT_STOCK_SETTLEMENT_FAILED",
       {
         orderId: order.id,
@@ -663,16 +817,48 @@ export async function settlePaidOrder({ order, authority, refId }) {
         message: settlementError.cause?.message,
       },
     );
-    outcome = await recordPaidStockIssue({ order, authority, refId });
+
+    outcome = await recordPaidStockIssue({
+      order,
+      authority,
+      refId,
+    });
   }
+
   const latest = await prisma.order.findUnique({
     where: { id: order.id },
-    select: { stockReservationStatus: true, stockIssueAt: true },
+    select: {
+      stockReservationStatus: true,
+      stockIssueAt: true,
+    },
   });
-  const issue = outcome === "STOCK_ISSUE" || latest?.stockReservationStatus === "ISSUE" || Boolean(latest?.stockIssueAt);
+
+  const issue =
+    outcome === "STOCK_ISSUE" ||
+    latest?.stockReservationStatus === "ISSUE" ||
+    Boolean(latest?.stockIssueAt);
+
   await prisma.paymentAttempt.updateMany({
     where: { authority },
-    data: { status: "PAID", refId: refId ?? undefined, note: issue ? "paid; stock issue - manual refund/review required" : null },
+    data: {
+      status: "PAID",
+      refId: refId ?? undefined,
+      note: issue
+        ? "paid; stock issue - manual refund/review required"
+        : null,
+    },
   }).catch(() => { });
+
+  // ارسال پیامک اطلاع‌رسانی پس از ثبت قطعی پرداخت
+  // خطای SMS نباید نتیجه پرداخت را تغییر دهد.
+  try {
+    await sendAdminOrderNotificationSms(order.id);
+  } catch (smsError) {
+    console.error("ADMIN_ORDER_SMS_UNEXPECTED_ERROR", {
+      orderId: order.id,
+      code: smsError?.code,
+    });
+  }
+
   return issue ? "STOCK_ISSUE" : "SUCCESS";
 }

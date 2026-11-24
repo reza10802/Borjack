@@ -1,5 +1,8 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import Modal from "@/components/ui/Modal";
+
 export default function ConfirmDialog({
   open,
   title,
@@ -8,41 +11,89 @@ export default function ConfirmDialog({
   cancelText = "انصراف",
   onConfirm,
   onCancel,
+  danger = false,
 }) {
-  if (!open) return null;
+  const [submitting, setSubmitting] = useState(false);
 
-  const buttonBase =
-    "inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2";
+  useEffect(() => {
+    if (!open) {
+      setSubmitting(false);
+    }
+  }, [open]);
+
+  const handleConfirm = async () => {
+    if (submitting) return;
+
+    try {
+      setSubmitting(true);
+      await onConfirm?.();
+    } catch (error) {
+      console.error("ConfirmDialog action failed:", error);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const buttonBase = `
+    inline-flex items-center justify-center
+    rounded-xl px-5 py-2.5
+    text-sm font-medium
+    transition
+    focus-visible:outline-none
+    focus-visible:ring-2
+    focus-visible:ring-offset-2
+    disabled:cursor-not-allowed
+    disabled:opacity-60
+  `;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
-        <h2 className="mb-2 text-lg font-bold text-gray-800">
-          {title}
-        </h2>
-
-        <p className="mb-6 text-sm leading-6 text-gray-600">
+    <Modal
+      open={open}
+      onClose={onCancel}
+      title={title || "تأیید عملیات"}
+      size="sm"
+      closeOnOverlay={false}
+    >
+      {description && (
+        <p className="text-sm leading-7 text-[var(--color-text-muted)]">
           {description}
         </p>
+      )}
 
-        <div className="flex justify-end gap-3">
-          <button
-            type="button"
-            onClick={onCancel}
-            className={`${buttonBase} border border-gray-300 bg-gray-100 text-gray-700 hover:bg-gray-200 focus-visible:ring-gray-400`}
-          >
-            {cancelText}
-          </button>
+      <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={submitting}
+          className={`
+            ${buttonBase}
+            border border-[var(--color-border)]
+            bg-[var(--color-surface-2)]
+            text-[var(--color-text)]
+            hover:opacity-80
+          `}
+        >
+          {cancelText}
+        </button>
 
-          <button
-            type="button"
-            onClick={onConfirm}
-            className={`${buttonBase} bg-blue-600 text-white hover:bg-blue-700 focus-visible:ring-blue-500`}
-          >
-            {confirmText}
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={handleConfirm}
+          disabled={submitting}
+          className={`
+            ${buttonBase}
+            text-white
+            focus-visible:ring-offset-2
+            ${
+              danger
+                ? "bg-red-600 hover:bg-red-700 focus-visible:ring-red-500"
+                : "bg-[var(--color-primary)] hover:opacity-90 focus-visible:ring-[var(--color-primary)]"
+            }
+          `}
+        >
+          {submitting ? "در حال انجام..." : confirmText}
+        </button>
       </div>
-    </div>
+    </Modal>
   );
 }

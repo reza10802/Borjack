@@ -1,2 +1,4 @@
-1. consider a user may buy 2 things from two differ locations.
-2.reistering supplier through webShop 
+reistering supplier through webShop
+offs% code
+snapp pay
+check user registration at first if its registered or not for showing toast this user doesn't exist

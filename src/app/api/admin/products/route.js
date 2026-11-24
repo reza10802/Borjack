@@ -5,6 +5,10 @@ import {
   requireAdmin,
   logAction,
 } from "@/lib/auth";
+import {
+  calculateProductPricing,
+  PricingError,
+} from "@/lib/pricing";
 
 // ساخت slug از عنوان فارسی یا انگلیسی
 function slugify(value) {
@@ -138,8 +142,7 @@ export async function POST(req) {
 
     const {
       title,
-      price,
-      originalPrice,
+      basePrice,
       discount,
       categoryId,
       image,
@@ -191,14 +194,8 @@ export async function POST(req) {
       }
     }
 
-    // اعتبارسنجی اطلاعات محصول
-    const finalPrice = Number(price);
-
-    const finalOriginalPrice =
-      originalPrice != null && originalPrice !== ""
-        ? Number(originalPrice)
-        : finalPrice;
-
+    // اعتبارسنجی اطلاعات پایه محصول
+    const finalBasePrice = Number(basePrice);
     const finalDiscount = Number(discount ?? 0);
     const finalCategoryId = Number(categoryId);
     const finalStock = Number(stock);
@@ -206,17 +203,16 @@ export async function POST(req) {
     if (
       typeof title !== "string" ||
       !title.trim() ||
+      title.length > 200 ||
       typeof description !== "string" ||
       !description.trim() ||
       typeof image !== "string" ||
       !image.trim() ||
-      !Number.isSafeInteger(finalPrice) ||
-      finalPrice <= 0 ||
-      !Number.isSafeInteger(finalOriginalPrice) ||
-      finalOriginalPrice < finalPrice ||
+      !Number.isSafeInteger(finalBasePrice) ||
+      finalBasePrice <= 0 ||
       !Number.isSafeInteger(finalDiscount) ||
       finalDiscount < 0 ||
-      finalDiscount > 100 ||
+      finalDiscount > 99 ||
       !Number.isSafeInteger(finalCategoryId) ||
       finalCategoryId <= 0 ||
       !Number.isSafeInteger(finalStock) ||
@@ -228,6 +224,25 @@ export async function POST(req) {
         },
         { status: 400 },
       );
+    }
+
+    // محاسبه قیمت مشتری فقط در سرور
+    let pricing;
+
+    try {
+      pricing = calculateProductPricing({
+        basePrice: finalBasePrice,
+        discount: finalDiscount,
+      });
+    } catch (error) {
+      if (error instanceof PricingError) {
+        return NextResponse.json(
+          { error: error.message },
+          { status: 400 },
+        );
+      }
+
+      throw error;
     }
 
     // تصویر اصلی جداست؛ حداکثر ۴ تصویر اضافی در گالری
@@ -276,9 +291,14 @@ export async function POST(req) {
       data: {
         title: title.trim(),
         slug,
-        price: finalPrice,
-        originalPrice: finalOriginalPrice,
-        discount: finalDiscount,
+
+        // قیمت‌ها و کمیسیون محاسبه‌شده توسط سرور
+        price: pricing.price,
+        originalPrice: pricing.originalPrice,
+        discount: pricing.discount,
+        basePrice: pricing.basePrice,
+        commissionPercent: pricing.commissionPercent,
+
         categoryId: finalCategoryId,
         image: image.trim(),
         description: description.trim(),
@@ -325,6 +345,7 @@ export async function POST(req) {
       },
     });
 
+    // ثبت جزئیات مالی محصول در لاگ مدیریتی
     await logAction({
       userId: check.user.id,
       action: "CREATE_PRODUCT",
@@ -335,7 +356,11 @@ export async function POST(req) {
         : `محصول «${product.title}» برای برجک ایجاد شد`,
       newValue: {
         title: product.title,
+        basePrice: product.basePrice,
+        commissionPercent: product.commissionPercent,
+        originalPrice: product.originalPrice,
         price: product.price,
+        discount: product.discount,
         stock: product.stock,
         supplierId: product.supplierId,
         supplierName: supplier?.name ?? null,

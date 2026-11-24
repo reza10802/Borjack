@@ -3,6 +3,146 @@ import { prisma } from "@/lib/db";
 import { getSessionUser } from "@/lib/auth";
 import { PUBLIC_PRODUCT_SCALARS } from "@/lib/public-product";
 
+// نگاشت صفحه‌کلید انگلیسی به حروف فارسی
+const PERSIAN_KEYBOARD_MAP = {
+  q: "ض",
+  w: "ص",
+  e: "ث",
+  r: "ق",
+  t: "ف",
+  y: "غ",
+  u: "ع",
+  i: "ه",
+  o: "خ",
+  p: "ح",
+  "[": "ج",
+  "]": "چ",
+
+  a: "ش",
+  s: "س",
+  d: "ی",
+  f: "ب",
+  g: "ل",
+  h: "ا",
+  j: "ت",
+  k: "ن",
+  l: "م",
+  ";": "ک",
+  "'": "گ",
+
+  z: "ظ",
+  x: "ط",
+  c: "ز",
+  v: "ر",
+  b: "ذ",
+  n: "د",
+  m: "ئ",
+  ",": "و",
+  "\\": "پ",
+};
+
+// کلمات مربوط به نام برند فروشگاه
+const STORE_BRAND_WORDS = new Set([
+  "برجک",
+  "borjak",
+  "borjack",
+  "فروشگاه",
+  "سایت",
+  "وبشاپ",
+  "shop",
+  "store",
+  "website",
+]);
+
+/**
+ * تبدیل کلمه‌ای که با زبان انگلیسی به‌جای فارسی تایپ شده است.
+ *
+ * برای جلوگیری از تبدیل اشتباهی کلمات انگلیسی عادی،
+ * فقط کلماتی تبدیل می‌شوند که حداقل دو نشانه خاص
+ * از چیدمان صفحه‌کلید فارسی داشته باشند.
+ *
+ * نمونه:
+ * fv[;     => برجک
+ * ,fah\    => وبشاپ
+ */
+function convertKeyboardLayoutToken(token) {
+  const specialKeys = token.match(/[\[\];,\\]/g) || [];
+
+  if (specialKeys.length < 2) {
+    return token;
+  }
+
+  return [...token]
+    .map((character) => {
+      const lowerCharacter = character.toLowerCase();
+
+      return (
+        PERSIAN_KEYBOARD_MAP[lowerCharacter] ??
+        character
+      );
+    })
+    .join("");
+}
+
+/**
+ * نرمال‌سازی عبارت جست‌وجو.
+ *
+ * - اصلاح اشتباه زبان صفحه‌کلید
+ * - یکسان‌سازی حروف عربی و فارسی
+ * - شناسایی Borjak و Borjack
+ * - شناسایی نام فارسی فروشگاه
+ * - حذف نام فروشگاه از جست‌وجوهای ترکیبی
+ *
+ * اگر عبارت فقط نام فروشگاه باشد، رشته خالی برمی‌گرداند
+ * تا API همه محصولات منتشرشده را نمایش دهد.
+ */
+function normalizeSearchQuery(value) {
+  const originalQuery = String(value ?? "").trim();
+
+  if (!originalQuery) {
+    return "";
+  }
+
+  let normalized = originalQuery
+    .split(/(\s+)/)
+    .map((part) => {
+      if (!part.trim()) {
+        return part;
+      }
+
+      return convertKeyboardLayoutToken(part);
+    })
+    .join("");
+
+  normalized = normalized
+    .replace(/ي/g, "ی")
+    .replace(/ك/g, "ک")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!normalized) {
+    return "";
+  }
+
+  const tokens = normalized.toLowerCase().split(" ");
+
+  const containsStoreBrand = tokens.some((token) =>
+    ["برجک", "borjak", "borjack"].includes(token),
+  );
+
+  if (!containsStoreBrand) {
+    return normalized;
+  }
+
+  // حذف نام برند و کلمات همراه آن
+  // تا جست‌وجو روی نام محصول باقی‌مانده انجام شود.
+  const remainingTokens = tokens.filter(
+    (token) => !STORE_BRAND_WORDS.has(token),
+  );
+
+  return remainingTokens.join(" ").trim();
+}
+
 export async function GET(req) {
   try {
     const user = await getSessionUser();
@@ -11,7 +151,7 @@ export async function GET(req) {
     const category = searchParams.get("category");
     const brand = searchParams.get("brand");
     const tag = searchParams.get("tag");
-    const search = searchParams.get("search");
+    const rawSearch = searchParams.get("search");
     const sort = searchParams.get("sort") || "default";
     const minPrice = searchParams.get("minPrice");
     const maxPrice = searchParams.get("maxPrice");
@@ -57,10 +197,16 @@ export async function GET(req) {
       Number(minPrice) > Number(maxPrice)
     ) {
       return NextResponse.json(
-        { error: "حداقل قیمت نمی‌تواند از حداکثر قیمت بیشتر باشد" },
+        {
+          error:
+            "حداقل قیمت نمی‌تواند از حداکثر قیمت بیشتر باشد",
+        },
         { status: 400 },
       );
     }
+
+    // اصلاح عبارت قبل از ساخت شرط جست‌وجوی دیتابیس
+    const normalizedSearch = normalizeSearchQuery(rawSearch);
 
     const where = {
       isPublished: true,
@@ -89,18 +235,16 @@ export async function GET(req) {
       };
     }
 
-    if (search?.trim()) {
-      const normalizedSearch = search
-        .trim()
-        .replace(/ي/g, "ی")
-        .replace(/ك/g, "ک");
-
+    // اگر عبارت فقط نام فروشگاه باشد، جست‌وجوی متنی اعمال نمی‌شود
+    // و همه محصولات منتشرشده با رعایت سایر فیلترها نمایش داده می‌شوند.
+    if (normalizedSearch) {
       const compactSearch = normalizedSearch
         .replace(/[\s\u200c]+/g, "")
         .toLowerCase();
 
       const searchTerms = new Set([normalizedSearch]);
 
+      // پشتیبانی از شکل‌های مختلف نوشتن لپ‌تاپ
       if (
         ["لپتاپ", "laptop", "notebook"].includes(compactSearch)
       ) {

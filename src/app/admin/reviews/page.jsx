@@ -1,57 +1,109 @@
+
 "use client";
 
 import { useEffect, useState } from "react";
+import { useUI } from "@/context/UIContext";
 
 const STARS = (rating) =>
   [1, 2, 3, 4, 5].map((i) => (
     <span
       key={i}
-      className={`leading-none ${i <= rating ? "text-yellow-400" : "text-gray-300 dark:text-zinc-600"
-        }`}
+      className={`leading-none ${
+        i <= rating
+          ? "text-yellow-400"
+          : "text-gray-300 dark:text-zinc-600"
+      }`}
     >
       ★
     </span>
   ));
 
 export default function AdminReviews() {
+  const { showToast, showConfirm } = useUI();
+
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("pending");
   const [updating, setUpdating] = useState(null);
+  const [deleting, setDeleting] = useState(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const [error, setError] = useState("");
 
-  const load = async () => {
-    setLoading(true);
-    setError("");
+  // دریافت نظرات
+  useEffect(() => {
+    const controller = new AbortController();
+    let ignore = false;
 
-    try {
-      const res = await fetch(`/api/admin/reviews?filter=${filter}`, {
+    fetch(
+      `/api/admin/reviews?filter=${encodeURIComponent(filter)}`,
+      {
         cache: "no-store",
+        signal: controller.signal,
+      }
+    )
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok) {
+          throw new Error(
+            data.error || "خطا در دریافت نظرات"
+          );
+        }
+
+        return data;
+      })
+      .then((data) => {
+        if (ignore) return;
+
+        setReviews(
+          Array.isArray(data.reviews)
+            ? data.reviews
+            : []
+        );
+
+        setError("");
+      })
+      .catch((error) => {
+        if (
+          ignore ||
+          error.name === "AbortError"
+        ) {
+          return;
+        }
+
+        console.error("LOAD REVIEWS ERROR:", error);
+
+        setError(
+          error.message || "خطا در ارتباط با سرور"
+        );
+
+        setReviews([]);
+      })
+      .finally(() => {
+        if (!ignore) {
+          setLoading(false);
+        }
       });
 
-      const data = await res.json();
+    return () => {
+      ignore = true;
+      controller.abort();
+    };
+  }, [filter, reloadKey]);
 
-      if (!res.ok) {
-        setError(data.error || "خطا در دریافت نظرات");
-        setReviews([]);
-        return;
-      }
+  // تغییر فیلتر
+  const handleFilterChange = (nextFilter) => {
+    if (filter === nextFilter) return;
 
-      setReviews(Array.isArray(data.reviews) ? data.reviews : []);
-    } catch (error) {
-      console.error("LOAD REVIEWS ERROR:", error);
-      setError("خطا در ارتباط با سرور");
-      setReviews([]);
-    } finally {
-      setLoading(false);
-    }
+    setLoading(true);
+    setError("");
+    setFilter(nextFilter);
   };
 
-  useEffect(() => {
-    load();
-  }, [filter]);
-
+  // تأیید یا رد نظر
   const handleApprove = async (id, approved) => {
+    if (updating !== null) return;
+
     setUpdating(id);
     setError("");
 
@@ -67,43 +119,80 @@ export default function AdminReviews() {
         }),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        setError(data.error || "خطا در تغییر وضعیت نظر");
+        setError(
+          data.error || "خطا در تغییر وضعیت نظر"
+        );
         return;
       }
 
-      await load();
+      showToast(
+        approved
+          ? "نظر با موفقیت تأیید شد."
+          : "تأیید نظر با موفقیت لغو شد.",
+        { type: "success" }
+      );
+
+      setLoading(true);
+      setReloadKey((prev) => prev + 1);
     } catch (error) {
       console.error("UPDATE REVIEW ERROR:", error);
+
       setError("خطا در ارتباط با سرور");
     } finally {
       setUpdating(null);
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!confirm("حذف این نظر؟")) return;
+  // حذف نظر
+  const handleDelete = async (review) => {
+    if (deleting !== null) return;
 
+    const confirmed = await showConfirm({
+      title: "حذف نظر مشتری",
+      description: `آیا از حذف نظر ثبت‌شده توسط «${review.user || "کاربر"}» مطمئن هستی؟ این عملیات قابل بازگشت نیست.`,
+      confirmText: "حذف نظر",
+      cancelText: "انصراف",
+      danger: true,
+    });
+
+    if (!confirmed) return;
+
+    setDeleting(review.id);
     setError("");
 
     try {
-      const res = await fetch(`/api/admin/reviews?id=${id}`, {
-        method: "DELETE",
-      });
+      const res = await fetch(
+        `/api/admin/reviews?id=${encodeURIComponent(review.id)}`,
+        {
+          method: "DELETE",
+        }
+      );
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        setError(data.error || "خطا در حذف نظر");
+        setError(
+          data.error || "خطا در حذف نظر"
+        );
         return;
       }
 
-      await load();
+      showToast(
+        data.message || "نظر با موفقیت حذف شد.",
+        { type: "success" }
+      );
+
+      setLoading(true);
+      setReloadKey((prev) => prev + 1);
     } catch (error) {
       console.error("DELETE REVIEW ERROR:", error);
+
       setError("خطا در ارتباط با سرور");
+    } finally {
+      setDeleting(null);
     }
   };
 
@@ -116,13 +205,16 @@ export default function AdminReviews() {
         </h1>
 
         <p className="mt-1 text-sm text-[var(--color-text-muted)]">
-          {reviews.length} نظر
+          {reviews.length.toLocaleString("fa-IR")} نظر
         </p>
       </div>
 
       {/* Error */}
       {error && (
-        <div className="mb-5 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-500">
+        <div
+          role="alert"
+          className="mb-5 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm leading-6 text-red-500"
+        >
           {error}
         </div>
       )}
@@ -138,11 +230,12 @@ export default function AdminReviews() {
             <button
               key={tab.key}
               type="button"
-              onClick={() => setFilter(tab.key)}
-              className={`h-10 rounded-xl px-4 text-sm font-medium transition ${filter === tab.key
+              onClick={() => handleFilterChange(tab.key)}
+              className={`h-10 rounded-xl px-4 text-sm font-medium transition ${
+                filter === tab.key
                   ? "bg-[var(--color-accent)] text-white"
                   : "border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] hover:border-[var(--color-accent)] hover:bg-[var(--color-surface-2)]"
-                }`}
+              }`}
             >
               {tab.label}
             </button>
@@ -162,13 +255,15 @@ export default function AdminReviews() {
         </div>
       ) : reviews.length === 0 ? (
         <div className="card py-14 text-center text-sm text-[var(--color-text-muted)]">
-          نظری یافت نشد
+          {error
+            ? "دریافت نظرات ناموفق بود."
+            : "نظری یافت نشد"}
         </div>
       ) : (
         <div className="space-y-3">
-          {reviews.map((r) => (
+          {reviews.map((review) => (
             <div
-              key={r.id}
+              key={review.id}
               className="card min-w-0 rounded-2xl p-4 sm:p-5"
             >
               <div className="flex min-w-0 flex-col gap-4">
@@ -177,73 +272,100 @@ export default function AdminReviews() {
                   {/* User + Rating + Status */}
                   <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
                     <span className="truncate text-sm font-semibold text-[var(--color-text)]">
-                      {r.user || "کاربر"}
+                      {review.user || "کاربر"}
                     </span>
 
                     <div
                       className="flex shrink-0 items-center gap-0.5 text-sm"
-                      aria-label={`امتیاز ${r.rating} از 5`}
+                      aria-label={`امتیاز ${review.rating} از 5`}
                     >
-                      {STARS(r.rating)}
+                      {STARS(review.rating)}
                     </div>
 
                     <span
-                      className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-lg px-2.5 py-1.5 text-xs font-medium ${r.approved
+                      className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-lg px-2.5 py-1.5 text-xs font-medium ${
+                        review.approved
                           ? "bg-green-500/10 text-green-500"
                           : "bg-yellow-500/10 text-yellow-500"
-                        }`}
+                      }`}
                     >
-                      {r.approved ? "تایید شده" : "در انتظار"}
+                      {review.approved
+                        ? "تایید شده"
+                        : "در انتظار"}
                     </span>
                   </div>
 
                   {/* Comment */}
-                  <p className="mt-3 text-sm leading-7 text-[var(--color-text)] break-words">
-                    {r.comment || "—"}
+                  <p className="mt-3 break-words text-sm leading-7 text-[var(--color-text)]">
+                    {review.comment || "—"}
                   </p>
 
                   {/* Product + Date */}
                   <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[var(--color-text-muted)]">
-                    <span className="truncate max-w-full">
-                      {r.product?.title || "کالای نامشخص"}
+                    <span className="max-w-full truncate">
+                      {review.product?.title || "کالای نامشخص"}
                     </span>
 
-                    <span className="hidden sm:inline">—</span>
+                    <span className="hidden sm:inline">
+                      —
+                    </span>
 
                     <span className="whitespace-nowrap">
-                      {new Date(r.createdAt).toLocaleDateString("fa-IR")}
+                      {new Date(
+                        review.createdAt
+                      ).toLocaleDateString("fa-IR")}
                     </span>
                   </div>
                 </div>
 
                 {/* Actions */}
                 <div className="flex w-full flex-wrap gap-2 border-t border-[var(--color-border)] pt-3 sm:w-auto sm:justify-end sm:border-t-0 sm:pt-0">
-                  {!r.approved ? (
+                  {!review.approved ? (
                     <button
                       type="button"
-                      onClick={() => handleApprove(r.id, true)}
-                      disabled={updating === r.id}
+                      onClick={() =>
+                        handleApprove(review.id, true)
+                      }
+                      disabled={
+                        updating !== null ||
+                        deleting !== null
+                      }
                       className="h-9 min-w-[92px] rounded-lg bg-green-500/10 px-3 text-xs font-medium text-green-500 transition hover:bg-green-500/20 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      {updating === r.id ? "..." : "تایید"}
+                      {updating === review.id
+                        ? "..."
+                        : "تایید"}
                     </button>
                   ) : (
                     <button
                       type="button"
-                      onClick={() => handleApprove(r.id, false)}
-                      disabled={updating === r.id}
+                      onClick={() =>
+                        handleApprove(review.id, false)
+                      }
+                      disabled={
+                        updating !== null ||
+                        deleting !== null
+                      }
                       className="h-9 min-w-[92px] rounded-lg bg-yellow-500/10 px-3 text-xs font-medium text-yellow-600 transition hover:bg-yellow-500/20 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      {updating === r.id ? "..." : "رد تایید"}
+                      {updating === review.id
+                        ? "..."
+                        : "رد تایید"}
                     </button>
                   )}
 
                   <button
                     type="button"
-                    onClick={() => handleDelete(r.id)}
-                    className="h-9 min-w-[92px] rounded-lg border border-red-500/20 bg-red-500/10 px-3 text-xs font-medium text-red-500 transition hover:bg-red-500/20"
+                    onClick={() => handleDelete(review)}
+                    disabled={
+                      deleting !== null ||
+                      updating !== null
+                    }
+                    className="h-9 min-w-[92px] rounded-lg border border-red-500/20 bg-red-500/10 px-3 text-xs font-medium text-red-500 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    حذف
+                    {deleting === review.id
+                      ? "در حال حذف..."
+                      : "حذف"}
                   </button>
                 </div>
               </div>

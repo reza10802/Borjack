@@ -1,13 +1,17 @@
 // Explicit allowlist for supplier product views.
-// Internal ownership fields are never exposed.
+// Internal ownership and commission fields are never exposed.
 export const PRODUCT_LIST_SELECT = {
   id: true,
   title: true,
   slug: true,
   image: true,
+
+  // Supplier's own base price and customer-facing prices
+  basePrice: true,
   price: true,
   originalPrice: true,
   discount: true,
+
   stock: true,
   reservedStock: true,
   isPublished: true,

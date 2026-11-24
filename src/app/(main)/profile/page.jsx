@@ -4,6 +4,7 @@
 import { useEffect, useState, useCallback, Suspense } from "react";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
+import { useUI } from "@/context/UIContext";
 import { useRouter, useSearchParams } from "next/navigation";
 import BackButton from "@/components/BackButton";
 import {
@@ -38,9 +39,8 @@ const FULFILLMENT_STATUS_COLORS = {
 };
 
 const SHIPPING_METHOD_LABELS = {
-    POST: "پست",
-    TIPAX: "تیپاکس",
-    SNAPPBOX: "اسنپ‌باکس",
+    POST: "پست عادی",
+    POST_EXPRESS: "پست پیشتاز",
 };
 
 function formatDate(value) {
@@ -57,6 +57,7 @@ function formatDate(value) {
 
 function ProfileContent() {
     const { user, loading, logout, setUser } = useAuth();
+    const { showToast, showConfirm } = useUI();
 
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -223,7 +224,10 @@ function ProfileContent() {
             setCopiedTrackingCode(fulfillmentId);
         } catch (error) {
             console.error("COPY_TRACKING_CODE_ERROR", error);
-            alert("کپی کد رهگیری انجام نشد");
+
+            showToast("کپی کد رهگیری انجام نشد", {
+                type: "error",
+            });
         }
     };
 
@@ -307,40 +311,62 @@ function ProfileContent() {
             const data = await res.json().catch(() => ({}));
 
             if (!res.ok || !data?.paymentUrl) {
-                alert(
-                    data?.error || "امکان شروع پرداخت وجود ندارد"
+                showToast(
+                    data?.error || "امکان شروع پرداخت وجود ندارد",
+                    { type: "error" }
                 );
                 return;
             }
 
             window.location.assign(data.paymentUrl);
-        } catch {
-            alert("خطا در ارتباط با سرور");
+        } catch (error) {
+            console.error("CONTINUE PAYMENT ERROR:", error);
+
+            showToast("خطا در ارتباط با سرور", {
+                type: "error",
+            });
         }
     };
 
     const cancelOrder = async (id) => {
-        if (!confirm("این سفارش لغو شود؟")) {
-            return;
-        }
+        const confirmed = await showConfirm({
+            title: "لغو سفارش",
+            description: "آیا از لغو این سفارش مطمئن هستید؟",
+            confirmText: "لغو سفارش",
+            cancelText: "بازگشت",
+            danger: true,
+        });
+
+        if (!confirmed) return;
 
         try {
             const res = await fetch(`/api/order/${id}`, {
                 method: "DELETE",
             });
 
-            if (!res.ok) {
-                const data = await res.json().catch(() => ({}));
+            const data = await res.json().catch(() => ({}));
 
-                alert(data.error || "لغو سفارش انجام نشد");
+            if (!res.ok) {
+                showToast(
+                    data.error || "لغو سفارش انجام نشد",
+                    { type: "error" }
+                );
                 return;
             }
 
             setOrders((prev) =>
                 prev.filter((order) => order.id !== id)
             );
+
+            showToast("سفارش با موفقیت لغو شد.", {
+                type: "success",
+            });
         } catch (error) {
-            console.error(error);
+            console.error("CANCEL ORDER ERROR:", error);
+
+            showToast("خطا در ارتباط با سرور هنگام لغو سفارش", {
+                type: "error",
+            });
         }
     };
 

@@ -1,7 +1,9 @@
+
 "use client";
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { useUI } from "@/context/UIContext";
 import Modal from "@/components/ui/Modal";
 import Select from "react-select";
 import { selectStyles } from "@/components/ui/selectStyles";
@@ -23,6 +25,7 @@ const ROLE_COLORS = {
 
 export default function AdminUsersPage() {
   const { user: me } = useAuth();
+  const { showConfirm, showToast } = useUI();
 
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -44,57 +47,107 @@ export default function AdminUsersPage() {
     );
   });
 
-  const load = async () => {
-    setError("");
-    setLoading(true);
-
-    try {
-      const res = await fetch("/api/admin/users", {
-        cache: "no-store",
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setError(data.error || "خطا در دریافت کاربران");
-        setUsers([]);
-        return;
-      }
-
-      setUsers(Array.isArray(data.users) ? data.users : []);
-    } catch (error) {
-      console.error("LOAD USERS ERROR:", error);
-      setError("خطا در ارتباط با سرور");
-      setUsers([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // دریافت کاربران
   useEffect(() => {
-    load();
+    const controller = new AbortController();
+    let ignore = false;
+
+    async function loadUsers() {
+      try {
+        const res = await fetch("/api/admin/users", {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok) {
+          throw new Error(
+            data.error || "خطا در دریافت کاربران"
+          );
+        }
+
+        if (!ignore) {
+          setUsers(
+            Array.isArray(data.users)
+              ? data.users
+              : []
+          );
+
+          setError("");
+        }
+      } catch (error) {
+        if (
+          ignore ||
+          error.name === "AbortError"
+        ) {
+          return;
+        }
+
+        console.error("LOAD USERS ERROR:", error);
+
+        setError(
+          error.message || "خطا در ارتباط با سرور"
+        );
+
+        setUsers([]);
+      } finally {
+        if (!ignore) {
+          setLoading(false);
+        }
+      }
+    }
+
+    loadUsers();
+
+    return () => {
+      ignore = true;
+      controller.abort();
+    };
   }, []);
 
-  // Sends a role / status change. When the server reports that products will be archived it
-  // answers 409 + requiresConfirmation (with the product count in its message). We show that
-  // message and re-send with confirm: true only if the admin agrees.
+  // ارسال درخواست تغییر نقش یا وضعیت کاربر
+  // در صورت نیاز، ابتدا تأیید مجدد ادمین دریافت می‌شود.
   const sendUserChange = async (userId, method, payload) => {
-    let confirm = false;
+    let confirmedArchive = false;
 
     for (let attempt = 0; attempt < 2; attempt++) {
-      const res = await fetch(`/api/admin/users/${userId}`, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ ...payload, confirm }),
-      });
+      const res = await fetch(
+        `/api/admin/users/${userId}`,
+        {
+          method,
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            ...payload,
+            confirm: confirmedArchive,
+          }),
+        }
+      );
 
       const data = await res.json().catch(() => ({}));
 
-      if (res.status === 409 && data.requiresConfirmation && !confirm) {
-        if (!window.confirm(data.error)) return { cancelled: true };
-        confirm = true;
+      if (
+        res.status === 409 &&
+        data.requiresConfirmation &&
+        !confirmedArchive
+      ) {
+        const shouldContinue = await showConfirm({
+          title: "تأیید عملیات و آرشیو محصولات",
+          description:
+            data.error ||
+            "این عملیات ممکن است باعث آرشیو محصولات کاربر شود. آیا ادامه می‌دهید؟",
+          confirmText: "ادامه عملیات",
+          cancelText: "انصراف",
+          danger: true,
+        });
+
+        if (!shouldContinue) {
+          return { cancelled: true };
+        }
+
+        confirmedArchive = true;
         continue;
       }
 
@@ -104,20 +157,40 @@ export default function AdminUsersPage() {
     return { cancelled: true };
   };
 
+  // تغییر نقش کاربر
   const changeRole = async (userId, role) => {
-    if (!role) return;
+    if (!role || updating !== null || toggling !== null) {
+      return;
+    }
 
     const target = users.find((u) => u.id === userId);
-    if (target && target.role === role) return;
 
-    if (!window.confirm(`نقش «${target?.name}» از ${ROLE_LABELS[target?.role] ?? target?.role} به ${ROLE_LABELS[role] ?? role} تغییر کند؟`)) return;
+    if (!target || target.role === role) return;
+
+    const confirmed = await showConfirm({
+      title: "تغییر نقش کاربر",
+      description:
+        `نقش «${target.name || "کاربر"}» از ` +
+        `${ROLE_LABELS[target.role] ?? target.role} به ` +
+        `${ROLE_LABELS[role] ?? role} تغییر کند؟`,
+      confirmText: "تغییر نقش",
+      cancelText: "انصراف",
+    });
+
+    if (!confirmed) return;
 
     setUpdating(userId);
     setError("");
 
     try {
-      const result = await sendUserChange(userId, "PATCH", { role });
+      const result = await sendUserChange(
+        userId,
+        "PATCH",
+        { role }
+      );
+
       if (result.cancelled) return;
+
       const { res, data } = result;
 
       if (!res.ok) {
@@ -126,11 +199,18 @@ export default function AdminUsersPage() {
       }
 
       setUsers((prev) =>
-        prev.map((u) => (u.id === userId ? data.user : u))
+        prev.map((u) =>
+          u.id === userId ? data.user : u
+        )
       );
 
       setSelectedUser((prev) =>
         prev?.id === userId ? data.user : prev
+      );
+
+      showToast(
+        data.message || "نقش کاربر با موفقیت تغییر کرد.",
+        { type: "success" }
       );
     } catch (error) {
       console.error("CHANGE ROLE ERROR:", error);
@@ -140,13 +220,24 @@ export default function AdminUsersPage() {
     }
   };
 
+  // تغییر وضعیت فعال یا مسدود بودن کاربر
   const toggleUserStatus = async (userId, isActive) => {
+    if (toggling !== null || updating !== null) {
+      return;
+    }
+
     setToggling(userId);
     setError("");
 
     try {
-      const result = await sendUserChange(userId, "PUT", { isActive });
+      const result = await sendUserChange(
+        userId,
+        "PUT",
+        { isActive }
+      );
+
       if (result.cancelled) return;
+
       const { res, data } = result;
 
       if (!res.ok) {
@@ -155,11 +246,20 @@ export default function AdminUsersPage() {
       }
 
       setUsers((prev) =>
-        prev.map((u) => (u.id === userId ? data.user : u))
+        prev.map((u) =>
+          u.id === userId ? data.user : u
+        )
       );
 
       setSelectedUser((prev) =>
         prev?.id === userId ? data.user : prev
+      );
+
+      showToast(
+        isActive
+          ? "حساب کاربر با موفقیت فعال شد."
+          : "حساب کاربر با موفقیت مسدود شد.",
+        { type: "success" }
       );
     } catch (error) {
       console.error("TOGGLE USER STATUS ERROR:", error);
@@ -169,9 +269,16 @@ export default function AdminUsersPage() {
     }
   };
 
+  // نمایش اطلاعات کاربر
   const openUserModal = (user) => {
     setSelectedUser(user);
     setShowModal(true);
+  };
+
+  // بستن اطلاعات کاربر
+  const closeUserModal = () => {
+    setShowModal(false);
+    setSelectedUser(null);
   };
 
   return (
@@ -183,13 +290,16 @@ export default function AdminUsersPage() {
         </h1>
 
         <p className="mt-1 text-sm text-[var(--color-text-muted)]">
-          {filteredUsers.length} کاربر
+          {filteredUsers.length.toLocaleString("fa-IR")} کاربر
         </p>
       </div>
 
       {/* Error */}
       {error && (
-        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400">
+        <div
+          role="alert"
+          className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400"
+        >
           {error}
         </div>
       )}
@@ -292,9 +402,10 @@ export default function AdminUsersPage() {
                       {/* Role */}
                       <td className="px-4 py-4 text-center align-middle">
                         <span
-                          className={`inline-flex min-w-[72px] justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium ${ROLE_COLORS[u.role] ||
+                          className={`inline-flex min-w-[72px] justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium ${
+                            ROLE_COLORS[u.role] ||
                             "bg-[var(--color-surface-2)] text-[var(--color-text-muted)]"
-                            }`}
+                          }`}
                         >
                           {ROLE_LABELS[u.role] || u.role}
                         </span>
@@ -303,10 +414,11 @@ export default function AdminUsersPage() {
                       {/* Status */}
                       <td className="px-4 py-4 text-center align-middle">
                         <span
-                          className={`inline-flex min-w-[72px] justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium ${u.isActive
-                            ? "bg-green-500/10 text-green-500"
-                            : "bg-red-500/10 text-red-500"
-                            }`}
+                          className={`inline-flex min-w-[72px] justify-center whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium ${
+                            u.isActive
+                              ? "bg-green-500/10 text-green-500"
+                              : "bg-red-500/10 text-red-500"
+                          }`}
                         >
                           {u.isActive ? "فعال" : "مسدود"}
                         </span>
@@ -346,7 +458,10 @@ export default function AdminUsersPage() {
                                       label: "تأمین‌کننده",
                                     },
                                   ]}
-                                  isDisabled={updating === u.id}
+                                  isDisabled={
+                                    updating === u.id ||
+                                    toggling === u.id
+                                  }
                                   styles={{
                                     ...selectStyles,
                                     control: (base, state) => ({
@@ -366,11 +481,15 @@ export default function AdminUsersPage() {
                                 onClick={() =>
                                   toggleUserStatus(u.id, !u.isActive)
                                 }
-                                disabled={toggling === u.id}
-                                className={`h-9 shrink-0 rounded-lg px-4 text-xs text-white transition disabled:cursor-not-allowed disabled:opacity-50 ${u.isActive
-                                  ? "bg-red-500 hover:bg-red-600"
-                                  : "bg-green-500 hover:bg-green-600"
-                                  }`}
+                                disabled={
+                                  toggling === u.id ||
+                                  updating === u.id
+                                }
+                                className={`h-9 shrink-0 rounded-lg px-4 text-xs text-white transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                                  u.isActive
+                                    ? "bg-red-500 hover:bg-red-600"
+                                    : "bg-green-500 hover:bg-green-600"
+                                }`}
                               >
                                 {toggling === u.id
                                   ? "..."
@@ -400,10 +519,7 @@ export default function AdminUsersPage() {
       {/* User Modal */}
       <Modal
         open={showModal}
-        onClose={() => {
-          setShowModal(false);
-          setSelectedUser(null);
-        }}
+        onClose={closeUserModal}
         title="اطلاعات کاربر"
       >
         {selectedUser && (
@@ -450,9 +566,9 @@ export default function AdminUsersPage() {
               <span className="font-semibold">تاریخ عضویت</span>
               <span className="text-[var(--color-text-muted)]">
                 {selectedUser.createdAt
-                  ? new Date(selectedUser.createdAt).toLocaleDateString(
-                    "fa-IR"
-                  )
+                  ? new Date(
+                      selectedUser.createdAt
+                    ).toLocaleDateString("fa-IR")
                   : "—"}
               </span>
             </div>

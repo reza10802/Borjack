@@ -2,6 +2,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useUI } from "@/context/UIContext";
 
 const STATUS_CONFIG = {
   TODO: {
@@ -67,6 +68,8 @@ function isOverdue(task) {
 }
 
 export default function SupplierTasksPage() {
+  const { showToast } = useUI();
+
   const [tasks, setTasks] = useState([]);
   const [drafts, setDrafts] = useState({});
 
@@ -191,7 +194,10 @@ export default function SupplierTasksPage() {
     }
 
     if (draft.supplierResponse.length > 5000) {
-      alert("پاسخ نمی‌تواند بیشتر از ۵۰۰۰ کاراکتر باشد.");
+      showToast(
+        "پاسخ نمی‌تواند بیشتر از ۵۰۰۰ کاراکتر باشد.",
+        { type: "warning" }
+      );
       return;
     }
 

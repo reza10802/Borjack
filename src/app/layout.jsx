@@ -6,39 +6,27 @@ import SWRegister from "./sw-register";
 import InstallPrompt from "@/components/pwa/InstallPrompt";
 import CustomerAssistant from "@/components/assistant/CustomerAssistant";
 import { safeJsonLd } from "@/lib/json-ld";
+import { UIProvider } from "@/context/UIContext";
 
 const BASE_URL = (
   process.env.NEXT_PUBLIC_SITE_URL || "https://borjak.site"
 ).replace(/\/+$/, "");
 
-const SITE_TITLE =
-  "برجک | فروشگاه اینترنتی موبایل، لپ‌تاپ و پوشاک";
+const SITE_TITLE = "برجک | فروشگاه اینترنتی Borjak";
 
 const SITE_DESCRIPTION =
-  "در فروشگاه اینترنتی برجک، محصولات دیجیتال و پوشاک را بررسی کنید، مشخصات و قیمت محصولات را ببینید و گزینه مناسب خود را انتخاب کنید.";
+  "برجک (Borjak)، فروشگاه اینترنتی برای مشاهده، بررسی و خرید کالاهای متنوع از فروشندگان مختلف. محصولات و قیمت‌ها را بررسی کنید و سفارش خود را آنلاین ثبت کنید.";
 
 const SHARE_IMAGE = "/images/og-image.png";
-
-const websiteJsonLd = {
-  "@context": "https://schema.org",
-  "@type": "WebSite",
-  name: "برجک",
-  alternateName: ["Borjak", "borjak.site"],
-  url: `${BASE_URL}/`,
-  potentialAction: {
-    "@type": "SearchAction",
-    target: `${BASE_URL}/search?q={search_term_string}`,
-    "query-input": "required name=search_term_string",
-  },
-};
 
 const organizationJsonLd = {
   "@context": "https://schema.org",
   "@type": "Organization",
+  "@id": `${BASE_URL}/#organization`,
   name: "برجک",
-  alternateName: "Borjak",
+  alternateName: ["Borjak", "Borjack", "وب شاپ برجک", "وبشاپ برجک", "fv[;", ",fah\ fv[;"],
   description:
-    "فروشگاه اینترنتی برجک برای بررسی و خرید محصولات دیجیتال و پوشاک.",
+    "برجک، فروشگاه اینترنتی برای مشاهده و خرید کالاهای متنوع از فروشندگان مختلف.",
   url: `${BASE_URL}/`,
   logo: `${BASE_URL}/images/logo.png`,
   sameAs: [
@@ -47,8 +35,22 @@ const organizationJsonLd = {
   ],
 };
 
+const websiteJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  "@id": `${BASE_URL}/#website`,
+  name: "برجک",
+  alternateName: ["Borjak", "Borjack"],
+  url: `${BASE_URL}/`,
+  publisher: {
+    "@id": `${BASE_URL}/#organization`,
+  },
+};
+
 export const metadata = {
   metadataBase: new URL(BASE_URL),
+
+  applicationName: "برجک",
 
   title: {
     default: SITE_TITLE,
@@ -69,7 +71,7 @@ export const metadata = {
         url: SHARE_IMAGE,
         width: 1200,
         height: 630,
-        alt: "پیش‌نمایش فروشگاه اینترنتی برجک",
+        alt: "فروشگاه اینترنتی برجک",
       },
     ],
   },
@@ -81,7 +83,7 @@ export const metadata = {
     images: [
       {
         url: SHARE_IMAGE,
-        alt: "پیش‌نمایش فروشگاه اینترنتی برجک",
+        alt: "فروشگاه اینترنتی برجک",
       },
     ],
   },
@@ -108,13 +110,15 @@ export default function RootLayout({ children }) {
         />
 
         <ThemeProvider>
-          <AuthProvider>
-            <CartProvider>
-              {children}
-              <InstallPrompt />
-              <CustomerAssistant />
-            </CartProvider>
-          </AuthProvider>
+          <UIProvider>
+            <AuthProvider>
+              <CartProvider>
+                {children}
+                <InstallPrompt />
+                <CustomerAssistant />
+              </CartProvider>
+            </AuthProvider>
+          </UIProvider>
         </ThemeProvider>
       </body>
     </html>

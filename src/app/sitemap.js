@@ -71,7 +71,7 @@ export default async function sitemap() {
 
   return [
     {
-      url: BASE_URL,
+      url: `${BASE_URL}/`,
       changeFrequency: "daily",
       priority: 1,
     },
