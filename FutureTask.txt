@@ -1,4 +1,0 @@
-reistering supplier through webShop
-offs% code
-snapp pay
-check user registration at first if its registered or not for showing toast this user doesn't exist
