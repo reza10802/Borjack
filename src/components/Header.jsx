@@ -15,8 +15,8 @@ const staticNavLinks = [
     { label: "ارتباط با ما", href: "/contact" },
 ];
 
-function getCategoryHref(title) {
-    return `/search?${new URLSearchParams({ category: title }).toString()}`;
+function getCategoryHref(category) {
+    return `/category/${encodeURIComponent(category.slug)}`;
 }
 
 function ChevronDown({ className = "" }) {
@@ -332,7 +332,7 @@ export default function Header() {
                                             {categories.map((category) => (
                                                 <Link
                                                     key={category.id}
-                                                    href={getCategoryHref(category.title)}
+                                                    href={getCategoryHref(category)}
                                                     onClick={() => setMegaMenuOpen(false)}
                                                     className="group flex min-h-[74px] items-center justify-between gap-2 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-3 transition duration-200 hover:-translate-y-0.5 hover:border-[var(--color-accent)] hover:bg-[var(--color-surface-2)] hover:shadow-md sm:px-4"
                                                 >
@@ -406,7 +406,7 @@ export default function Header() {
                                         categories.map((category) => (
                                             <Link
                                                 key={category.id}
-                                                href={getCategoryHref(category.title)}
+                                                href={getCategoryHref(category)}
                                                 onClick={closeMobileMenu}
                                                 className="rounded-xl bg-[var(--color-surface)] px-3 py-2.5 text-sm text-[var(--color-text)] transition hover:text-[var(--color-accent)]"
                                             >

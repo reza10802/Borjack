@@ -92,6 +92,11 @@ export default function HeroSlider() {
     <section
       className="relative my-8 h-[320px] sm:h-[420px] lg:h-[520px] lg:my-10 overflow-hidden rounded-3xl border border-zinc-200/50 dark:border-zinc-700/50 bg-white dark:bg-[#1E2640] shadow-xl shadow-black/5 dark:shadow-black/30"
     >
+
+      <h1 className="absolute right-6 top-5 z-20 rounded-full border border-white/20 bg-black/15 px-3 py-1.5 text-xs font-bold text-white/95 backdrop-blur-sm sm:right-10 sm:top-6 sm:text-sm lg:right-20">
+        فروشگاه اینترنتی برجک
+      </h1>
+      
       <Swiper
         modules={[Navigation, Autoplay]}
         autoplay={{

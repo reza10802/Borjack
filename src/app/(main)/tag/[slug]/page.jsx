@@ -1,13 +1,26 @@
+
 import Breadcrumb from "@/components/Breadcrumb";
 import ProductCard from "@/components/ProductCard";
 import { prisma } from "@/lib/db";
 import { notFound } from "next/navigation";
 import { PUBLIC_CARD_SELECT, toPublicCardProduct } from "@/lib/public-product";
 
+export const metadata = {
+    title: "برچسب محصولات",
+    description: "مشاهده محصولات فروشگاه اینترنتی برجک بر اساس برچسب.",
+    robots: {
+        index: false,
+        follow: true,
+    },
+};
+
 async function getTag(slug) {
     return prisma.tag.findUnique({
-        where: {
-            slug,
+        where: { slug },
+        select: {
+            id: true,
+            title: true,
+            slug: true,
         },
     });
 }
@@ -17,7 +30,6 @@ async function getProducts(tagId) {
         where: {
             isPublished: true,
             deletedAt: null,
-
             tags: {
                 some: {
                     tagId,
@@ -25,7 +37,6 @@ async function getProducts(tagId) {
             },
         },
         select: PUBLIC_CARD_SELECT,
-
         orderBy: {
             createdAt: "desc",
         },
@@ -39,12 +50,14 @@ export default async function TagPage({ params }) {
 
     const tag = await getTag(slug);
 
-    if (!tag) notFound();
+    if (!tag) {
+        notFound();
+    }
 
     const products = await getProducts(tag.id);
 
     return (
-        <div className="container-page py-10">
+        <main className="container-page py-10">
             <Breadcrumb
                 items={[
                     {
@@ -56,30 +69,34 @@ export default async function TagPage({ params }) {
                     },
                 ]}
             />
-            <div className="mb-10">
+
+            <header className="mb-10">
                 <h1 className="section-title">
                     محصولات برچسب {tag.title}
                 </h1>
 
                 <p className="muted mt-2">
-                    {products.length} محصول
+                    {products.length.toLocaleString("fa-IR")} محصول
                 </p>
-            </div>
+            </header>
 
             {products.length === 0 ? (
                 <div className="card py-16 text-center text-zinc-500">
-                    محصولی برای این برچسب وجود ندارد.
+                    محصول منتشرشده‌ای برای این برچسب وجود ندارد.
                 </div>
             ) : (
-                <div className="grid gap-7 grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+                <section
+                    aria-label={`محصولات برچسب ${tag.title}`}
+                    className="grid grid-cols-2 gap-4 sm:gap-6 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5"
+                >
                     {products.map((product) => (
                         <ProductCard
                             key={product.id}
                             product={product}
                         />
                     ))}
-                </div>
+                </section>
             )}
-        </div>
+        </main>
     );
 }

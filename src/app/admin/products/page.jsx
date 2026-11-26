@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState } from "react";
@@ -18,6 +19,8 @@ import {
   PricingError,
 } from "@/lib/pricing";
 
+const MAX_PRODUCT_STOCK = 1000000;
+
 const emptyForm = {
   title: "",
   basePrice: "",
@@ -27,7 +30,7 @@ const emptyForm = {
   gallery: [],
   description: "",
   supplierId: "",
-  stock: 0,
+  stock: "0",
   specs: [],
 };
 
@@ -151,10 +154,14 @@ const selectStyles = {
   }),
 };
 
+function getSafeInteger(value, fallback = 0) {
+  const number = Number(value);
+
+  return Number.isSafeInteger(number) ? number : fallback;
+}
+
 /**
- * نمایش گالری تصاویر در کارت محصول ادمین
- * تصویر اصلی و تصاویر اضافی در اندازه یکسان نمایش داده می‌شوند.
- * با کلیک روی هر تصویر، نسخه بزرگ آن باز می‌شود.
+ * نمایش گالری تصاویر محصولات در پنل مدیریت
  */
 function ProductImageGallery({ product }) {
   const [selectedImage, setSelectedImage] = useState(null);
@@ -163,12 +170,11 @@ function ProductImageGallery({ product }) {
     product?.image,
     ...(Array.isArray(product?.images)
       ? product.images.map((item) =>
-        typeof item === "string" ? item : item?.url
-      )
+          typeof item === "string" ? item : item?.url
+        )
       : []),
   ];
 
-  // حذف آدرس‌های خالی و تصاویر تکراری
   const imageUrls = [
     ...new Set(
       rawImages
@@ -180,7 +186,6 @@ function ProductImageGallery({ product }) {
     ),
   ];
 
-  // بستن تصویر بزرگ با کلید Escape
   useEffect(() => {
     if (!selectedImage) return;
 
@@ -215,7 +220,7 @@ function ProductImageGallery({ product }) {
         </div>
 
         {imageUrls.length > 0 ? (
-          <div className="grid grid-cols-2 justify-items-start gap-3 sm:grid-cols-3 xl:grid-cols-3">
+          <div className="grid grid-cols-2 justify-items-start gap-3 sm:grid-cols-3">
             {imageUrls.map((url, index) => (
               <button
                 key={`${url}-${index}`}
@@ -234,9 +239,7 @@ function ProductImageGallery({ product }) {
                 />
 
                 <span className="absolute bottom-2 right-2 rounded-md bg-black/70 px-2 py-1 text-[10px] font-medium text-white">
-                  {index === 0
-                    ? "تصویر اصلی"
-                    : `تصویر ${index + 1}`}
+                  {index === 0 ? "تصویر اصلی" : `تصویر ${index + 1}`}
                 </span>
 
                 <span className="absolute inset-0 flex items-center justify-center bg-black/0 text-xs font-medium text-white opacity-0 transition group-hover:bg-black/35 group-hover:opacity-100">
@@ -263,7 +266,6 @@ function ProductImageGallery({ product }) {
         )}
       </section>
 
-      {/* نمایش بزرگ تصویر */}
       {selectedImage && (
         <div
           role="dialog"
@@ -303,7 +305,6 @@ function ProductImageGallery({ product }) {
 
 /**
  * راهنمای عکاسی محصول
- * این راهنما در فرم ادمین و کنار بخش آپلود تصاویر نمایش داده می‌شود.
  */
 function ProductImageGuide() {
   const tips = [
@@ -382,7 +383,7 @@ function ProductImageGuide() {
             حداکثر حجم هر تصویر
           </p>
           <p className="mt-1 text-sm font-bold text-[var(--color-text)]">
-            فرمت‌های معمول: ۱۵ مگابایت
+            ۱۵ مگابایت
           </p>
           <p className="mt-1 text-sm font-bold text-[var(--color-accent)]">
             HEIC و HEIF: ۲۵ مگابایت
@@ -403,7 +404,9 @@ function ProductImageGuide() {
       </div>
 
       <p className="mt-3 rounded-xl bg-[var(--color-accent)]/10 p-3 text-xs leading-6 text-[var(--color-text-muted)]">
-        لازم نیست عکس‌ها را قبل از آپلود تغییر اندازه بدهی. تصاویر در سرور به‌صورت خودکار بهینه و به فرمت WebP تبدیل می‌شوند. نسبت اصلی تصویر حفظ می‌شود.
+        لازم نیست عکس‌ها را قبل از آپلود تغییر اندازه بدهی. تصاویر
+        در سرور به‌صورت خودکار بهینه و به فرمت WebP تبدیل می‌شوند.
+        نسبت اصلی تصویر حفظ می‌شود.
       </p>
     </aside>
   );
@@ -504,7 +507,7 @@ export default function AdminProductsPage() {
     return () => controller.abort();
   }, [view]);
 
-  // دریافت دسته‌بندی‌ها و تأمین‌کنندگان هنگام بازشدن فرم
+  // دریافت دسته‌بندی‌ها و تأمین‌کنندگان
   useEffect(() => {
     if (!showForm || !isAdmin) return;
 
@@ -608,7 +611,7 @@ export default function AdminProductsPage() {
     setView(nextView);
   };
 
-  // نگه‌داشتن محصول فقط در فیلتر متناسب با وضعیت جدیدش
+  // بررسی باقی‌ماندن محصول در فهرست فعلی
   const keepProductInCurrentView = (product) => {
     if (view === "archived") {
       return Boolean(product.deletedAt);
@@ -624,66 +627,6 @@ export default function AdminProductsPage() {
       !expectedStatus ||
       product.reviewStatus === expectedStatus
     );
-  };
-
-  // تغییر سریع موجودی
-  const toggleStock = async (product) => {
-    try {
-      const reservedStock =
-        Number(product.reservedStock) || 0;
-
-      const availableStock =
-        Number(product.stock) - reservedStock;
-
-      const nextStock =
-        availableStock > 0
-          ? reservedStock
-          : reservedStock + 1;
-
-      const res = await fetch(
-        `/api/admin/products/${product.id}`,
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            stock: nextStock,
-          }),
-        }
-      );
-
-      const data = await res.json().catch(() => ({}));
-
-      if (!res.ok) {
-        showToast(
-          data.error || "خطا در تغییر موجودی",
-          { type: "error" }
-        );
-        return;
-      }
-
-      setProducts((prev) =>
-        prev.map((item) =>
-          item.id === product.id
-            ? {
-              ...item,
-              ...data.product,
-            }
-            : item
-        )
-      );
-
-      showToast("موجودی محصول به‌روزرسانی شد.", {
-        type: "success",
-      });
-    } catch (error) {
-      console.error("TOGGLE STOCK ERROR:", error);
-
-      showToast("خطا در ارتباط با سرور", {
-        type: "error",
-      });
-    }
   };
 
   // آرشیو محصول
@@ -860,9 +803,9 @@ export default function AdminProductsPage() {
           .map((item) =>
             item.id === product.id
               ? {
-                ...item,
-                ...data.product,
-              }
+                  ...item,
+                  ...data.product,
+                }
               : item
           )
           .filter(keepProductInCurrentView)
@@ -951,9 +894,9 @@ export default function AdminProductsPage() {
             nextPublished
               ? { isPublished: true }
               : {
-                isPublished: false,
-                reviewNote,
-              }
+                  isPublished: false,
+                  reviewNote,
+                }
           ),
         }
       );
@@ -972,10 +915,10 @@ export default function AdminProductsPage() {
         prev.map((item) =>
           item.id === product.id
             ? {
-              ...item,
-              isPublished: data.isPublished,
-              reviewNote: data.reviewNote,
-            }
+                ...item,
+                isPublished: data.isPublished,
+                reviewNote: data.reviewNote,
+              }
             : item
         )
       );
@@ -995,17 +938,20 @@ export default function AdminProductsPage() {
     }
   };
 
-  // پیش‌نمایش قیمت‌گذاری؛ محاسبه نهایی و ذخیره قیمت فقط در سرور انجام می‌شود.
+  // پیش‌نمایش قیمت‌گذاری
   const hasBasePriceInput =
     form.basePrice !== "" && form.basePrice !== null;
+
   const previewBasePrice = hasBasePriceInput
     ? Number(form.basePrice)
     : null;
+
   const previewDiscount =
     form.discount === "" ? NaN : Number(form.discount);
 
   const isLegacyProductWithoutBasePrice =
     Boolean(editingProduct && editingProduct.basePrice == null);
+
   const preserveLegacyPricing =
     isLegacyProductWithoutBasePrice && !hasBasePriceInput;
 
@@ -1023,7 +969,8 @@ export default function AdminProductsPage() {
       previewDiscount < 0 ||
       previewDiscount > 99
     ) {
-      pricingPreviewError = "درصد تخفیف باید عددی صحیح بین صفر تا ۹۹ باشد.";
+      pricingPreviewError =
+        "درصد تخفیف باید عددی صحیح بین صفر تا ۹۹ باشد.";
     } else {
       try {
         pricingPreview = calculateProductPricing({
@@ -1039,7 +986,7 @@ export default function AdminProductsPage() {
     }
   }
 
-  // تغییر مالکیت محصول
+  // انتقال مالکیت محصول
   const handleTransferOwnership = async () => {
     if (
       !isAdmin ||
@@ -1122,10 +1069,10 @@ export default function AdminProductsPage() {
         prev.map((product) =>
           product.id === editingProduct.id
             ? {
-              ...product,
-              ...updated,
-              supplier: targetSupplier,
-            }
+                ...product,
+                ...updated,
+                supplier: targetSupplier,
+              }
             : product
         )
       );
@@ -1134,7 +1081,7 @@ export default function AdminProductsPage() {
 
       showToast(
         data.message ||
-        "مالکیت محصول با موفقیت تغییر کرد.",
+          "مالکیت محصول با موفقیت تغییر کرد.",
         { type: "success" }
       );
     } catch (error) {
@@ -1146,7 +1093,7 @@ export default function AdminProductsPage() {
     }
   };
 
-  // ایجاد یا ویرایش محصول؛ قیمت نهایی و کمیسیون را فقط API محاسبه می‌کند.
+  // ایجاد یا ویرایش محصول
   const handleSubmit = async (event) => {
     event.preventDefault();
 
@@ -1188,6 +1135,7 @@ export default function AdminProductsPage() {
 
     const basePriceWasEntered =
       form.basePrice !== "" && form.basePrice !== null;
+
     const shouldPreserveLegacyPricing =
       Boolean(editingProduct && editingProduct.basePrice == null) &&
       !basePriceWasEntered;
@@ -1195,8 +1143,17 @@ export default function AdminProductsPage() {
     const requestedBasePrice = basePriceWasEntered
       ? Number(form.basePrice)
       : null;
+
     const requestedDiscount =
       form.discount === "" ? NaN : Number(form.discount);
+
+    const requestedStock =
+      form.stock === "" ? NaN : Number(form.stock);
+
+    const reservedStock = getSafeInteger(
+      editingProduct?.reservedStock,
+      0
+    );
 
     if (
       !form.title.trim() ||
@@ -1213,8 +1170,7 @@ export default function AdminProductsPage() {
       return;
     }
 
-    // محصول قدیمی فاقد basePrice می‌تواند بدون تغییر قیمت ویرایش شود.
-    // برای ورود به موتور جدید قیمت‌گذاری، ابتدا باید قیمت پایه تعیین شود.
+    // قیمت‌گذاری
     if (!shouldPreserveLegacyPricing) {
       if (
         !Number.isSafeInteger(requestedBasePrice) ||
@@ -1229,11 +1185,12 @@ export default function AdminProductsPage() {
         requestedDiscount < 0 ||
         requestedDiscount > 99
       ) {
-        setFormError("درصد تخفیف باید عددی صحیح بین صفر تا ۹۹ باشد.");
+        setFormError(
+          "درصد تخفیف باید عددی صحیح بین صفر و ۹۹ باشد."
+        );
         return;
       }
 
-      // پیش‌اعتبارسنجی برای نمایش خطاهای موتور قیمت‌گذاری پیش از ارسال فرم.
       try {
         calculateProductPricing({
           basePrice: requestedBasePrice,
@@ -1249,11 +1206,22 @@ export default function AdminProductsPage() {
       }
     }
 
+    // اعتبارسنجی موجودی
     if (
-      !Number.isSafeInteger(Number(form.stock)) ||
-      Number(form.stock) < 0
+      !Number.isSafeInteger(requestedStock) ||
+      requestedStock < 0 ||
+      requestedStock > MAX_PRODUCT_STOCK
     ) {
-      setFormError("موجودی محصول معتبر نیست.");
+      setFormError(
+        `موجودی باید عددی صحیح بین صفر و ${MAX_PRODUCT_STOCK.toLocaleString("fa-IR")} باشد.`
+      );
+      return;
+    }
+
+    if (requestedStock < reservedStock) {
+      setFormError(
+        `موجودی کل نمی‌تواند کمتر از ${reservedStock.toLocaleString("fa-IR")} کالای رزروشده باشد.`
+      );
       return;
     }
 
@@ -1263,18 +1231,16 @@ export default function AdminProductsPage() {
       image: mainImage,
       gallery: additionalGallery,
       description: form.description.trim(),
-      stock: Number(form.stock),
+      stock: requestedStock,
       specs: cleanSpecs,
 
       ...(editingProduct
         ? {}
         : {
-          supplierId: form.supplierId || null,
-        }),
+            supplierId: form.supplierId || null,
+          }),
     };
 
-    // برای محصول قدیمی بدون قیمت پایه، این دو فیلد را اصلاً ارسال نمی‌کنیم؛
-    // به این ترتیب قیمت قدیمی با ویرایش عنوان، تصویر یا مشخصات تغییر نمی‌کند.
     if (!shouldPreserveLegacyPricing) {
       payload.basePrice = requestedBasePrice;
       payload.discount = requestedDiscount;
@@ -1305,9 +1271,9 @@ export default function AdminProductsPage() {
           prev.map((product) =>
             product.id === data.product.id
               ? {
-                ...product,
-                ...data.product,
-              }
+                  ...product,
+                  ...data.product,
+                }
               : product
           )
         );
@@ -1453,16 +1419,16 @@ export default function AdminProductsPage() {
     }
   };
 
-  // مدیریت مشخصات فنی
+  // مشخصات فنی
   const updateSpec = (index, field, value) => {
     setForm((prev) => ({
       ...prev,
       specs: prev.specs.map((spec, i) =>
         i === index
           ? {
-            ...spec,
-            [field]: value,
-          }
+              ...spec,
+              [field]: value,
+            }
           : spec
       ),
     }));
@@ -1521,7 +1487,9 @@ export default function AdminProductsPage() {
     setForm({
       title: product.title || "",
       basePrice:
-        product.basePrice == null ? "" : String(product.basePrice),
+        product.basePrice == null
+          ? ""
+          : String(product.basePrice),
       discount: String(product.discount ?? 0),
       categoryId:
         product.categoryId ??
@@ -1531,12 +1499,12 @@ export default function AdminProductsPage() {
       gallery,
       description: product.description || "",
       supplierId: product.supplierId || "",
-      stock: product.stock ?? 0,
+      stock: String(product.stock ?? 0),
       specs: Array.isArray(product.specs)
         ? product.specs.map((spec) => ({
-          key: spec.key || "",
-          value: spec.value || "",
-        }))
+            key: spec.key || "",
+            value: spec.value || "",
+          }))
         : [],
     });
 
@@ -1547,6 +1515,25 @@ export default function AdminProductsPage() {
   const supplierExists = suppliers.some(
     (supplier) => supplier.id === form.supplierId
   );
+
+  // مقادیر موجودی در فرم
+  const formStockValue =
+    form.stock === "" ? NaN : Number(form.stock);
+
+  const formReservedStock = getSafeInteger(
+    editingProduct?.reservedStock,
+    0
+  );
+
+  const formStockValid =
+    Number.isSafeInteger(formStockValue) &&
+    formStockValue >= 0 &&
+    formStockValue <= MAX_PRODUCT_STOCK;
+
+  const formAvailableStock =
+    formStockValid
+      ? Math.max(0, formStockValue - formReservedStock)
+      : 0;
 
   return (
     <div className="w-full min-w-0 space-y-5 overflow-x-hidden sm:space-y-6">
@@ -1596,10 +1583,11 @@ export default function AdminProductsPage() {
                 key={value}
                 type="button"
                 onClick={() => handleViewChange(value)}
-                className={`shrink-0 whitespace-nowrap rounded-xl px-4 py-2 text-xs font-medium transition sm:text-sm ${view === value
-                  ? "bg-[var(--color-accent)] text-white"
-                  : "bg-[var(--color-surface-2)] text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
-                  }`}
+                className={`shrink-0 whitespace-nowrap rounded-xl px-4 py-2 text-xs font-medium transition sm:text-sm ${
+                  view === value
+                    ? "bg-[var(--color-accent)] text-white"
+                    : "bg-[var(--color-surface-2)] text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+                }`}
               >
                 {label}
               </button>
@@ -1614,15 +1602,14 @@ export default function AdminProductsPage() {
           onSubmit={handleSubmit}
           className="card flex min-w-0 flex-col gap-5 overflow-hidden p-3 sm:p-5 lg:p-6"
         >
-          <div>
-            <h2 className="text-base font-bold sm:text-lg">
-              {editingProduct
-                ? "ویرایش محصول"
-                : "ثبت محصول جدید"}
-            </h2>
-          </div>
+          <h2 className="text-base font-bold sm:text-lg">
+            {editingProduct
+              ? "ویرایش محصول"
+              : "ثبت محصول جدید"}
+          </h2>
 
           <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
+            {/* عنوان */}
             <div className="min-w-0">
               <label className="mb-2 block text-sm font-medium">
                 عنوان محصول
@@ -1642,6 +1629,7 @@ export default function AdminProductsPage() {
               />
             </div>
 
+            {/* دسته‌بندی */}
             <div className="min-w-0">
               <label className="mb-2 block text-sm font-medium">
                 دسته‌بندی
@@ -1739,7 +1727,7 @@ export default function AdminProductsPage() {
               )}
             </div>
 
-            {/* قیمت پایه فروشنده یا هزینه تأمین کالا */}
+            {/* قیمت پایه */}
             <div className="min-w-0">
               <label
                 htmlFor="product-base-price"
@@ -1764,12 +1752,13 @@ export default function AdminProductsPage() {
                 placeholder="قیمت اعلامی فروشنده / قیمت تأمین"
                 className="w-full min-w-0 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-3 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-accent)] sm:px-4"
               />
+
               <p className="mt-1 text-xs leading-5 text-[var(--color-text-muted)]">
                 قیمت نهایی و درصد سود به‌صورت خودکار در سرور محاسبه می‌شوند.
               </p>
             </div>
 
-            {/* تخفیف از قیمت پایه تأمین کالا */}
+            {/* تخفیف */}
             <div className="min-w-0">
               <label
                 htmlFor="product-discount"
@@ -1786,8 +1775,10 @@ export default function AdminProductsPage() {
                 step="1"
                 value={form.discount}
                 disabled={
-                  Boolean(editingProduct && editingProduct.basePrice == null) &&
-                  !hasBasePriceInput
+                  Boolean(
+                    editingProduct &&
+                    editingProduct.basePrice == null
+                  ) && !hasBasePriceInput
                 }
                 onChange={(event) =>
                   setForm((prev) => ({
@@ -1797,6 +1788,7 @@ export default function AdminProductsPage() {
                 }
                 className="w-full min-w-0 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-3 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-50 sm:px-4"
               />
+
               {isLegacyProductWithoutBasePrice && !hasBasePriceInput && (
                 <p className="mt-1 text-xs leading-5 text-[var(--color-text-muted)]">
                   برای تغییر تخفیف این محصول قدیمی، ابتدا قیمت پایه را وارد کن.
@@ -1804,12 +1796,13 @@ export default function AdminProductsPage() {
               )}
             </div>
 
-            {/* پیش‌نمایش موتور قیمت‌گذاری */}
+            {/* پیش‌نمایش قیمت‌گذاری */}
             <div className="card min-w-0 space-y-3 p-4 sm:col-span-2">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h3 className="text-sm font-bold">
                   پیش‌نمایش محاسبه قیمت برجک
                 </h3>
+
                 <span className="text-xs text-[var(--color-text-muted)]">
                   مبالغ به تومان
                 </span>
@@ -1826,6 +1819,7 @@ export default function AdminProductsPage() {
                         {pricingPreview.basePrice.toLocaleString("fa-IR")} تومان
                       </p>
                     </div>
+
                     <div className="rounded-xl bg-[var(--color-surface-2)] p-3">
                       <p className="text-xs text-[var(--color-text-muted)]">
                         تخفیف از قیمت پایه ({pricingPreview.discount.toLocaleString("fa-IR")}٪)
@@ -1834,6 +1828,7 @@ export default function AdminProductsPage() {
                         {pricingPreview.supplierDiscountAmount.toLocaleString("fa-IR")} تومان
                       </p>
                     </div>
+
                     <div className="rounded-xl bg-[var(--color-surface-2)] p-3">
                       <p className="text-xs text-[var(--color-text-muted)]">
                         مبلغ قابل تسویه هر واحد
@@ -1842,6 +1837,7 @@ export default function AdminProductsPage() {
                         {pricingPreview.supplierPayoutPrice.toLocaleString("fa-IR")} تومان
                       </p>
                     </div>
+
                     <div className="rounded-xl bg-[var(--color-surface-2)] p-3">
                       <p className="text-xs text-[var(--color-text-muted)]">
                         کمیسیون برجک
@@ -1861,6 +1857,7 @@ export default function AdminProductsPage() {
                         {pricingPreview.originalPrice.toLocaleString("fa-IR")} تومان
                       </p>
                     </div>
+
                     <div className="rounded-xl border border-[var(--color-accent)] p-3">
                       <p className="text-xs text-[var(--color-text-muted)]">
                         قیمت نهایی مشتری بعد از تخفیف
@@ -1869,6 +1866,7 @@ export default function AdminProductsPage() {
                         {pricingPreview.price.toLocaleString("fa-IR")} تومان
                       </p>
                     </div>
+
                     <div className="rounded-xl border border-[var(--color-border)] p-3">
                       <p className="text-xs text-[var(--color-text-muted)]">
                         اختلاف قیمت فروش و مبلغ تسویه
@@ -1885,9 +1883,11 @@ export default function AdminProductsPage() {
                 </>
               ) : preserveLegacyPricing ? (
                 <div className="rounded-xl bg-[var(--color-surface-2)] p-3 text-sm leading-6 text-[var(--color-text-muted)]">
-                  این محصول قدیمی هنوز قیمت پایه مستقلی ندارد. اگر فقط اطلاعاتی مثل عنوان، تصویر یا مشخصات را تغییر بدهی، قیمت فعلی آن حفظ می‌شود. برای انتقال محصول به موتور قیمت‌گذاری جدید، قیمت پایه را وارد کن.
+                  این محصول قدیمی هنوز قیمت پایه مستقلی ندارد. اگر فقط اطلاعاتی مثل عنوان، تصویر یا مشخصات را تغییر بدهی، قیمت فعلی آن حفظ می‌شود.
+
                   <p className="mt-2 font-semibold text-[var(--color-text)]">
-                    قیمت فعلی مشتری: {Number(editingProduct.price).toLocaleString("fa-IR")} تومان
+                    قیمت فعلی مشتری:{" "}
+                    {Number(editingProduct.price).toLocaleString("fa-IR")} تومان
                   </p>
                 </div>
               ) : pricingPreviewError ? (
@@ -1901,14 +1901,106 @@ export default function AdminProductsPage() {
               )}
             </div>
 
-            {/* تصاویر محصول و راهنمای عکاسی */}
+            {/* موجودی محصول */}
+            <div className="min-w-0 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 sm:col-span-2 sm:p-5">
+              <div className="mb-4">
+                <h3 className="text-sm font-bold text-[var(--color-text)]">
+                  مدیریت موجودی کالا
+                </h3>
+
+                <p className="mt-1 text-xs leading-6 text-[var(--color-text-muted)]">
+                  تعداد واقعی کالاهای موجود نزد فروشگاه یا تأمین‌کننده را وارد کن.
+                </p>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label
+                    htmlFor="product-stock"
+                    className="mb-2 block text-sm font-medium"
+                  >
+                    تعداد کل موجودی (عدد)
+                  </label>
+
+                  <input
+                    id="product-stock"
+                    type="number"
+                    min={formReservedStock}
+                    max={MAX_PRODUCT_STOCK}
+                    step="1"
+                    required
+                    inputMode="numeric"
+                    value={form.stock}
+                    onChange={(event) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        stock: event.target.value,
+                      }))
+                    }
+                    placeholder="مثلاً 25"
+                    className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm text-[var(--color-text)] outline-none transition focus:border-[var(--color-accent)]"
+                  />
+
+                  <p className="mt-2 text-xs leading-6 text-[var(--color-text-muted)]">
+                    موجودی کل شامل کالاهای رزروشده هم می‌شود.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="rounded-xl bg-[var(--color-surface-2)] p-3">
+                    <p className="text-[11px] text-[var(--color-text-muted)]">
+                      موجودی کل
+                    </p>
+
+                    <p className="mt-2 text-lg font-black">
+                      {formStockValid
+                        ? formStockValue.toLocaleString("fa-IR")
+                        : "—"}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl bg-blue-500/10 p-3">
+                    <p className="text-[11px] text-blue-600 dark:text-blue-400">
+                      رزروشده
+                    </p>
+
+                    <p className="mt-2 text-lg font-black text-blue-600 dark:text-blue-400">
+                      {formReservedStock.toLocaleString("fa-IR")}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl bg-green-500/10 p-3">
+                    <p className="text-[11px] text-green-600 dark:text-green-400">
+                      قابل خرید
+                    </p>
+
+                    <p className="mt-2 text-lg font-black text-green-600 dark:text-green-400">
+                      {formAvailableStock.toLocaleString("fa-IR")}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {formStockValid && formStockValue < formReservedStock && (
+                <p className="mt-3 rounded-xl bg-red-500/10 p-3 text-xs leading-6 text-red-500">
+                  موجودی کل نمی‌تواند کمتر از تعداد رزروشده باشد.
+                </p>
+              )}
+
+              <p className="mt-4 rounded-xl bg-[var(--color-surface-2)] p-3 text-xs leading-6 text-[var(--color-text-muted)]">
+                موجودی رزروشده توسط سیستم و بر اساس سفارش‌ها مدیریت می‌شود.
+                نیازی به واردکردن دستی آن نیست. موجودی قابل خرید برابر
+                موجودی کل منهای موجودی رزروشده است.
+              </p>
+            </div>
+
+            {/* تصاویر محصول */}
             <div className="min-w-0 sm:col-span-2">
               <p className="mb-3 text-sm font-medium">
                 تصاویر محصول
               </p>
 
               <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-                {/* بخش آپلود و مدیریت تصاویر */}
                 <div className="min-w-0">
                   <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap sm:gap-4">
                     {form.gallery.length === 0 && (
@@ -1923,10 +2015,11 @@ export default function AdminProductsPage() {
                     {form.gallery.map((img, index) => (
                       <div
                         key={`${img}-${index}`}
-                        className={`relative aspect-square w-full max-w-32 overflow-hidden rounded-xl border ${form.image === img
-                          ? "border-[var(--color-accent)]"
-                          : "border-[var(--color-border)]"
-                          }`}
+                        className={`relative aspect-square w-full max-w-32 overflow-hidden rounded-xl border ${
+                          form.image === img
+                            ? "border-[var(--color-accent)]"
+                            : "border-[var(--color-border)]"
+                        }`}
                       >
                         <Image
                           src={img}
@@ -2011,7 +2104,6 @@ export default function AdminProductsPage() {
                   </p>
                 </div>
 
-                {/* راهنمای عکاسی در کنار آپلود */}
                 <ProductImageGuide />
               </div>
             </div>
@@ -2113,22 +2205,6 @@ export default function AdminProductsPage() {
             )}
           </section>
 
-          {/* موجودی */}
-          <label className="flex cursor-pointer items-center gap-2 text-sm text-[var(--color-text)]">
-            <input
-              type="checkbox"
-              checked={Number(form.stock) > 0}
-              onChange={(event) =>
-                setForm((prev) => ({
-                  ...prev,
-                  stock: event.target.checked ? 1 : 0,
-                }))
-              }
-              className="h-4 w-4 accent-[var(--color-accent)]"
-            />
-            موجود است
-          </label>
-
           {formError && (
             <p
               role="alert"
@@ -2203,15 +2279,14 @@ export default function AdminProductsPage() {
       ) : (
         <div className="grid min-w-0 grid-cols-1 gap-3 xl:grid-cols-2">
           {products.map((product) => {
-            const reservedStock =
-              Number(product.reservedStock) || 0;
-
-            const stock =
-              Number(product.stock) || 0;
+            const stockValue = getSafeInteger(product.stock);
+            const reservedStock = getSafeInteger(
+              product.reservedStock
+            );
 
             const availableStock = Math.max(
               0,
-              stock - reservedStock
+              stockValue - reservedStock
             );
 
             let productPricing = null;
@@ -2223,7 +2298,7 @@ export default function AdminProductsPage() {
                   discount: Number(product.discount ?? 0),
                 });
               } catch {
-                // اطلاعات محصولات قدیمی یا ناسازگار نباید فهرست را از کار بیندازد.
+                // اطلاعات قدیمی یا ناسازگار نباید فهرست را از کار بیندازد.
               }
             }
 
@@ -2239,15 +2314,14 @@ export default function AdminProductsPage() {
                 key={product.id}
                 className="card flex min-w-0 flex-col gap-3 overflow-hidden p-3 transition-shadow hover:shadow-md sm:p-4"
               >
-                {/* اطلاعات اصلی محصول */}
+                {/* اطلاعات محصول */}
                 <div className="min-w-0">
                   <h3 className="break-words text-base font-bold leading-7 text-[var(--color-text)] sm:text-lg">
                     {product.title}
                   </h3>
 
                   <p className="mt-1 break-words text-xs text-[var(--color-text-muted)]">
-                    دسته‌بندی:{" "}
-                    {product.category?.title || "—"}
+                    دسته‌بندی: {product.category?.title || "—"}
                   </p>
 
                   <p className="mt-2 break-words text-sm font-bold text-[var(--color-text)]">
@@ -2259,6 +2333,7 @@ export default function AdminProductsPage() {
                     <p className="mt-1 break-words text-xs text-[var(--color-text-muted)]">
                       قیمت پایه:{" "}
                       {Number(product.basePrice).toLocaleString("fa-IR")} تومان
+
                       {product.commissionPercent != null && (
                         <>
                           ؛ کمیسیون برجک:{" "}
@@ -2272,7 +2347,7 @@ export default function AdminProductsPage() {
                     <p className="mt-1 break-words text-xs text-[var(--color-text-muted)]">
                       تخفیف از قیمت پایه:{" "}
                       {productPricing.discount.toLocaleString("fa-IR")}٪؛
-                      مبنای پرداخت هر واحد با قیمت فعلی:{" "}
+                      مبلغ تسویه هر واحد:{" "}
                       {productPricing.supplierPayoutPrice.toLocaleString("fa-IR")} تومان
                     </p>
                   )}
@@ -2280,8 +2355,7 @@ export default function AdminProductsPage() {
                   {product.supplier && (
                     <p className="mt-1 break-words text-xs text-[var(--color-text-muted)]">
                       مالک: {product.supplier.name}
-                      {!product.supplier.isActive &&
-                        " (غیرفعال)"}
+                      {!product.supplier.isActive && " (غیرفعال)"}
                     </p>
                   )}
 
@@ -2292,41 +2366,47 @@ export default function AdminProductsPage() {
                   )}
                 </div>
 
-                {/* گالری تصاویر محصول */}
+                {/* تصاویر */}
                 <ProductImageGallery product={product} />
 
-                {/* موجودی و وضعیت‌ها */}
+                {/* وضعیت موجودی */}
                 <div className="flex min-w-0 flex-wrap items-center gap-2">
                   <span className="rounded-lg bg-[var(--color-surface-2)] px-2.5 py-1.5 text-xs text-[var(--color-text)]">
-                    موجودی قابل فروش:{" "}
-                    <strong>
-                      {availableStock.toLocaleString("fa-IR")}
-                    </strong>
+                    موجودی کل:{" "}
+                    <strong>{stockValue.toLocaleString("fa-IR")}</strong>
                   </span>
 
-                  {reservedStock > 0 && (
-                    <span className="rounded-lg bg-blue-500/10 px-2.5 py-1.5 text-xs text-blue-600">
-                      رزروشده:{" "}
-                      {reservedStock.toLocaleString("fa-IR")}
-                    </span>
-                  )}
+                  <span className="rounded-lg bg-blue-500/10 px-2.5 py-1.5 text-xs text-blue-600">
+                    رزروشده:{" "}
+                    {reservedStock.toLocaleString("fa-IR")}
+                  </span>
 
+                  <span className="rounded-lg bg-green-500/10 px-2.5 py-1.5 text-xs text-green-600">
+                    قابل خرید:{" "}
+                    {availableStock.toLocaleString("fa-IR")}
+                  </span>
+                </div>
+
+                {/* وضعیت بررسی و انتشار */}
+                <div className="flex flex-wrap items-center gap-2">
                   <span
-                    className={`rounded-lg px-2.5 py-1.5 text-xs ${product.reviewStatus === "APPROVED"
-                      ? "bg-green-500/10 text-green-600"
-                      : product.reviewStatus === "REJECTED"
-                        ? "bg-red-500/10 text-red-600"
-                        : "bg-amber-500/10 text-amber-600"
-                      }`}
+                    className={`rounded-lg px-2.5 py-1.5 text-xs ${
+                      product.reviewStatus === "APPROVED"
+                        ? "bg-green-500/10 text-green-600"
+                        : product.reviewStatus === "REJECTED"
+                          ? "bg-red-500/10 text-red-600"
+                          : "bg-amber-500/10 text-amber-600"
+                    }`}
                   >
                     {reviewStatus}
                   </span>
 
                   <span
-                    className={`rounded-lg px-2.5 py-1.5 text-xs ${product.isPublished
-                      ? "bg-green-500/10 text-green-600"
-                      : "bg-orange-500/10 text-orange-600"
-                      }`}
+                    className={`rounded-lg px-2.5 py-1.5 text-xs ${
+                      product.isPublished
+                        ? "bg-green-500/10 text-green-600"
+                        : "bg-orange-500/10 text-orange-600"
+                    }`}
                   >
                     {product.isPublished
                       ? "منتشرشده"
@@ -2349,54 +2429,35 @@ export default function AdminProductsPage() {
                   </div>
                 )}
 
-                {/* عملیات محصول */}
+                {/* عملیات */}
                 {view !== "archived" ? (
                   <div className="grid min-w-0 grid-cols-2 gap-2 border-t border-[var(--color-border)] pt-3 sm:flex sm:flex-wrap">
-                    <button
-                      type="button"
-                      onClick={() => toggleStock(product)}
-                      className={`min-w-0 rounded-xl px-3 py-2.5 text-xs font-medium transition sm:w-auto ${availableStock > 0
-                        ? "bg-green-500/10 text-green-600 hover:bg-green-500/20"
-                        : "bg-red-500/10 text-red-600 hover:bg-red-500/20"
-                        }`}
-                    >
-                      {availableStock > 0
-                        ? "ناموجود کردن"
-                        : "موجود کردن"}
-                    </button>
-
                     {isAdmin && (
                       <>
                         {(product.reviewStatus === "PENDING" ||
                           product.reviewStatus === "REJECTED") && (
-                            <button
-                              type="button"
-                              disabled={isModerating}
-                              onClick={() =>
-                                updateProductReview(
-                                  product,
-                                  "APPROVED"
-                                )
-                              }
-                              className="min-w-0 rounded-xl bg-green-500/10 px-3 py-2.5 text-xs font-medium text-green-600 transition hover:bg-green-500/20 disabled:opacity-50"
-                            >
-                              {isModerating
-                                ? "..."
-                                : product.reviewStatus === "REJECTED"
-                                  ? "تأیید مجدد"
-                                  : "تأیید محصول"}
-                            </button>
-                          )}
+                          <button
+                            type="button"
+                            disabled={isModerating}
+                            onClick={() =>
+                              updateProductReview(product, "APPROVED")
+                            }
+                            className="min-w-0 rounded-xl bg-green-500/10 px-3 py-2.5 text-xs font-medium text-green-600 transition hover:bg-green-500/20 disabled:opacity-50"
+                          >
+                            {isModerating
+                              ? "..."
+                              : product.reviewStatus === "REJECTED"
+                                ? "تأیید مجدد"
+                                : "تأیید محصول"}
+                          </button>
+                        )}
 
                         {product.reviewStatus === "PENDING" && (
                           <button
                             type="button"
                             disabled={isModerating}
                             onClick={() =>
-                              updateProductReview(
-                                product,
-                                "REJECTED"
-                              )
+                              updateProductReview(product, "REJECTED")
                             }
                             className="min-w-0 rounded-xl bg-red-500/10 px-3 py-2.5 text-xs font-medium text-red-600 transition hover:bg-red-500/20 disabled:opacity-50"
                           >
@@ -2428,7 +2489,7 @@ export default function AdminProductsPage() {
                           className="inline-flex min-w-0 items-center justify-center gap-1.5 rounded-xl border border-[var(--color-border)] px-3 py-2.5 text-xs font-medium text-[var(--color-accent)] transition hover:bg-[var(--color-surface-2)]"
                         >
                           <PencilSquareIcon className="h-4 w-4" />
-                          ویرایش
+                          ویرایش و موجودی
                         </button>
 
                         <button
@@ -2448,18 +2509,15 @@ export default function AdminProductsPage() {
                     <div className="border-t border-[var(--color-border)] pt-3">
                       <button
                         type="button"
-                        onClick={() =>
-                          restoreProduct(product.id)
-                        }
+                        onClick={() => restoreProduct(product.id)}
                         disabled={restoring === product.id}
                         className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-green-500/10 px-4 py-2.5 text-sm font-medium text-green-600 transition hover:bg-green-500/20 disabled:opacity-50 sm:w-auto"
                       >
-                        {restoring === product.id ? (
-                          <ArrowPathIcon className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <ArrowPathIcon className="h-4 w-4" />
-                        )}
-
+                        <ArrowPathIcon
+                          className={`h-4 w-4 ${
+                            restoring === product.id ? "animate-spin" : ""
+                          }`}
+                        />
                         بازگردانی محصول
                       </button>
                     </div>

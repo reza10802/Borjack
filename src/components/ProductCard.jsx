@@ -1,15 +1,19 @@
+
 "use client";
 
 import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+
 import {
   BookmarkIcon as BookmarkOutline,
 } from "@heroicons/react/24/outline";
+
 import {
   BookmarkIcon as BookmarkSolid,
 } from "@heroicons/react/24/solid";
+
 import Image from "next/image";
 import { toPersianPrice, safeImageSrc } from "@/lib/utils";
 import { useCart } from "@/context/CartContext";
@@ -74,9 +78,7 @@ export default function ProductCard({
 
         if (res.ok) {
           setLiked(false);
-          window.dispatchEvent(
-            new Event("wishlist-updated")
-          );
+          window.dispatchEvent(new Event("wishlist-updated"));
         }
       } else {
         const res = await fetch("/api/wishlist", {
@@ -91,9 +93,7 @@ export default function ProductCard({
 
         if (res.ok) {
           setLiked(true);
-          window.dispatchEvent(
-            new Event("wishlist-updated")
-          );
+          window.dispatchEvent(new Event("wishlist-updated"));
         }
       }
     } catch (error) {
@@ -123,9 +123,9 @@ export default function ProductCard({
         isSearchVariant ? "" : "min-h-[410px]"
       }`}
     >
-      {/* Product image */}
+      {/* Responsive product image */}
       <div
-        className={`relative h-40 overflow-hidden sm:h-52 ${
+        className={`relative aspect-square w-full shrink-0 overflow-hidden sm:aspect-[4/3] ${
           isSearchVariant
             ? "bg-[var(--color-surface-2)]"
             : "bg-zinc-100 dark:bg-zinc-800"
@@ -138,14 +138,10 @@ export default function ProductCard({
             fill
             sizes={
               isSearchVariant
-                ? "(max-width: 639px) 50vw, (max-width: 767px) 50vw, (max-width: 1023px) 33vw, (max-width: 1279px) 25vw, 20vw"
-                : "(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
+                ? "(max-width: 639px) 46vw, (max-width: 767px) 46vw, (max-width: 1023px) 30vw, (max-width: 1279px) 23vw, 20vw"
+                : "(max-width: 639px) 46vw, (max-width: 767px) 46vw, (max-width: 1023px) 30vw, (max-width: 1279px) 23vw, 20vw"
             }
-            className={`transition-all duration-500 group-hover:scale-105 ${
-              isSearchVariant
-                ? "object-contain p-3 sm:p-4"
-                : "object-cover group-hover:scale-110"
-            }`}
+            className="object-contain p-2 transition-transform duration-300 group-hover:scale-[1.03] sm:p-3"
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-sm text-[var(--color-text-muted)]">
@@ -169,9 +165,7 @@ export default function ProductCard({
       {/* Product information */}
       <div
         className={`flex min-w-0 flex-1 flex-col ${
-          isSearchVariant
-            ? "p-3 sm:p-5"
-            : "p-5"
+          isSearchVariant ? "p-3 sm:p-5" : "p-5"
         }`}
       >
         {/* Title and wishlist */}
@@ -196,9 +190,7 @@ export default function ProductCard({
                 ? "text-[var(--color-accent)]"
                 : "text-[var(--color-text-muted)] hover:text-[var(--color-accent)]"
             } ${
-              loading
-                ? "cursor-not-allowed opacity-60"
-                : ""
+              loading ? "cursor-not-allowed opacity-60" : ""
             }`}
           >
             {liked ? (
@@ -304,7 +296,7 @@ export default function ProductCard({
           <span
             className={`font-black tracking-tight ${
               isSearchVariant
-                ? "text-base sm:text-xl text-[var(--color-text)]"
+                ? "text-base text-[var(--color-text)] sm:text-xl"
                 : "text-xl text-[var(--color-primary)] dark:text-[var(--color-accent)]"
             }`}
           >
@@ -332,9 +324,7 @@ export default function ProductCard({
               : "cursor-not-allowed rounded-xl bg-gray-200 py-3 text-xs text-gray-400 dark:bg-zinc-800 dark:text-zinc-500 sm:text-sm"
           }`}
         >
-          {isAvailable
-            ? "افزودن به سبد"
-            : "ناموجود"}
+          {isAvailable ? "افزودن به سبد" : "ناموجود"}
         </button>
       </div>
     </Link>

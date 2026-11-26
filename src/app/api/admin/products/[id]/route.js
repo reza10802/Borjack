@@ -16,8 +16,20 @@ import {
   PricingError,
 } from "@/lib/pricing";
 
+const MAX_PRODUCT_STOCK = 1_000_000;
+
+function errorResponse(message, status = 400, extra = {}) {
+  return NextResponse.json(
+    { error: message, ...extra },
+    { status },
+  );
+}
+
+function isValidProductId(value) {
+  return Number.isSafeInteger(value) && value > 0;
+}
+
 // PATCH /api/admin/products/[id]
-// ویرایش محصول، تغییر موجودی، انتقال مالکیت، بررسی و انتشار
 export async function PATCH(req, { params }) {
   const check = await requireAdmin();
   if (check.error) return check.error;
@@ -26,34 +38,35 @@ export async function PATCH(req, { params }) {
     const { id: rawId } = await params;
     const productId = Number(rawId);
 
-    if (!Number.isSafeInteger(productId) || productId <= 0) {
-      return NextResponse.json(
-        { error: "شناسه محصول معتبر نیست" },
-        { status: 400 },
-      );
+    if (!isValidProductId(productId)) {
+      return errorResponse("شناسه محصول معتبر نیست");
     }
 
     const body = await req.json();
 
     if (!body || typeof body !== "object" || Array.isArray(body)) {
-      return NextResponse.json(
-        { error: "اطلاعات ارسالی معتبر نیست" },
-        { status: 400 },
-      );
+      return errorResponse("اطلاعات ارسالی معتبر نیست");
     }
 
     const has = (key) =>
       Object.prototype.hasOwnProperty.call(body, key);
 
+    // reservedStock فقط توسط سیستم رزرو سفارش مدیریت می‌شود.
+    if (has("reservedStock")) {
+      return errorResponse(
+        "موجودی رزروشده قابل ویرایش دستی نیست و توسط سیستم مدیریت می‌شود.",
+      );
+    }
+
     // ---------------------------------------------------------
-    // 1. تغییر مالکیت محصول
+    // 1. انتقال مالکیت محصول
     // این عملیات باید مستقل ارسال شود.
     // ---------------------------------------------------------
+
     if (has("supplierId")) {
       if (Object.keys(body).some((key) => key !== "supplierId")) {
-        return NextResponse.json(
-          { error: "تغییر مالکیت باید به‌صورت مستقل ارسال شود" },
-          { status: 400 },
+        return errorResponse(
+          "تغییر مالکیت باید به‌صورت مستقل ارسال شود",
         );
       }
 
@@ -65,9 +78,8 @@ export async function PATCH(req, { params }) {
           !body.supplierId.trim() ||
           body.supplierId.length > 128
         ) {
-          return NextResponse.json(
-            { error: "شناسه تأمین‌کننده معتبر نیست" },
-            { status: 400 },
+          return errorResponse(
+            "شناسه تأمین‌کننده معتبر نیست",
           );
         }
 
@@ -135,7 +147,9 @@ export async function PATCH(req, { params }) {
           where: { id: productId },
           data: {
             supplierId: nextSupplierId,
-            ...(shouldUnpublish ? { isPublished: false } : {}),
+            ...(shouldUnpublish
+              ? { isPublished: false }
+              : {}),
           },
           select: {
             id: true,
@@ -155,16 +169,13 @@ export async function PATCH(req, { params }) {
       });
 
       if (transfer.type === "NOT_FOUND") {
-        return NextResponse.json(
-          { error: "محصول پیدا نشد" },
-          { status: 404 },
-        );
+        return errorResponse("محصول پیدا نشد", 404);
       }
 
       if (transfer.type === "INVALID_SUPPLIER") {
-        return NextResponse.json(
-          { error: "حساب تأمین‌کننده موردنظر معتبر نیست" },
-          { status: 404 },
+        return errorResponse(
+          "حساب تأمین‌کننده موردنظر معتبر نیست",
+          404,
         );
       }
 
@@ -201,6 +212,7 @@ export async function PATCH(req, { params }) {
     // ---------------------------------------------------------
     // 2. تأیید یا رد محصول
     // ---------------------------------------------------------
+
     if (has("reviewStatus")) {
       const allowedKeys = ["reviewStatus", "reviewNote"];
 
@@ -209,12 +221,8 @@ export async function PATCH(req, { params }) {
           (key) => !allowedKeys.includes(key),
         )
       ) {
-        return NextResponse.json(
-          {
-            error:
-              "عملیات بررسی محصول باید مستقل از سایر تغییرات ارسال شود",
-          },
-          { status: 400 },
+        return errorResponse(
+          "عملیات بررسی محصول باید مستقل از سایر تغییرات ارسال شود",
         );
       }
 
@@ -229,7 +237,8 @@ export async function PATCH(req, { params }) {
         );
 
         if (result.changed) {
-          const isApproved = result.reviewStatus === "APPROVED";
+          const isApproved =
+            result.reviewStatus === "APPROVED";
 
           await logAction({
             userId: check.user.id,
@@ -262,9 +271,9 @@ export async function PATCH(req, { params }) {
         });
       } catch (error) {
         if (error instanceof ReviewRefusal) {
-          return NextResponse.json(
-            { error: error.message },
-            { status: error.status },
+          return errorResponse(
+            error.message,
+            error.status,
           );
         }
 
@@ -275,6 +284,7 @@ export async function PATCH(req, { params }) {
     // ---------------------------------------------------------
     // 3. انتشار یا خارج‌کردن محصول از انتشار
     // ---------------------------------------------------------
+
     if (has("isPublished")) {
       const allowedKeys = ["isPublished", "reviewNote"];
 
@@ -284,12 +294,8 @@ export async function PATCH(req, { params }) {
           (key) => !allowedKeys.includes(key),
         )
       ) {
-        return NextResponse.json(
-          {
-            error:
-              "وضعیت انتشار باید به‌صورت مستقل و با مقدار معتبر ارسال شود",
-          },
-          { status: 400 },
+        return errorResponse(
+          "وضعیت انتشار باید به‌صورت مستقل و با مقدار معتبر ارسال شود",
         );
       }
 
@@ -298,11 +304,8 @@ export async function PATCH(req, { params }) {
         has("reviewNote") &&
         body.reviewNote != null
       ) {
-        return NextResponse.json(
-          {
-            error: "هنگام انتشار محصول نیازی به ارسال پیام نیست",
-          },
-          { status: 400 },
+        return errorResponse(
+          "هنگام انتشار محصول نیازی به ارسال پیام نیست",
         );
       }
 
@@ -339,9 +342,9 @@ export async function PATCH(req, { params }) {
         });
       } catch (error) {
         if (error instanceof PublishRefusal) {
-          return NextResponse.json(
-            { error: error.message },
-            { status: error.status },
+          return errorResponse(
+            error.message,
+            error.status,
           );
         }
 
@@ -350,7 +353,7 @@ export async function PATCH(req, { params }) {
     }
 
     // ---------------------------------------------------------
-    // 4. ویرایش اطلاعات محصول یا تغییر موجودی
+    // 4. ویرایش اطلاعات محصول، قیمت یا موجودی
     // ---------------------------------------------------------
 
     // قیمت نهایی، قیمت اصلی مشتری و کمیسیون باید فقط
@@ -360,19 +363,13 @@ export async function PATCH(req, { params }) {
       has("originalPrice") ||
       has("commissionPercent")
     ) {
-      return NextResponse.json(
-        {
-          error:
-            "قیمت فروش و کمیسیون محاسبه‌شده هستند. فقط قیمت پایه و درصد تخفیف را ارسال کنید.",
-        },
-        { status: 400 },
+      return errorResponse(
+        "قیمت فروش و کمیسیون محاسبه‌شده هستند. فقط قیمت پایه و درصد تخفیف را ارسال کنید.",
       );
     }
 
     const fullEditKeys = [
       "title",
-      "basePrice",
-      "discount",
       "categoryId",
       "image",
       "gallery",
@@ -380,40 +377,97 @@ export async function PATCH(req, { params }) {
       "specs",
     ];
 
+    const allowedEditKeys = [
+      ...fullEditKeys,
+      "basePrice",
+      "discount",
+      "stock",
+    ];
+
+    const unknownKeys = Object.keys(body).filter(
+      (key) => !allowedEditKeys.includes(key),
+    );
+
+    if (unknownKeys.length > 0) {
+      return errorResponse(
+        "فیلدهای ارسالی برای ویرایش محصول معتبر نیستند.",
+      );
+    }
+
     const isFullEdit = fullEditKeys.some(has);
     const hasStock = has("stock");
 
     const hasPricingChange =
       has("basePrice") || has("discount");
 
-    if (!isFullEdit && !hasStock) {
-      return NextResponse.json(
-        { error: "هیچ اطلاعاتی برای ویرایش ارسال نشده است" },
-        { status: 400 },
+    if (!isFullEdit && !hasStock && !hasPricingChange) {
+      return errorResponse(
+        "هیچ اطلاعاتی برای ویرایش ارسال نشده است",
       );
     }
 
     const updateData = {};
 
-    // اعتبارسنجی تغییر موجودی
-    if (hasStock) {
-      const stock = Number(body.stock);
+    // ---------------------------------------------------------
+    // 4-الف. اعتبارسنجی موجودی
+    // ---------------------------------------------------------
 
-      if (!Number.isSafeInteger(stock) || stock < 0) {
-        return NextResponse.json(
-          { error: "موجودی محصول معتبر نیست" },
-          { status: 400 },
+    if (hasStock) {
+      // API فقط عدد واقعی می‌پذیرد؛ رشته عددی پذیرفته نمی‌شود.
+      const stock = body.stock;
+
+      if (
+        typeof stock !== "number" ||
+        !Number.isSafeInteger(stock) ||
+        stock < 0 ||
+        stock > MAX_PRODUCT_STOCK
+      ) {
+        return errorResponse(
+          `موجودی باید عددی صحیح بین صفر و ${MAX_PRODUCT_STOCK.toLocaleString("fa-IR")} باشد.`,
         );
       }
 
       updateData.stock = stock;
     }
 
+    // ---------------------------------------------------------
+    // 4-ب. اعتبارسنجی قیمت
+    // ---------------------------------------------------------
+
     let finalBasePrice;
     let finalDiscount;
-    let finalCategoryId;
 
-    // اعتبارسنجی و آماده‌سازی ویرایش کامل محصول
+    if (has("basePrice")) {
+      finalBasePrice = body.basePrice;
+
+      if (
+        typeof finalBasePrice !== "number" ||
+        !Number.isSafeInteger(finalBasePrice) ||
+        finalBasePrice <= 0
+      ) {
+        return errorResponse("قیمت پایه معتبر نیست");
+      }
+    }
+
+    if (has("discount")) {
+      finalDiscount = body.discount;
+
+      if (
+        typeof finalDiscount !== "number" ||
+        !Number.isSafeInteger(finalDiscount) ||
+        finalDiscount < 0 ||
+        finalDiscount > 99
+      ) {
+        return errorResponse(
+          "درصد تخفیف باید عددی صحیح بین صفر تا ۹۹ باشد",
+        );
+      }
+    }
+
+    // ---------------------------------------------------------
+    // 4-پ. اعتبارسنجی اطلاعات اصلی محصول
+    // ---------------------------------------------------------
+
     if (isFullEdit) {
       const requiredFields = [
         "title",
@@ -425,16 +479,13 @@ export async function PATCH(req, { params }) {
       ];
 
       if (requiredFields.some((field) => !has(field))) {
-        return NextResponse.json(
-          { error: "اطلاعات محصول برای ویرایش کامل نیست" },
-          { status: 400 },
+        return errorResponse(
+          "اطلاعات محصول برای ویرایش کامل نیست",
         );
       }
 
       const {
         title,
-        basePrice,
-        discount,
         categoryId,
         image,
         gallery,
@@ -442,12 +493,12 @@ export async function PATCH(req, { params }) {
         specs,
       } = body;
 
-      finalCategoryId = Number(categoryId);
+      const finalCategoryId = Number(categoryId);
 
       if (
         typeof title !== "string" ||
         !title.trim() ||
-        title.length > 200 ||
+        title.trim().length > 200 ||
         typeof description !== "string" ||
         !description.trim() ||
         typeof image !== "string" ||
@@ -455,58 +506,27 @@ export async function PATCH(req, { params }) {
         !Number.isSafeInteger(finalCategoryId) ||
         finalCategoryId <= 0
       ) {
-        return NextResponse.json(
-          { error: "اطلاعات محصول را به‌درستی وارد کنید" },
-          { status: 400 },
+        return errorResponse(
+          "اطلاعات محصول را به‌درستی وارد کنید",
         );
-      }
-
-      if (has("basePrice")) {
-        finalBasePrice = Number(basePrice);
-
-        if (
-          !Number.isSafeInteger(finalBasePrice) ||
-          finalBasePrice <= 0
-        ) {
-          return NextResponse.json(
-            { error: "قیمت پایه معتبر نیست" },
-            { status: 400 },
-          );
-        }
-      }
-
-      if (has("discount")) {
-        finalDiscount = Number(discount);
-
-        if (
-          !Number.isSafeInteger(finalDiscount) ||
-          finalDiscount < 0 ||
-          finalDiscount > 99
-        ) {
-          return NextResponse.json(
-            { error: "درصد تخفیف باید بین صفر تا ۹۹ باشد" },
-            { status: 400 },
-          );
-        }
       }
 
       if (
         !Array.isArray(gallery) ||
         gallery.length > 4 ||
         gallery.some(
-          (url) => typeof url !== "string" || !url.trim(),
+          (url) =>
+            typeof url !== "string" || !url.trim(),
         )
       ) {
-        return NextResponse.json(
-          { error: "حداکثر ۴ تصویر گالری مجاز است" },
-          { status: 400 },
+        return errorResponse(
+          "حداکثر ۴ تصویر اضافی برای گالری مجاز است",
         );
       }
 
       if (!Array.isArray(specs)) {
-        return NextResponse.json(
-          { error: "فهرست مشخصات فنی معتبر نیست" },
-          { status: 400 },
+        return errorResponse(
+          "فهرست مشخصات فنی معتبر نیست",
         );
       }
 
@@ -547,8 +567,13 @@ export async function PATCH(req, { params }) {
       };
     }
 
+    // ---------------------------------------------------------
+    // 4-ت. ذخیره تغییرات در تراکنش
+    // ---------------------------------------------------------
+
     const result = await prisma.$transaction(async (tx) => {
-      // جلوگیری از تداخل تغییر موجودی با رزرو هم‌زمان
+      // قفل ردیف محصول برای جلوگیری از تداخل تغییر موجودی
+      // با عملیات هم‌زمانی که همین ردیف را قفل می‌کنند.
       await tx.$queryRaw`
         SELECT "id"
         FROM "Product"
@@ -581,38 +606,49 @@ export async function PATCH(req, { params }) {
         return { type: "ARCHIVED" };
       }
 
-      // موجودی واقعی نباید کمتر از مجموع رزروهای فعال باشد.
+      // مقدار رزرو باید معتبر باشد.
+      const currentReservedStock =
+        oldProduct.reservedStock ?? 0;
+
+      if (
+        !Number.isSafeInteger(currentReservedStock) ||
+        currentReservedStock < 0
+      ) {
+        return { type: "INVALID_RESERVED_STOCK" };
+      }
+
+      // موجودی کل نباید از تعداد رزروشده کمتر شود.
       if (
         hasStock &&
-        updateData.stock < oldProduct.reservedStock
+        updateData.stock < currentReservedStock
       ) {
         return {
           type: "BELOW_RESERVED_STOCK",
-          reservedStock: oldProduct.reservedStock,
+          reservedStock: currentReservedStock,
         };
       }
 
-      // قیمت‌گذاری فقط در صورت تغییر صریح قیمت پایه یا تخفیف
+      // -------------------------------------------------------
+      // محاسبه قیمت
+      // -------------------------------------------------------
+
       if (hasPricingChange) {
-        const effectiveBasePrice =
-          has("basePrice")
-            ? finalBasePrice
-            : oldProduct.basePrice;
+        const effectiveBasePrice = has("basePrice")
+          ? finalBasePrice
+          : oldProduct.basePrice;
 
-        const effectiveDiscount =
-          has("discount")
-            ? finalDiscount
-            : oldProduct.discount;
+        const effectiveDiscount = has("discount")
+          ? finalDiscount
+          : oldProduct.discount ?? 0;
 
-        // محصول قدیمی ممکن است هنوز قیمت پایه نداشته باشد.
-        // قیمت‌های قدیمی در ویرایش‌های غیرمالی دست‌نخورده می‌مانند.
+        // محصولات قدیمی ممکن است هنوز قیمت پایه نداشته باشند.
         if (effectiveBasePrice == null) {
           return { type: "BASE_PRICE_REQUIRED" };
         }
 
         const pricing = calculateProductPricing({
-          basePrice: effectiveBasePrice,
-          discount: effectiveDiscount,
+          basePrice: Number(effectiveBasePrice),
+          discount: Number(effectiveDiscount),
         });
 
         Object.assign(updateData, {
@@ -623,6 +659,10 @@ export async function PATCH(req, { params }) {
           discount: pricing.discount,
         });
       }
+
+      // -------------------------------------------------------
+      // ذخیره محصول
+      // -------------------------------------------------------
 
       const product = await tx.product.update({
         where: { id: productId },
@@ -646,39 +686,48 @@ export async function PATCH(req, { params }) {
       };
     });
 
+    // ---------------------------------------------------------
+    // 4-ث. بررسی نتیجه تراکنش
+    // ---------------------------------------------------------
+
     if (result.type === "NOT_FOUND") {
-      return NextResponse.json(
-        { error: "محصول پیدا نشد" },
-        { status: 404 },
-      );
+      return errorResponse("محصول پیدا نشد", 404);
     }
 
     if (result.type === "ARCHIVED") {
-      return NextResponse.json(
-        { error: "محصول آرشیوشده قابل ویرایش نیست" },
-        { status: 409 },
+      return errorResponse(
+        "محصول آرشیوشده قابل ویرایش نیست",
+        409,
+      );
+    }
+
+    if (result.type === "INVALID_RESERVED_STOCK") {
+      return errorResponse(
+        "مقدار موجودی رزروشده محصول در پایگاه داده معتبر نیست.",
+        409,
       );
     }
 
     if (result.type === "BASE_PRICE_REQUIRED") {
-      return NextResponse.json(
-        {
-          error:
-            "این محصول هنوز قیمت پایه ندارد. برای انتقال آن به سیستم قیمت‌گذاری جدید، قیمت پایه تأمین‌کننده را وارد کنید.",
-        },
-        { status: 409 },
+      return errorResponse(
+        "این محصول هنوز قیمت پایه ندارد. برای تغییر قیمت آن ابتدا قیمت پایه تأمین‌کننده را وارد کنید.",
+        409,
       );
     }
 
     if (result.type === "BELOW_RESERVED_STOCK") {
-      return NextResponse.json(
+      return errorResponse(
+        `حداقل موجودی قابل ثبت ${result.reservedStock.toLocaleString("fa-IR")} عدد است؛ چون همین تعداد در حال حاضر رزرو شده است.`,
+        409,
         {
-          error: `حداقل موجودی قابل ثبت ${result.reservedStock} عدد است؛ چون همین تعداد در حال حاضر رزرو شده است.`,
           reservedStock: result.reservedStock,
         },
-        { status: 409 },
       );
     }
+
+    // ---------------------------------------------------------
+    // 4-ج. ثبت لاگ تغییرات
+    // ---------------------------------------------------------
 
     await logAction({
       userId: check.user.id,
@@ -711,22 +760,19 @@ export async function PATCH(req, { params }) {
     });
 
     if (error instanceof PricingError) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: 400 },
-      );
+      return errorResponse(error.message, 400);
     }
 
     if (error?.code === "P2025") {
-      return NextResponse.json(
-        { error: "محصول یا دسته‌بندی موردنظر پیدا نشد" },
-        { status: 400 },
+      return errorResponse(
+        "محصول یا دسته‌بندی موردنظر پیدا نشد",
+        400,
       );
     }
 
-    return NextResponse.json(
-      { error: "خطا در ویرایش محصول" },
-      { status: 500 },
+    return errorResponse(
+      "خطا در ویرایش محصول",
+      500,
     );
   }
 }
@@ -741,15 +787,12 @@ export async function DELETE(_req, { params }) {
     const { id: rawId } = await params;
     const productId = Number(rawId);
 
-    if (!Number.isSafeInteger(productId) || productId <= 0) {
-      return NextResponse.json(
-        { error: "شناسه محصول معتبر نیست" },
-        { status: 400 },
-      );
+    if (!isValidProductId(productId)) {
+      return errorResponse("شناسه محصول معتبر نیست");
     }
 
     const result = await prisma.$transaction(async (tx) => {
-      // قفل ردیف مانع رزرو هم‌زمان در حین آرشیو می‌شود.
+      // قفل ردیف مانع تداخل عملیات آرشیو با رزرو هم‌زمان می‌شود.
       await tx.$queryRaw`
         SELECT "id"
         FROM "Product"
@@ -815,10 +858,7 @@ export async function DELETE(_req, { params }) {
     });
 
     if (result.type === "NOT_FOUND") {
-      return NextResponse.json(
-        { error: "محصول پیدا نشد" },
-        { status: 404 },
-      );
+      return errorResponse("محصول پیدا نشد", 404);
     }
 
     if (result.type === "ALREADY_ARCHIVED") {
@@ -829,12 +869,12 @@ export async function DELETE(_req, { params }) {
     }
 
     if (result.type === "HAS_RESERVATIONS") {
-      return NextResponse.json(
+      return errorResponse(
+        `این محصول ${result.reservedStock.toLocaleString("fa-IR")} عدد رزرو فعال دارد. تا تعیین تکلیف رزروها امکان آرشیو آن وجود ندارد.`,
+        409,
         {
-          error: `این محصول ${result.reservedStock} عدد رزرو فعال دارد. تا تعیین تکلیف رزروها امکان آرشیو آن وجود ندارد.`,
           reservedStock: result.reservedStock,
         },
-        { status: 409 },
       );
     }
 
@@ -871,9 +911,9 @@ export async function DELETE(_req, { params }) {
       code: error?.code,
     });
 
-    return NextResponse.json(
-      { error: "خطا در آرشیو محصول" },
-      { status: 500 },
+    return errorResponse(
+      "خطا در آرشیو محصول",
+      500,
     );
   }
 }

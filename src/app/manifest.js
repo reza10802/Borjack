@@ -1,20 +1,16 @@
+
 export default function manifest() {
   return {
     name: "برجک",
     short_name: "برجک",
-
     description: "فروشگاه آنلاین برجک",
 
     start_url: "/",
-
     display: "standalone",
-
     background_color: "#ffffff",
-
     theme_color: "#000000",
 
     lang: "fa",
-
     dir: "rtl",
 
     icons: [
@@ -27,6 +23,14 @@ export default function manifest() {
         src: "/images/logo2.png",
         sizes: "512x512",
         type: "image/png",
+      },
+    ],
+
+    // ارتباط سایت با اپلیکیشن اندروید برجک
+    related_applications: [
+      {
+        platform: "play",
+        id: "site.borjak.twa",
       },
     ],
   };

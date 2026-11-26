@@ -5,8 +5,10 @@ import Breadcrumb from "@/components/Breadcrumb";
 import { safeJsonLd } from "@/lib/json-ld";
 import { PUBLIC_CARD_SELECT, toPublicCardProduct } from "@/lib/public-product";
 
-const BASE_URL =
-    process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+const BASE_URL = (
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    "https://borjak.site"
+).replace(/\/+$/, "");
 
 async function getBrand(slug) {
     return prisma.brand.findUnique({

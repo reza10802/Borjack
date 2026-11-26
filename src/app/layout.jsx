@@ -19,19 +19,36 @@ const SITE_DESCRIPTION =
 
 const SHARE_IMAGE = "/images/og-image.png";
 
+
 const organizationJsonLd = {
   "@context": "https://schema.org",
   "@type": "Organization",
   "@id": `${BASE_URL}/#organization`,
   name: "برجک",
-  alternateName: ["Borjak", "Borjack", "وب شاپ برجک", "وبشاپ برجک", "fv[;", ",fah\ fv[;"],
+  alternateName: "Borjak",
   description:
-    "برجک، فروشگاه اینترنتی برای مشاهده و خرید کالاهای متنوع از فروشندگان مختلف.",
+    "برجک (Borjak)، فروشگاه اینترنتی برای مشاهده و خرید کالاهای متنوع از فروشندگان مختلف.",
   url: `${BASE_URL}/`,
   logo: `${BASE_URL}/images/logo.png`,
   sameAs: [
     "https://instagram.com/borjaklab",
     "https://t.me/borjaklabs",
+  ],
+  contactPoint: [
+    {
+      "@type": "ContactPoint",
+      telephone: "+989116001260",
+      contactType: "customer service",
+      areaServed: "IR",
+      availableLanguage: "fa",
+    },
+    {
+      "@type": "ContactPoint",
+      telephone: "+989038775616",
+      contactType: "customer service",
+      areaServed: "IR",
+      availableLanguage: "fa",
+    },
   ],
 };
 
@@ -40,12 +57,13 @@ const websiteJsonLd = {
   "@type": "WebSite",
   "@id": `${BASE_URL}/#website`,
   name: "برجک",
-  alternateName: ["Borjak", "Borjack"],
+  alternateName: ["Borjak", "borjak.site"],
   url: `${BASE_URL}/`,
   publisher: {
     "@id": `${BASE_URL}/#organization`,
   },
 };
+
 
 export const metadata = {
   metadataBase: new URL(BASE_URL),
